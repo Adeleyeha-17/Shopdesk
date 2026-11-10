@@ -1,0 +1,33 @@
+# ShopDesk on cPanel (Apache or LiteSpeed)
+# Every page address (/admin, /orders, /o/..., /your-shop) is opened by the app in index.html.
+# Real files (the pictures and /assets/...) are sent as they are.
+Options -MultiViews -Indexes
+DirectoryIndex index.html
+AddType application/manifest+json .webmanifest
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  # leave the SSL certificate check alone
+  RewriteRule ^\.well-known/ - [L]
+  # a real file or folder: send it
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  # anything else: let the app open it
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  # index.html, the alerts worker (sw.js) and the manifest are always checked again, so an update shows straight away
+  <FilesMatch "^(index\.html|sw\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  # files in /assets/ get a new name every update, so phones can keep them for a year
+  <FilesMatch "-[A-Za-z0-9_-]{8}\.(js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+</IfModule>
