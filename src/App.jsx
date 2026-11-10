@@ -1,0 +1,63 @@
+// Which page to show for each web address:
+//   /              the vendor's app (sign in, set up your shop, then Sales / Orders / Stock / Shop)
+//   /admin         ShopDesk Admin (only your owner account)
+//   /privacy       privacy notice and shop rules
+//   /orders        a customer's own orders and saved details
+//   /o/<link>      one order, as the customer sees it
+//   /email-off     "Stop these emails" (the link in every email)
+//   /<shop-name>   a shop's order page and cart
+//   /<shop-name>/checkout   that shop's checkout
+import React, { useEffect, useState } from 'react';
+import { configured } from './lib/database.js';
+import { VendorApp } from './vendor/VendorApp.jsx';
+import { AdminApp } from './admin/AdminApp.jsx';
+import { ShopPage } from './customer/ShopPage.jsx';
+import { OrderPage } from './customer/OrderPage.jsx';
+import { MyOrdersPage } from './customer/MyOrdersPage.jsx';
+import { PrivacyPage } from './shared/PrivacyPage.jsx';
+import { EmailOffPage } from './shared/EmailOffPage.jsx';
+
+export function App() {
+  const [path, setPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const f = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', f);
+    return () => window.removeEventListener('popstate', f);
+  }, []);
+  if (!configured) {
+    return (
+      <div className="app">
+        <main>
+          <div className="center">
+            <h2>Almost there</h2>
+            <p className="note">
+              This copy of ShopDesk isn't connected to a database yet. Copy <strong>.env.example</strong> to{' '}
+              <strong>.env</strong>, fill in your Supabase Project URL and anon key, then restart{' '}
+              <code>npm run dev</code>.
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+  const p = path.replace(/\/+$/, '') || '/';
+  if (p === '/') return <VendorApp />;
+  if (p === '/admin') return <AdminApp />;
+  if (p === '/privacy') return <PrivacyPage />;
+  if (p === '/orders') return <MyOrdersPage />;
+  if (p === '/email-off') return <EmailOffPage />;
+  const o = p.match(/^\/o\/([0-9a-f-]{36})$/i);
+  if (o) return <OrderPage token={o[1]} />;
+  const s = p.match(/^\/([a-z0-9-]{3,30})(\/checkout)?$/i);
+  if (s) return <ShopPage slug={s[1].toLowerCase()} step={s[2] ? 'checkout' : 'shop'} />;
+  return (
+    <div className="app">
+      <main>
+        <div className="center">
+          <h2>Page not found</h2>
+          <p className="note">Check the link and try again.</p>
+        </div>
+      </main>
+    </div>
+  );
+}
