@@ -1,5 +1,5 @@
-// Builds the ShopDesk demo: the real app (src/) with the in-browser sample database (demo/database.js), alerts
-// (demo/alerts.js) and location (demo/location.js) swapped in. Used for trying the app without a backend and by the
+// Builds the ShopDesk demo: the real app (src/) with the in-browser sample database (demo/database.js) and alerts
+// (demo/alerts.js) swapped in. Used for trying the app without a backend and by the
 // browser tests (tests/e2e).
 //   npm run build:demo   writes demo/dist; open demo/dist/demo/index.html through any static server
 // The app's code isn't changed on disk; the few lines that touch the web address or downloads are
@@ -54,7 +54,6 @@ export default defineConfig({
     alias: [
       { find: /^(?:\.\.?\/)+(?:lib\/)?database\.js$/, replacement: path.join(here, 'database.js') },
       { find: /^(?:\.\.?\/)+(?:lib\/)?alerts\.js$/, replacement: path.join(here, 'alerts.js') },
-      { find: /^(?:\.\.?\/)+(?:lib\/)?location\.js$/, replacement: path.join(here, 'location.js') },
     ],
   },
   build: {

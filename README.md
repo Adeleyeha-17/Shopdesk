@@ -12,7 +12,7 @@ Live at [shopdesk.com.ng](https://shopdesk.com.ng).
 
 **Customers**
 - Browse a shop's page, choose sizes or other options, and keep a cart per shop that survives a refresh
-- Separate checkout with saved details, delivery or pick-up, and an optional map pin ("Use my current location")
+- Separate cart and checkout pages with saved details, and delivery or pick-up
 - Passwordless sign-in with an emailed 6-digit code
 - Order page with live status, rider name and number, and the promised delivery time
 - Chat with the shop inside the order, report a problem with photos, and confirm receipt

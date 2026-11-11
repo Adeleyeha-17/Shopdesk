@@ -18,9 +18,7 @@ export function PrivacyPage() {
         </p>
         <p className="note">
           <strong>Deliveries.</strong> When your order goes out, you see the rider's name and phone number so
-          you can reach them. It's hidden again two days after delivery. If you tap “Use my current location”,
-          your phone shares where you are once, the shop gets a map pin for its rider, and the street name is
-          looked up on OpenStreetMap. We never track you; the pin is only taken when you tap.
+          you can reach them. It's hidden again two days after delivery. We never track where you are.
         </p>
         <p className="note">
           <strong>Chat and alerts.</strong> Messages you send in an order's chat are kept with the order and

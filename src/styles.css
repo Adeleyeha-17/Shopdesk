@@ -642,8 +642,6 @@ html[data-move="back"]::view-transition-new(root) { animation-name: page-from-le
 .optlist li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; font-size: 14px; }
 .optname { font-weight: 600; overflow-wrap: anywhere; }
 .note.small, .sub.tiny { font-size: 12px; }
-.locbtn { align-self: flex-start; font-weight: 600; }
-.pinline { line-height: 1.45; }
 /* the customer's cart */
 .cart-stack { display: flex; flex-direction: column; gap: 24px; scroll-margin-top: 84px; }
 .cart-title { font-size: 17px; margin: 0; }

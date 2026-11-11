@@ -74,5 +74,4 @@ The Edge Function connects to Postgres directly and holds no state besides its V
 
 ## Third-party services
 
-- **OpenStreetMap Nominatim** for reverse geocoding when a customer shares their location (`src/lib/location.js`). The request is made only on the customer's tap and failure is non-fatal.
 - **Google Maps** links for opening a delivery pin. No API key is involved.

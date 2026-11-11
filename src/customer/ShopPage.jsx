@@ -1,5 +1,5 @@
 // /<shop-name>: a shop's order page. Customers pick products (and a size, when a product has them), sign in
-// (if they aren't already) and place the order. For delivery they can share their location instead of typing.
+// (if they aren't already) and place the order.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -14,7 +14,6 @@ import { ReportShopForm } from '../shared/ReportShopForm.jsx';
 import { rememberOrder } from './savedOrders.js';
 import { loadCart, saveCart, clearCart, fitCart } from './cart.js';
 import { onSale, optionWord, options, payPrice, priceFrom } from '../lib/products.js';
-import { currentPlace } from '../lib/location.js';
 import { useBusy } from '../lib/busy.js';
 import { Skeleton } from '../shared/Skeleton.jsx';
 
@@ -200,9 +199,6 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [editDetails, setEditDetails] = useState(false);
   const [editAddr, setEditAddr] = useState(false);
   const [picking, setPicking] = useState(null); // the product whose sizes are open
-  const [pin, setPin] = useState(null); // { lat, lng, acc } when the customer shared their location
-  const [locating, setLocating] = useState(false);
-  const [locMsg, setLocMsg] = useState('');
   const [find, setFind] = useState(''); // search this shop's products
   const [inSearch, setInSearch] = useState(false); // the search box is being used
   const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '' });
@@ -349,30 +345,7 @@ export function ShopPage({ slug, step = 'shop' }) {
   );
   // returning customers see their saved details in one line, with Change; first-timers fill them in
   const detailsForm = editDetails || !(saved && saved.name && saved.phone);
-  const addrForm = editAddr || !!pin || !(saved && saved.address && form.address);
-
-  // "Use my current location": a map pin for the rider, and the street filled in when it can be found
-  async function locate() {
-    setLocating(true);
-    setLocMsg('');
-    setMsg('');
-    try {
-      const at = await currentPlace();
-      setPin({ lat: at.lat, lng: at.lng, acc: at.acc, osm: !!at.address });
-      setEditAddr(true);
-      if (at.address) setForm((f) => ({ ...f, address: at.address }));
-      setLocMsg(
-        at.acc > 1000
-          ? `That's only accurate to about ${Math.round(at.acc / 1000)} km. Add your street and a landmark too.`
-          : at.address
-            ? 'Check the address, and add a house number or landmark.'
-            : 'Location added. Add a landmark so the rider finds you.',
-      );
-    } catch (e) {
-      setLocMsg(e.message);
-    }
-    setLocating(false);
-  }
+  const addrForm = editAddr || !(saved && saved.address && form.address);
 
   async function place() {
     const items = lines.map((l) => ({ product_id: l.p.id, ...(l.o ? { option_id: l.o.id } : {}), qty: l.q }));
@@ -390,16 +363,16 @@ export function ShopPage({ slug, step = 'shop' }) {
       setMsg('Add your phone number.');
       return;
     }
-    if (form.mode === 'delivery' && form.address.trim().length < 3 && !pin) {
+    if (form.mode === 'delivery' && form.address.trim().length < 3) {
       setEditAddr(true);
-      setMsg('Add an address or use your current location, or choose pick-up.');
+      setMsg('Add your delivery address, or choose pick-up.');
       return;
     }
     setBusy(true);
     setMsg('');
     const { data, error } = await supabase.rpc('place_order', {
       p_slug: slug,
-      p_customer: { ...form, ...(pin && form.mode === 'delivery' ? { lat: pin.lat, lng: pin.lng } : {}) },
+      p_customer: form,
       p_items: items,
     });
     setBusy(false);
@@ -768,47 +741,13 @@ export function ShopPage({ slug, step = 'shop' }) {
               (addrForm ? (
                 <div className="field">
                   <label htmlFor="cAddr">Delivery address</label>
-                  <button className="btn small ghost locbtn" onClick={locate} disabled={locating}>
-                    <span aria-hidden="true">📍</span>{' '}
-                    {locating ? 'Finding you…' : pin ? 'Update my location' : 'Use my current location'}
-                  </button>
                   <input
                     id="cAddr"
                     autoComplete="street-address"
                     value={form.address}
                     onChange={(e) => setForm({ ...form, address: e.target.value })}
-                    placeholder={
-                      pin ? 'Add a house number or landmark' : 'Or type your street, area and a landmark'
-                    }
+                    placeholder="Street, area and a landmark"
                   />
-                  {pin && (
-                    <span className="sub pinline">
-                      Map pin added{pin.acc && pin.acc <= 1000 ? ` (within about ${pin.acc} m)` : ''}. The
-                      shop and rider see where you are.{' '}
-                      <button
-                        className="linkbtn"
-                        onClick={() => {
-                          setPin(null);
-                          setLocMsg('');
-                        }}
-                      >
-                        Remove pin
-                      </button>
-                    </span>
-                  )}
-                  {locMsg && <span className="sub">{locMsg}</span>}
-                  {pin && pin.osm && (
-                    <span className="sub tiny">
-                      Address from{' '}
-                      <a
-                        href="https://www.openstreetmap.org/copyright"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        © OpenStreetMap
-                      </a>
-                    </span>
-                  )}
                 </div>
               ) : (
                 <div className="co-addr">
@@ -819,11 +758,6 @@ export function ShopPage({ slug, step = 'shop' }) {
                     </button>
                   </div>
                   <p className="co-line">{form.address}</p>
-                  <button className="btn small ghost locbtn" onClick={locate} disabled={locating}>
-                    <span aria-hidden="true">📍</span>{' '}
-                    {locating ? 'Finding you…' : 'Use my current location instead'}
-                  </button>
-                  {locMsg && <span className="sub">{locMsg}</span>}
                 </div>
               ))}
           </section>
