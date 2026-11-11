@@ -58,7 +58,14 @@ function OptionSheet({ p, cart, set, onClose }) {
             const k = p.id + ':' + o.id,
               q = cart[k] || 0;
             return (
-              <li key={o.id} className={o.stock > 0 ? '' : 'out'}>
+              // the whole row is a big tap target: tapping it adds one of that size
+              <li
+                key={o.id}
+                className={o.stock > 0 ? (q > 0 ? 'on' : '') : 'out'}
+                onClick={(e) => {
+                  if (o.stock > 0 && q < o.stock && !e.target.closest('button')) set(k, q + 1);
+                }}
+              >
                 <div>
                   <strong>{o.name}</strong>
                   <div className="sub num">
