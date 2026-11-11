@@ -19,7 +19,7 @@ permissions:
 jobs:
   database:
     name: Database tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16
@@ -44,7 +44,7 @@ jobs:
 
   app:
     name: Browser tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -63,7 +63,7 @@ jobs:
 
   build:
     name: Build the site
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
@@ -108,7 +108,7 @@ jobs:
     name: Publish to shopdesk.com.ng
     needs: [database, app, build]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_TARGET == 'ftp'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: production
       url: https://shopdesk.com.ng
