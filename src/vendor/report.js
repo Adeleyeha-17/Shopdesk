@@ -86,6 +86,7 @@ export function reportPeriod(key, custom, now = Date.now()) {
   const [ty, tm, td] = custom.to.split('-').map(Number);
   const start = +new Date(fy, fm - 1, fd);
   const finish = Math.min(+new Date(ty, tm - 1, td + 1), now);
+  const end = finish === now ? now : finish - 1; // the last moment counted: the end of the last day, or now
   const days = Math.max(1, Math.round((+new Date(ty, tm - 1, td + 1) - start) / DAY));
   const slots = [];
   for (let i = 0; i < days; i++)
@@ -98,7 +99,7 @@ export function reportPeriod(key, custom, now = Date.now()) {
       key: 'custom',
       fullMonth: true,
       start,
-      end: finish,
+      end,
       finish,
       prevStart: +new Date(fy, fm - 2, 1),
       prevEnd: start - 1,
@@ -113,7 +114,7 @@ export function reportPeriod(key, custom, now = Date.now()) {
   return {
     key: 'custom',
     start,
-    end: finish,
+    end,
     finish,
     prevStart: start - days * DAY,
     prevEnd: start - 1,

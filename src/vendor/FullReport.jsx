@@ -399,15 +399,23 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
       <Table
         searchable
         cols={[
-          { k: 'name', label: 'Customer' },
-          { k: 'periodOrders', label: 'Orders', t: 'int', sum: true },
+          {
+            k: 'name',
+            label: 'Customer',
+            render: (c) => (
+              <span className="rt-two">
+                {c.name}
+                {c.tag && <span className="sub">{c.tag}</span>}
+              </span>
+            ),
+          },
           { k: 'periodSpent', label: 'Spent', t: 'money', sum: true },
+          { k: 'msg', label: '', render: (c) => sendButton('Message', () => message(c), !c.customerId) },
+          { k: 'periodOrders', label: 'Orders', t: 'int', sum: true },
           { k: 'orders', label: 'All orders', t: 'int' },
           { k: 'spent', label: 'All spent', t: 'money' },
           { k: 'area', label: 'Area' },
           { k: 'last', label: 'Last order', t: 'date' },
-          { k: 'tag', label: '' },
-          { k: 'msg', label: '', render: (c) => sendButton('Message', () => message(c), !c.customerId) },
         ]}
         rows={r.customers
           .filter((c) => c.periodOrders > 0)
@@ -430,12 +438,22 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
         </div>
         <Table
           cols={[
-            { k: 'code', label: 'Order' },
-            { k: 'name', label: 'Customer' },
-            { k: 'days', label: 'Days', t: 'int', cls: (o) => (o.days > 30 ? 'down' : '') },
+            {
+              k: 'name',
+              label: 'Customer',
+              render: (o) => (
+                <span className="rt-two">
+                  {o.name}
+                  <span className="sub">
+                    {o.code}
+                    {o.says ? ' · says paid' : ''}
+                  </span>
+                </span>
+              ),
+            },
             { k: 'owes', label: 'Owes', t: 'money', sum: true },
-            { k: 'says', label: '', render: (o) => (o.says ? 'Says paid' : '') },
             { k: 'msg', label: '', render: (o) => sendButton('Remind', () => remind(o)) },
+            { k: 'days', label: 'Days', t: 'int', cls: (o) => (o.days > 30 ? 'down' : '') },
           ]}
           rows={r.owed.map((o) => ({ ...o, code: orderCode(shop, o) }))}
           onRow={(o) => openOrder(o.id)}
@@ -555,10 +573,10 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
         <Table
           cols={[
             { k: 'name', label: 'Customer' },
-            { k: 'last', label: 'Last order', t: 'date' },
-            { k: 'paidOrders', label: 'Orders', t: 'int' },
             { k: 'spent', label: 'Spent', t: 'money' },
             { k: 'msg', label: '', render: (c) => sendButton('Message', () => message(c), !c.customerId) },
+            { k: 'last', label: 'Last order', t: 'date' },
+            { k: 'paidOrders', label: 'Orders', t: 'int' },
           ]}
           rows={(r.actions.find((a) => a.kind === 'quiet') || { list: [] }).list}
           empty="All your regulars have ordered recently."
