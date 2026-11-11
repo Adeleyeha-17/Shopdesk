@@ -8,9 +8,11 @@
 //   /email-off     "Stop these emails" (the link in every email)
 //   /<shop-name>   a shop's order page and cart
 //   /<shop-name>/checkout   that shop's checkout
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { configured } from './lib/database.js';
+import { flushSync } from 'react-dom';
 import { keepLinksInApp } from './lib/helpers.js';
+import { currentPath, direction, keepSpot, nowShowing, spotOf, startHistory, transition } from './lib/motion.js';
 import { VendorApp } from './vendor/VendorApp.jsx';
 import { AdminApp } from './admin/AdminApp.jsx';
 import { ShopPage } from './customer/ShopPage.jsx';
@@ -20,9 +22,31 @@ import { PrivacyPage } from './shared/PrivacyPage.jsx';
 import { EmailOffPage } from './shared/EmailOffPage.jsx';
 
 export function App() {
-  const [path, setPath] = useState(window.location.pathname);
+  const [path, setPath] = useState(currentPath);
+  const shown = useRef(path);
   useEffect(() => {
-    const f = () => setPath(window.location.pathname);
+    startHistory();
+    const f = (e) => {
+      const next = currentPath();
+      const prev = shown.current;
+      shown.current = next;
+      // a link or button in the app: navigate() is already running this as a smooth move
+      if (e.fromApp || next === prev) {
+        setPath(next);
+        return;
+      }
+      // the browser's Back or Forward: slide the same way, unless the browser animated it itself (a swipe back),
+      // and put the scroll back where it was on that page
+      keepSpot();
+      nowShowing(e.state && e.state.k);
+      const spot = spotOf(e.state);
+      const after = () => window.scrollTo(0, spot || 0);
+      if (e.hasUAVisualTransition === false) transition(() => setPath(next), direction(prev, next), after);
+      else {
+        flushSync(() => setPath(next));
+        after();
+      }
+    };
     window.addEventListener('popstate', f);
     const stopLinks = keepLinksInApp();
     return () => {

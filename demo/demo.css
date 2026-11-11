@@ -1,5 +1,5 @@
 /* The demo bar above the app: switch between the shop owner's app and the customer's view. Uses the app's own colours. */
-.demo-bar { background: var(--soft); border-bottom: 1px solid var(--line); }
+.demo-bar { background: var(--soft); border-bottom: 1px solid var(--line); view-transition-name: demobar; }
 .demo-in { max-width: 480px; margin: 0 auto; box-sizing: border-box;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px;
   display: flex; flex-direction: column; gap: 7px; }

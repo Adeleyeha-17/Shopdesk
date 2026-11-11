@@ -1,11 +1,25 @@
 // The pop-up at the bottom of the screen: one short line, and sometimes a button (like Open for a new message).
 // toast: { text, title?, action?: { label, run } } or null.
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
-export function Toast({ toast, onClose, low = false }) {
+export function Toast({ toast: now, onClose, low = false }) {
+  // when it goes, the last one stays a moment longer so it can slide away
+  const [last, setLast] = useState(now);
+  useEffect(() => {
+    if (now) {
+      setLast(now);
+      return undefined;
+    }
+    const t = setTimeout(() => setLast(null), 200);
+    return () => clearTimeout(t);
+  }, [now]);
+  const toast = now || last;
   if (!toast) return null;
   return (
-    <div className={'toast' + (low ? ' low' : '') + (toast.action ? ' has-action' : '')} role="status">
+    <div
+      className={'toast' + (low ? ' low' : '') + (toast.action ? ' has-action' : '') + (now ? '' : ' leaving')}
+      role="status"
+    >
       <span className="toast-text">
         {toast.title && <strong>{toast.title}</strong>}
         <span>{toast.text}</span>

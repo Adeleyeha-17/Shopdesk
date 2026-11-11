@@ -505,10 +505,71 @@ a.orow { text-decoration: none; color: inherit; }
 .switch[aria-checked="true"] span { transform: translateX(18px); }
 .switch:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .switch-row .err { flex-basis: 100%; }
-/* a new page (or a part that appears) fades in gently instead of popping */
-@keyframes appear { from { opacity: 0; } }
-main > * { animation: appear .16s ease-out; }
-@media (prefers-reduced-motion: reduce) { .switch, .switch span, .avatar { transition: none; } main > * { animation: none; } }
+/* ---------- motion: nothing pops, everything moves the same calm way ----------
+   Pages slide (view transitions, see lib/motion.js), what appears fades or rises in, sheets and pop-ups slide,
+   buttons give a little when pressed. Phones set to reduce motion get none of it. */
+:root { --ease: cubic-bezier(.2, .8, .2, 1); --ease-in: cubic-bezier(.4, 0, 1, 1); }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes pop-in { from { opacity: 0; transform: scale(.96); } }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+@keyframes sheet-down { to { transform: translateY(100%); } }
+@keyframes float-in { from { opacity: 0; transform: translate(-50%, 14px); } }
+@keyframes float-out { to { opacity: 0; transform: translate(-50%, 14px); } }
+
+/* a page, a tab or a part of a page that arrives (orders loading in, Show older orders) fades in */
+main > * { animation: fade-in .22s var(--ease); }
+.reveal, .confirm-del { animation: rise-in .22s var(--ease); }
+.chat-list > * { animation: rise-in .2s var(--ease); }
+
+/* pop-ups: the dark backdrop fades, the box grows in; on phones the size picker slides up from the bottom */
+.overlay { animation: fade-in .2s ease-out; }
+.modal { animation: pop-in .24s var(--ease); }
+.overlay.closing { animation: fade-out .2s var(--ease-in) forwards; pointer-events: none; }
+.overlay.closing .modal { animation: fade-out .2s var(--ease-in) forwards; }
+@media (max-width: 600px) {
+  .overlay.bottom .modal.sheet { animation: sheet-up .32s var(--ease); }
+  .overlay.bottom.closing .modal.sheet { animation: sheet-down .2s var(--ease-in) forwards; }
+}
+
+/* the message bar and the cart bar float up, and drop away when they go */
+.toast { animation: float-in .24s var(--ease); }
+.toast.leaving { animation: float-out .2s var(--ease-in) forwards; pointer-events: none; }
+.cartbar { animation: float-in .26s var(--ease); transition: opacity .2s var(--ease), transform .26s var(--ease), visibility 0s; }
+.cartbar.hide { opacity: 0; transform: translate(-50%, 18px); visibility: hidden; pointer-events: none;
+  transition: opacity .18s var(--ease-in), transform .2s var(--ease-in), visibility 0s .2s; }
+.cartbar:active { transform: translateX(-50%) scale(.98); }
+
+/* buttons, tabs and choices: colours change smoothly and a press gives a little */
+.btn, .step, .filter, .tab, .choice, .linkbtn, .optpick li, .demo-seg button {
+  transition: transform .14s var(--ease), background-color .18s ease, color .18s ease, border-color .18s ease, opacity .18s ease; }
+.btn:active:not([disabled]), .step:active:not([disabled]), .filter:active { transform: scale(.97); }
+.optpick li:not(.out):active { transform: scale(.985); }
+.tab:active svg { transform: scale(.9); }
+.tab svg { transition: transform .14s var(--ease); }
+.choice i { transition: border-width .18s var(--ease), border-color .18s ease; }
+
+/* moving between pages: the top bar and the tab bar stay still while the page under them slides */
+.top, .admin-top { view-transition-name: topbar; }
+.tabs { view-transition-name: tabbar; }
+::view-transition-group(*) { animation-duration: .24s; animation-timing-function: var(--ease); }
+/* the old page leaves quickly, then the new one comes in, so the two never sit on top of each other for long */
+::view-transition-old(root) { animation: .12s var(--ease-in) both fade-out; }
+::view-transition-new(root) { animation: .22s var(--ease) .05s both fade-in; }
+html[data-move="forward"]::view-transition-old(root) { animation: .14s var(--ease-in) both page-out-left; }
+html[data-move="forward"]::view-transition-new(root) { animation: .3s var(--ease) .06s both page-in-right; }
+html[data-move="back"]::view-transition-old(root) { animation: .14s var(--ease-in) both page-out-right; }
+html[data-move="back"]::view-transition-new(root) { animation: .3s var(--ease) .06s both page-in-left; }
+@keyframes page-in-right { from { opacity: 0; transform: translateX(36px); } }
+@keyframes page-in-left { from { opacity: 0; transform: translateX(-36px); } }
+@keyframes page-out-left { to { opacity: 0; transform: translateX(-36px); } }
+@keyframes page-out-right { to { opacity: 0; transform: translateX(36px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
 /* ---------- errors and connection ---------- */
 .offline-bar { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 20; background: var(--ink); color: var(--bg);
   font-size: 13px; font-weight: 600; text-align: center; padding: 7px 16px; }
@@ -557,7 +618,7 @@ main > * { animation: appear .16s ease-out; }
 .cartbar-count { min-width: 24px; height: 24px; padding: 0 7px; box-sizing: border-box; border-radius: 999px; background: var(--on-btn); color: var(--btn);
   display: grid; place-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
 .cartbar:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
-.cartbar ~ .toast.low { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+.cartbar:not(.hide) ~ .toast.low { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 @media (max-width: 600px) {
   .overlay.bottom { place-items: end center; padding: 0; }
   .overlay.bottom .modal.sheet { width: 100%; border-radius: 18px 18px 0 0; max-height: 85vh; padding-bottom: max(20px, env(safe-area-inset-bottom)); }

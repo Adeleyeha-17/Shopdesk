@@ -7,6 +7,7 @@ import { supabase } from '../lib/database.js';
 import { DAY } from '../lib/dates.js';
 import { errText, errInfo } from '../lib/helpers.js';
 import { problemState } from '../lib/problems.js';
+import { transition } from '../lib/motion.js';
 import { withOptions } from '../lib/products.js';
 import { kick, useCount, useLive, useUnread } from '../lib/alerts.js';
 import { SignIn } from '../shared/SignIn.jsx';
@@ -175,9 +176,22 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
   // Live: the moment a customer orders, pays, writes or reports a problem. A new message pops up with Open,
   // unless that chat is already open on screen.
   const openChat = useCallback((id) => {
-    setTab('orders');
-    setFocus({ id, chat: true, at: Date.now() });
+    transition(() => {
+      setTab('orders');
+      setFocus({ id, chat: true, at: Date.now() });
+    });
   }, []);
+  // tapping a tab cross-fades to it; tapping the tab already open scrolls back to the top
+  const pick = (k) => {
+    if (k === tab) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    transition(() => {
+      setTab(k);
+      window.scrollTo(0, 0);
+    });
+  };
   useLive(userId, (n) => {
     load();
     unread.reload();
@@ -187,7 +201,7 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
       say({ title: n.title, text: n.body, action: { label: 'Open', run: () => openChat(n.order_id) } });
   });
   useEffect(() => {
-    window.history.replaceState(null, '', '#' + tab);
+    window.history.replaceState(window.history.state, '', '#' + tab);
     window.scrollTo(0, 0);
   }, [tab]);
   useEffect(() => {
@@ -267,7 +281,7 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
       <nav className="tabs" aria-label="Sections">
         <div className="tabs-in" role="tablist">
           {TABS.map(([k, label, d]) => (
-            <button key={k} className="tab" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>
+            <button key={k} className="tab" role="tab" aria-selected={tab === k} onClick={() => pick(k)}>
               <svg viewBox="0 0 24 24">
                 <path d={d} />
               </svg>

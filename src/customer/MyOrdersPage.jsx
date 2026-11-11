@@ -248,14 +248,14 @@ function SignedInOrders({ email, userId, view }) {
           </div>
           {!draft ? (
             had && (
-              <div className="saved-details">
+              <div className="saved-details reveal">
                 {me.name && <strong>{me.name}</strong>}
                 {me.phone && <span>{me.phone}</span>}
                 {me.address && <span>{me.address}</span>}
               </div>
             )
           ) : (
-            <>
+            <div className="reveal stack-sm">
               <div className="field">
                 <label htmlFor="mName">Name</label>
                 <input
@@ -321,7 +321,7 @@ function SignedInOrders({ email, userId, view }) {
                     Delete my saved details
                   </button>
                 ))}
-            </>
+            </div>
           )}
         </section>
         <section className="card">

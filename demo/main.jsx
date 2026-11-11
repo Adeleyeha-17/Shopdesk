@@ -7,6 +7,7 @@ import './demo.css';
 import { demo } from './runtime.js';
 import { signInAs, whoIsIn, resetDemo, VENDOR, CUSTOMER } from './database.js';
 import { App } from '../src/App.jsx';
+import { navigate } from '../src/lib/helpers.js';
 
 function go(path) {
   demo.go(path);
@@ -14,7 +15,8 @@ function go(path) {
   window.scrollTo(0, 0);
 }
 
-// Links inside the app (/orders, /o/..., /privacy, the shop's own page) open here instead of leaving the demo.
+// Links inside the app (/orders, /o/..., /privacy, the shop's own page) open here instead of leaving the demo,
+// moving the same way they do on the real site.
 document.addEventListener('click', (e) => {
   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
   const a = e.target.closest ? e.target.closest('a[href]') : null;
@@ -31,7 +33,7 @@ document.addEventListener('click', (e) => {
   }
   if (!href || href[0] !== '/' || href[1] === '/') return;
   e.preventDefault();
-  go(href);
+  navigate(href);
 });
 
 function switchTo(kind) {

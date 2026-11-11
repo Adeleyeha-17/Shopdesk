@@ -1,4 +1,5 @@
 // Small helpers used all over the app.
+import { currentPath, direction, keepSpot, newKey, nowShowing, transition } from './motion.js';
 
 export const slugify = (s) =>
   String(s || '')
@@ -60,13 +61,26 @@ export function copyText(text, say, done) {
   else backup();
 }
 
-// Moves to another page of the app without reloading it; the new page starts at the top.
+// Moves to another page of the app without reloading it: the page slides (see motion.js) and starts at the top.
 // replace: true swaps the current page in the history instead of adding one, so Back skips it.
 export function navigate(path, { replace = false } = {}) {
-  if (replace) window.history.replaceState(null, '', path);
-  else window.history.pushState(null, '', path);
-  window.dispatchEvent(new Event('popstate'));
-  window.scrollTo(0, 0);
+  const from = currentPath();
+  const to = path.split(/[?#]/)[0] || '/';
+  if (to === from && !replace && !/[?#]/.test(path)) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  transition(() => {
+    keepSpot();
+    const k = newKey();
+    if (replace) window.history.replaceState({ k }, '', path);
+    else window.history.pushState({ k }, '', path);
+    nowShowing(k);
+    window.scrollTo(0, 0);
+    const e = new Event('popstate');
+    e.fromApp = true;
+    window.dispatchEvent(e);
+  }, direction(from, to));
 }
 
 // Links to other ShopDesk pages (<a href="/orders">) move like navigate() instead of loading the site again.

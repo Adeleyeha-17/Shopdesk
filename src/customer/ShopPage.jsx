@@ -34,15 +34,27 @@ function Price({ x }) {
 // Choosing sizes: every size with its price and stock, and how many of each are in the cart.
 function OptionSheet({ p, cart, set, onClose }) {
   const done = useRef(null);
-  useEffect(() => {
-    const key = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', key);
-    if (done.current) done.current.focus();
-    return () => window.removeEventListener('keydown', key);
+  // closing slides the sheet down first (a fifth of a second), then it goes
+  const [closing, setClosing] = useState(false);
+  const leaving = useRef(false);
+  const close = useCallback(() => {
+    if (leaving.current) return;
+    leaving.current = true;
+    setClosing(true);
+    setTimeout(onClose, 200);
   }, [onClose]);
+  useEffect(() => {
+    const key = (e) => e.key === 'Escape' && close();
+    window.addEventListener('keydown', key);
+    if (done.current) done.current.focus({ preventScroll: true });
+    return () => window.removeEventListener('keydown', key);
+  }, [close]);
   const word = optionWord(p);
   return (
-    <div className="overlay bottom" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className={'overlay bottom' + (closing ? ' closing' : '')}
+      onClick={(e) => e.target === e.currentTarget && close()}
+    >
       <div className="modal sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
         <div className="row" style={{ justifyContent: 'flex-start', gap: 12 }}>
           <img className="thumb" src={photoUrl(p.photo_path)} alt="" />
@@ -103,7 +115,7 @@ function OptionSheet({ p, cart, set, onClose }) {
             );
           })}
         </ul>
-        <button className="btn" ref={done} onClick={onClose}>
+        <button className="btn" ref={done} onClick={close}>
           Done
         </button>
       </div>
@@ -542,8 +554,13 @@ export function ShopPage({ slug, step = 'shop' }) {
           <ReportShopForm slug={slug} orders={mine} signedIn={me !== ''} done={() => setReporting(false)} />
         )}
         {sheet && <OptionSheet p={sheet} cart={cart} set={set} onClose={closeSheet} />}
-        {count > 0 && !cartInView && !sheet && (
-          <button className="cartbar" onClick={goCart}>
+        {count > 0 && (
+          <button
+            className={'cartbar' + (cartInView || sheet ? ' hide' : '')}
+            onClick={goCart}
+            aria-hidden={cartInView || sheet ? true : undefined}
+            tabIndex={cartInView || sheet ? -1 : undefined}
+          >
             <span className="cartbar-count" aria-hidden="true">
               {count}
             </span>
