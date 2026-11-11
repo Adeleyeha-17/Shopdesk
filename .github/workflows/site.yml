@@ -45,14 +45,13 @@ jobs:
   app:
     name: Browser tests
     runs-on: ubuntu-24.04
+    # the official Playwright image already has the browser and everything it needs;
+    # keep its version in step with the playwright entry in package.json
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - run: npm run build:demo
       - run: npm run test:e2e
       - if: failure()
