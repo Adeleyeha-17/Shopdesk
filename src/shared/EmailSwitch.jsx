@@ -24,7 +24,6 @@ export function EmailSwitch() {
     <div className="switch-row">
       <div className="switch-text">
         <strong id="emailSwitch">Email me what I miss</strong>
-        <span className="sub">After 10 minutes away · {s.email}</span>
       </div>
       <button
         type="button"

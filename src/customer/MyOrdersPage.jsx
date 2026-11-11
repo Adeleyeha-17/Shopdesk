@@ -65,7 +65,10 @@ export function MyOrdersPage() {
 
 function SignedInOrders({ email, userId }) {
   const [orders, setOrders] = useState(null);
+  // saved details are shown as text; Edit opens a copy in the form, so the minute refresh never overwrites typing
   const [me, setMe] = useState({ name: '', phone: '', address: '' });
+  const [draft, setDraft] = useState(null); // null: not editing
+  const [confirmForget, setConfirmForget] = useState(false);
   const [had, setHad] = useState(false);
   const [msg, setMsg] = useState('');
   const [isShop, setIsShop] = useState(false);
@@ -102,9 +105,9 @@ function SignedInOrders({ email, userId }) {
   const unread = inbox.unread;
   async function save() {
     const row = {
-      name: me.name.trim().slice(0, 60),
-      phone: me.phone.trim().slice(0, 20),
-      address: me.address.trim().slice(0, 160),
+      name: draft.name.trim().slice(0, 60),
+      phone: draft.phone.trim().slice(0, 20),
+      address: draft.address.trim().slice(0, 160),
     };
     const { error } = had
       ? await supabase
@@ -114,8 +117,10 @@ function SignedInOrders({ email, userId }) {
       : await supabase.from('customers').insert({ user_id: userId, ...row });
     if (error) setMsg(errText(error));
     else {
+      setMe(row);
       setHad(true);
-      setMsg('Saved.');
+      setDraft(null);
+      setMsg('');
     }
   }
   async function forget() {
@@ -124,7 +129,9 @@ function SignedInOrders({ email, userId }) {
     else {
       setHad(false);
       setMe({ name: '', phone: '', address: '' });
-      setMsg('Deleted.');
+      setDraft(null);
+      setConfirmForget(false);
+      setMsg('');
     }
   }
   if (isShop)
@@ -221,40 +228,87 @@ function SignedInOrders({ email, userId }) {
         </>
       )}
       <section className="card">
-        <h2>Your details</h2>
-        <p className="note">Filled in for you next time.</p>
-        <div className="field">
-          <label htmlFor="mName">Name</label>
-          <input id="mName" value={me.name} onChange={(e) => setMe({ ...me, name: e.target.value })} />
-        </div>
-        <div className="field">
-          <label htmlFor="mPhone">Phone number</label>
-          <input
-            id="mPhone"
-            inputMode="tel"
-            value={me.phone}
-            onChange={(e) => setMe({ ...me, phone: e.target.value })}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="mAddr">Delivery address</label>
-          <input
-            id="mAddr"
-            value={me.address}
-            onChange={(e) => setMe({ ...me, address: e.target.value })}
-            placeholder="Street, area and a landmark"
-          />
-        </div>
-        <div className="btns">
-          <button className="btn small" onClick={save}>
-            Save my details
-          </button>
-          {had && (
-            <button className="linkbtn" onClick={forget}>
-              Delete my saved details
+        <div className="row">
+          <h2>Your details</h2>
+          {!draft && (
+            <button
+              className="btn small ghost"
+              onClick={() => {
+                setDraft({ ...me });
+                setConfirmForget(false);
+              }}
+            >
+              {had ? 'Edit' : 'Add'}
             </button>
           )}
         </div>
+        {!draft ? (
+          had && (
+            <div className="saved-details">
+              {me.name && <strong>{me.name}</strong>}
+              {me.phone && <span>{me.phone}</span>}
+              {me.address && <span>{me.address}</span>}
+            </div>
+          )
+        ) : (
+          <>
+            <div className="field">
+              <label htmlFor="mName">Name</label>
+              <input
+                id="mName"
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                autoComplete="name"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="mPhone">Phone number</label>
+              <input
+                id="mPhone"
+                inputMode="tel"
+                autoComplete="tel"
+                value={draft.phone}
+                onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="mAddr">Delivery address</label>
+              <input
+                id="mAddr"
+                value={draft.address}
+                onChange={(e) => setDraft({ ...draft, address: e.target.value })}
+                placeholder="Street, area and a landmark"
+                autoComplete="street-address"
+              />
+            </div>
+            <div className="btns">
+              <button className="btn small" onClick={save}>
+                Save
+              </button>
+              <button className="linkbtn" onClick={() => setDraft(null)}>
+                Cancel
+              </button>
+            </div>
+            {had &&
+              (confirmForget ? (
+                <div className="confirm-del" role="alert">
+                  <span>Delete your saved name, phone number and address?</span>
+                  <div className="btns">
+                    <button className="btn small bad" onClick={forget}>
+                      Delete
+                    </button>
+                    <button className="linkbtn" onClick={() => setConfirmForget(false)}>
+                      Keep them
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button className="linkbtn fine-link" onClick={() => setConfirmForget(true)}>
+                  Delete my saved details
+                </button>
+              ))}
+          </>
+        )}
       </section>
       <section className="card">
         <EmailSwitch />

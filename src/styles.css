@@ -166,6 +166,10 @@ a { color: inherit; }
 .signin-foot p strong { color: var(--ink); }
 .signin-foot p.fine { font-size: 13px; }
 .signin-foot a { color: inherit; }
+/* My orders: saved details shown as text until Edit */
+.saved-details { display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
+.saved-details span { color: var(--muted); }
+.linkbtn.fine-link { align-self: flex-start; font-size: 13px; }
 
 /* Messages at the top of the vendor's app (waiting for approval, not approved, plan, announcements) */
 .banner { margin-top: 0; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--soft); font-size: 13px; line-height: 1.4; }
