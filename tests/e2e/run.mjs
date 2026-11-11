@@ -113,15 +113,15 @@ await step('a product with sizes opens the size picker, and tapping a size row a
   await p.locator('.sheet button:has-text("Done")').click();
 });
 
-await step('adding a second product puts 2 on the cart button at the top', async () => {
+await step('adding a second product puts 2 on the round cart button', async () => {
   await p.locator('.pcard:not(:has(.pname:text-is("Hair growth oil"))) button[data-inc]').first().click();
-  await p.locator('.iconbtn .count').waitFor();
-  expect((await p.locator('.iconbtn .count').innerText()).trim() === '2', 'the cart button does not show 2');
+  await p.locator('.cartfab .count').waitFor();
+  expect((await p.locator('.cartfab .count').innerText()).trim() === '2', 'the cart button does not show 2');
   expect((await p.locator('.cartbar').count()) === 0, 'the old bottom cart bar is still there');
 });
 
 await step('the cart button opens the cart page, which goes to checkout', async () => {
-  await p.locator('a.iconbtn[href$="/cart"]').click();
+  await p.locator('a.cartfab').click();
   await see('Your cart');
   expect((await p.locator('.cart-line').count()) === 2, 'the cart page does not list 2 lines');
   await p.locator('button:has-text("Checkout")').click();

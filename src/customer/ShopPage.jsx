@@ -125,8 +125,9 @@ function OptionSheet({ p, cart, set, onClose }) {
   );
 }
 
-// The cart button at the top right, with how many things are in it. The number gives a little bump when something is added.
-function CartLink({ slug, count, ready }) {
+// The round cart button at the bottom right of the shop page (where the thumb is), with how many things are in it.
+// The number gives a little bump when something is added.
+function CartButton({ slug, count, ready }) {
   const last = useRef(count);
   const [bump, setBump] = useState(0);
   useEffect(() => {
@@ -135,7 +136,7 @@ function CartLink({ slug, count, ready }) {
   }, [count, ready]);
   return (
     <a
-      className="iconbtn"
+      className="cartfab"
       href={'/' + slug + '/cart'}
       aria-label={count ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart'}
     >
@@ -335,17 +336,8 @@ export function ShopPage({ slug, step = 'shop' }) {
   const toShop = () => navigate('/' + slug);
   const toCart = () => navigate('/' + slug + '/cart');
   const toCheckout = () => navigate('/' + slug + '/checkout');
-  // the top bar on every page of the shop: the shop's name (back to the shop), My orders and the cart
-  const top = {
-    title: shop.name,
-    titleHref: '/' + slug,
-    right: (
-      <>
-        <MyOrdersLink count={inbox.count} />
-        <CartLink slug={slug} count={count} ready={ready} />
-      </>
-    ),
-  };
+  // the top bar on every page of the shop: the shop's name (back to the shop) and My orders
+  const top = { title: shop.name, titleHref: '/' + slug, right: <MyOrdersLink count={inbox.count} /> };
   const foot = (
     <footer className="page-foot">
       <button className="linkbtn" onClick={() => setReporting(!reporting)} aria-expanded={reporting}>
@@ -556,6 +548,7 @@ export function ShopPage({ slug, step = 'shop' }) {
           <ReportShopForm slug={slug} orders={mine} signedIn={me !== ''} done={() => setReporting(false)} />
         )}
         {sheet && <OptionSheet p={sheet} cart={cart} set={set} onClose={closeSheet} />}
+        <CartButton slug={slug} count={count} ready={ready} />
         <InboxToast inbox={inbox} />
       </Page>
     );
