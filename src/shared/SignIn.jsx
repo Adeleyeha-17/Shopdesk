@@ -31,7 +31,6 @@ export function SignIn({ title, note, path = '/', owner = false, footer = null, 
     };
   }, [compact]);
   const Title = compact ? 'h2' : 'h1';
-  const canPaste = typeof navigator !== 'undefined' && !!(navigator.clipboard && navigator.clipboard.readText);
 
   async function send(e) {
     if (e) e.preventDefault();
@@ -80,26 +79,6 @@ export function SignIn({ title, note, path = '/', owner = false, footer = null, 
     // When it works, the page that showed this form sees the new session and moves on.
   }
 
-  // "Paste code": takes the first 6-digit number from what was copied (the code alone, the email's subject line or
-  // a whole sentence) and signs in with it.
-  async function paste() {
-    let text = '';
-    try {
-      text = await navigator.clipboard.readText();
-    } catch {
-      setErr("Couldn't paste. Press and hold the box, then choose Paste.");
-      return;
-    }
-    const found = (text || '').match(/(^|\D)(\d{6})(?!\d)/);
-    if (!found) {
-      setErr('No 6-digit code to paste. Copy the code from the email first.');
-      return;
-    }
-    setCode(found[2]);
-    setErr('');
-    verify(null, found[2]);
-  }
-
   if (step === 'code') {
     return (
       <div className={box}>
@@ -107,18 +86,11 @@ export function SignIn({ title, note, path = '/', owner = false, footer = null, 
           Check your email
         </Title>
         <p className="note">
-          Code sent to <strong>{em}</strong>. Not there? Check Spam.
+          Code sent to <strong>{em}</strong>.
         </p>
         <form onSubmit={verify} className={compact ? 'stack-sm' : 'card'}>
           <div className="field">
-            <div className="field-head">
-              <label htmlFor="code">6-digit code</label>
-              {canPaste && (
-                <button type="button" className="btn small ghost" onClick={paste} disabled={busy}>
-                  Paste code
-                </button>
-              )}
-            </div>
+            <label htmlFor="code">6-digit code</label>
             <input
               id="code"
               className="code"
