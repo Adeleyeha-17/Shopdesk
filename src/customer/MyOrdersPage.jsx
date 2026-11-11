@@ -15,6 +15,8 @@ import { EmailSwitch } from '../shared/EmailSwitch.jsx';
 import { SignIn } from '../shared/SignIn.jsx';
 import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { myTokens } from './savedOrders.js';
+import { CustomerTabs } from './CustomerTabs.jsx';
+import { lastShop, rememberShop } from './lastShop.js';
 
 // The label on each order in the list: [colour, words].
 function orderLabel(o) {
@@ -42,20 +44,21 @@ export function MyOrdersPage({ view = 'orders' }) {
     return () => data.subscription.unsubscribe();
   }, []);
   const title = view === 'account' ? 'Account' : 'My orders';
+  const tabs = <CustomerTabs active={view === 'account' ? 'account' : 'orders'} />;
   useBusy(session === undefined);
   if (session === undefined)
     return (
-      <Page title={title} kind="me">
+      <Page title={title} kind="me" tabs={tabs}>
         <Skeleton kind={view === 'account' ? 'page' : 'list'} />
       </Page>
     );
   if (!session)
     return (
-      <Page title={title} kind="me">
+      <Page title={title} kind="me" tabs={tabs}>
         <SignIn
-          title="Your orders"
+          title={view === 'account' ? 'Your account' : 'Your orders'}
           path={view === 'account' ? '/account' : '/orders'}
-          note="Sign in to follow your orders."
+          note={view === 'account' ? 'Sign in to see your details and orders.' : 'Sign in to follow your orders.'}
           footer={
             <p className="note" style={{ fontSize: 12 }}>
               <a href="/privacy">Privacy</a>
@@ -110,6 +113,8 @@ function SignedInOrders({ email, userId, view }) {
     else {
       setLoadErr(null);
       setOrders(data || []);
+      // first time here without visiting a shop: the Shop tab goes to the shop of their latest order
+      if (!lastShop() && data && data[0] && data[0].slug) rememberShop(data[0].slug, data[0].shop);
     }
     if (c.data) {
       setMe(c.data);
@@ -212,19 +217,11 @@ function SignedInOrders({ email, userId, view }) {
       </a>
     );
   };
-  // the round badge: the first letter of their email
+  // the round letter on the Account page: the first letter of their email
   const initial = ((email || '').trim()[0] || '?').toUpperCase();
   if (view === 'account')
     return (
-      <Page
-        title="Account"
-        kind="me"
-        right={
-          <a className="top-link" href="/orders">
-            My orders
-          </a>
-        }
-      >
+      <Page title="Account" kind="me" tabs={<CustomerTabs active="account" unread={inbox.count} />}>
         <section className="card boxed profile">
           <span className="avatar big" aria-hidden="true">
             {initial}
@@ -338,15 +335,7 @@ function SignedInOrders({ email, userId, view }) {
     );
   const olderLeft = past.length - pastShown;
   return (
-    <Page
-      title="My orders"
-      kind="me"
-      right={
-        <a className="avatar" href="/account" aria-label="Account" title="Account">
-          {initial}
-        </a>
-      }
-    >
+    <Page title="My orders" kind="me" tabs={<CustomerTabs active="orders" unread={inbox.count} />}>
       {msg && <p className="note">{msg}</p>}
       <AlertsPrompt who="customer" userId={userId} />
       {orders === null ? (

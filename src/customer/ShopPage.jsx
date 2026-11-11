@@ -6,7 +6,9 @@ import { naira } from '../lib/money.js';
 import { photoUrl } from '../lib/photos.js';
 import { errText, navigate } from '../lib/helpers.js';
 import { kick, signOut } from '../lib/alerts.js';
-import { useInbox, MyOrdersLink, InboxToast } from './inbox.jsx';
+import { useInbox, InboxToast } from './inbox.jsx';
+import { CustomerTabs } from './CustomerTabs.jsx';
+import { rememberShop } from './lastShop.js';
 import { Page } from '../shared/Page.jsx';
 import { LoadError } from '../shared/LoadError.jsx';
 import { SignIn } from '../shared/SignIn.jsx';
@@ -121,35 +123,6 @@ function OptionSheet({ p, cart, set, onClose }) {
         </button>
       </div>
     </div>
-  );
-}
-
-// The round cart button at the bottom right of the shop page (where the thumb is), with how many things are in it.
-// The number gives a little bump when something is added.
-function CartButton({ slug, count, ready }) {
-  const last = useRef(count);
-  const [bump, setBump] = useState(0);
-  useEffect(() => {
-    if (ready && count > last.current) setBump((b) => b + 1);
-    last.current = count;
-  }, [count, ready]);
-  return (
-    <a
-      className="cartfab"
-      href={'/' + slug + '/cart'}
-      aria-label={count ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart'}
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 4h2.2l2.3 10.6a1.6 1.6 0 0 0 1.6 1.3h8.1a1.6 1.6 0 0 0 1.6-1.2L20.6 8H6" />
-        <circle cx="9.5" cy="19.6" r="1.3" />
-        <circle cx="17" cy="19.6" r="1.3" />
-      </svg>
-      {count > 0 && (
-        <span key={bump} className={'count' + (bump ? ' bump' : '')} aria-hidden="true">
-          {count > 99 ? '99+' : count}
-        </span>
-      )}
-    </a>
   );
 }
 
@@ -277,6 +250,10 @@ export function ShopPage({ slug, step = 'shop' }) {
     if (restored.current) saveCart(slug, cart);
   }, [cart, slug]);
   useBusy(state.loading || busy);
+  // the Shop and Cart tabs come back to this shop
+  useEffect(() => {
+    if (state.shop) rememberShop(slug, state.shop.name);
+  }, [state.shop, slug]);
   const hint = useTypingHint(
     state.products.slice(0, 6).map((p) => p.name),
     'Search ' + (state.shop ? state.shop.name : 'this shop'),
@@ -285,10 +262,12 @@ export function ShopPage({ slug, step = 'shop' }) {
   // a shop writes about another order while they browse: a pop-up, and the count on My orders
   const inbox = useInbox(uid, { title: state.shop ? state.shop.name : 'ShopDesk' });
   const closeSheet = useCallback(() => setPicking(null), []);
+  // the bar at the bottom on the shop and the cart (not on checkout)
+  const tabs = checkout ? null : <CustomerTabs active={step} unread={inbox.count} />;
 
   if (state.loading)
     return (
-      <Page>
+      <Page tabs={tabs}>
         <Skeleton kind={step === 'shop' ? 'shop' : 'list'} />
       </Page>
     );
@@ -333,7 +312,7 @@ export function ShopPage({ slug, step = 'shop' }) {
   const toCart = () => navigate('/' + slug + '/cart');
   const toCheckout = () => navigate('/' + slug + '/checkout');
   // the top bar on every page of the shop: the shop's name (back to the shop) and My orders
-  const top = { title: shop.name, titleHref: '/' + slug, right: <MyOrdersLink count={inbox.count} /> };
+  const top = { title: shop.name, titleHref: '/' + slug, tabs };
   const foot = (
     <footer className="page-foot">
       <button className="linkbtn" onClick={() => setReporting(!reporting)} aria-expanded={reporting}>
@@ -521,7 +500,6 @@ export function ShopPage({ slug, step = 'shop' }) {
           <ReportShopForm slug={slug} orders={mine} signedIn={me !== ''} done={() => setReporting(false)} />
         )}
         {sheet && <OptionSheet p={sheet} cart={cart} set={set} onClose={closeSheet} />}
-        <CartButton slug={slug} count={count} ready={ready} />
         <InboxToast inbox={inbox} />
       </Page>
     );
@@ -638,11 +616,8 @@ export function ShopPage({ slug, step = 'shop' }) {
   // ---------- checkout: who it's for, how it gets to them, and the order ----------
   const feeText = form.mode === 'pickup' ? 'None (pick-up)' : custPays ? 'The shop adds it' : 'Free';
   return (
-    <Page {...top}>
+    <Page {...top} back={'/' + slug + '/cart'}>
       <div className="checkout-head">
-        <button className="linkbtn back" onClick={toCart}>
-          ← Back to cart
-        </button>
         <h2>Checkout</h2>
       </div>
       {me === null ? (

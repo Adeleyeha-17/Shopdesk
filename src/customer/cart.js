@@ -21,6 +21,7 @@ export function saveCart(slug, items) {
     if (Object.keys(kept).length)
       localStorage.setItem(key(slug), JSON.stringify({ items: kept, at: Date.now() }));
     else localStorage.removeItem(key(slug));
+    window.dispatchEvent(new Event('shopdesk-cart')); // the Cart tab's number follows
   } catch (e) {
     /* not saved; the cart still works on this page */
   }

@@ -2,12 +2,14 @@
 import React from 'react';
 import { privacyEmail } from '../lib/database.js';
 import { Page } from './Page.jsx';
+import { lastShop } from '../customer/lastShop.js';
 
 // Plain-language notice. Have it checked by a lawyer before a public launch (Nigeria Data Protection Act 2023).
 export function PrivacyPage() {
   const contact = privacyEmail || 'the ShopDesk owner';
   return (
-    <Page title="Privacy and rules">
+    // Back: the page they came from, or the shop they were last in
+    <Page title="Privacy and rules" back={lastShop() ? '/' + lastShop().slug : '/'}>
       <section className="card">
         <h2>Privacy notice</h2>
         <p className="note">

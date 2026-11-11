@@ -52,6 +52,20 @@ export function direction(from, to) {
   return depth(to) < depth(from) ? 'back' : 'forward';
 }
 
+// The back arrow (helpers.js goBack): was this page opened from another ShopDesk page? Then Back goes there, sliding.
+let slideNext = null;
+export const cameInApp = () => !!(window.history.state && window.history.state.from);
+export function backInApp() {
+  slideNext = 'back';
+  window.history.back();
+}
+// the slide asked for by the back arrow, once
+export function takeSlide() {
+  const s = slideNext;
+  slideNext = null;
+  return s;
+}
+
 // Where each page in the history was scrolled to, so Back returns to the same spot in a list.
 const spots = new Map();
 let shownKey = null; // the history entry on screen now

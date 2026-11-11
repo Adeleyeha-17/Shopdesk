@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { configured } from './lib/database.js';
 import { flushSync } from 'react-dom';
 import { keepLinksInApp } from './lib/helpers.js';
-import { currentPath, direction, keepSpot, nowShowing, spotOf, startHistory, transition } from './lib/motion.js';
+import { currentPath, direction, keepSpot, nowShowing, spotOf, startHistory, takeSlide, transition } from './lib/motion.js';
 import { VendorApp } from './vendor/VendorApp.jsx';
 import { AdminApp } from './admin/AdminApp.jsx';
 import { ShopPage } from './customer/ShopPage.jsx';
@@ -47,13 +47,14 @@ function Pages() {
         setPath(next);
         return;
       }
-      // the browser's Back or Forward: slide the same way, unless the browser animated it itself (a swipe back),
-      // and put the scroll back where it was on that page
+      // the back arrow, or the browser's Back or Forward: slide the same way, unless the browser animated it itself
+      // (a swipe back), and put the scroll back where it was on that page
+      const asked = takeSlide();
       keepSpot();
       nowShowing(e.state && e.state.k);
       const spot = spotOf(e.state);
       const after = () => window.scrollTo(0, spot || 0);
-      if (e.hasUAVisualTransition === false) transition(() => setPath(next), direction(prev, next), after);
+      if (asked || e.hasUAVisualTransition === false) transition(() => setPath(next), asked || direction(prev, next), after);
       else {
         flushSync(() => setPath(next));
         after();

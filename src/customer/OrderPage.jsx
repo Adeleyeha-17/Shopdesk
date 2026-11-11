@@ -10,7 +10,9 @@ import { naira } from '../lib/money.js';
 import { whenText, atText } from '../lib/dates.js';
 import { copyText, errText, telLink } from '../lib/helpers.js';
 import { kick } from '../lib/alerts.js';
-import { useInbox, MyOrdersLink, InboxToast } from './inbox.jsx';
+import { useInbox, InboxToast } from './inbox.jsx';
+import { CustomerTabs } from './CustomerTabs.jsx';
+import { rememberShop } from './lastShop.js';
 import { Page } from '../shared/Page.jsx';
 import { Skeleton } from '../shared/Skeleton.jsx';
 import { useBusy } from '../lib/busy.js';
@@ -147,9 +149,15 @@ export function OrderPage({ token }) {
     }
   }
   useBusy(o === undefined && !loadErr);
+  // the Shop and Cart tabs go to this order's shop
+  const shopOf = o && o.shop;
+  useEffect(() => {
+    if (shopOf) rememberShop(shopOf.slug, shopOf.name);
+  }, [shopOf]);
+  const tabs = <CustomerTabs active="orders" unread={inbox.count} />;
   if (o === undefined)
     return (
-      <Page>
+      <Page back="/orders" tabs={tabs}>
         {loadErr ? (
           <LoadError error={loadErr} onRetry={load} what="your order" />
         ) : (
@@ -159,7 +167,7 @@ export function OrderPage({ token }) {
     );
   if (!o)
     return (
-      <Page>
+      <Page back="/orders" tabs={tabs}>
         <div className="center">
           <h2>Order not found</h2>
           <p className="note">Check the link. If you ordered with another email, sign in with that one.</p>
@@ -208,7 +216,7 @@ export function OrderPage({ token }) {
     o.status !== 'cancelled' && (canReceive || (unpaid && !feeWait && !o.customer_says_paid));
   const gate = wantsCustomer && !canAct && who !== undefined;
   return (
-    <Page title={o.shop.name} titleHref={'/' + o.shop.slug} right={<MyOrdersLink count={inbox.count} />}>
+    <Page title={o.shop.name} titleHref={'/' + o.shop.slug} back="/orders" tabs={tabs}>
       <section className="card">
         <div className="row">
           <span className="order-id">

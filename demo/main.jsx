@@ -33,7 +33,7 @@ document.addEventListener('click', (e) => {
   }
   if (!href || href[0] !== '/' || href[1] === '/') return;
   e.preventDefault();
-  navigate(href);
+  navigate(href, { move: a.dataset.move });
 });
 
 function switchTo(kind) {

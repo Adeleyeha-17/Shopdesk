@@ -1,5 +1,5 @@
 // Small helpers used all over the app.
-import { currentPath, direction, keepSpot, newKey, nowShowing, transition } from './motion.js';
+import { backInApp, cameInApp, currentPath, direction, keepSpot, newKey, nowShowing, transition } from './motion.js';
 import { pulse } from './busy.js';
 
 export const slugify = (s) =>
@@ -64,7 +64,8 @@ export function copyText(text, say, done) {
 
 // Moves to another page of the app without reloading it: the page slides (see motion.js) and starts at the top.
 // replace: true swaps the current page in the history instead of adding one, so Back skips it.
-export function navigate(path, { replace = false } = {}) {
+// move: 'forward', 'back' or 'none' (tabs change at once); by default it follows how deep the pages are.
+export function navigate(path, { replace = false, move } = {}) {
   const from = currentPath();
   const to = path.split(/[?#]/)[0] || '/';
   if (to === from && !replace && !/[?#]/.test(path)) {
@@ -76,13 +77,20 @@ export function navigate(path, { replace = false } = {}) {
     keepSpot();
     const k = newKey();
     if (replace) window.history.replaceState({ k }, '', path);
-    else window.history.pushState({ k }, '', path);
+    else window.history.pushState({ k, from }, '', path);
     nowShowing(k);
     window.scrollTo(0, 0);
     const e = new Event('popstate');
     e.fromApp = true;
     window.dispatchEvent(e);
-  }, direction(from, to));
+  }, move || direction(from, to));
+}
+
+// The back arrow at the top of a page: back to the page before, if it was in ShopDesk; otherwise (opened straight
+// from a link in WhatsApp or an email) to the page above this one.
+export function goBack(above) {
+  if (cameInApp()) backInApp();
+  else navigate(above, { replace: true, move: 'back' });
 }
 
 // Links to other ShopDesk pages (<a href="/orders">) move like navigate() instead of loading the site again.
@@ -95,7 +103,7 @@ export function keepLinksInApp() {
     const href = a.getAttribute('href');
     if (!href || href[0] !== '/' || href[1] === '/') return;
     e.preventDefault();
-    navigate(href);
+    navigate(href, { move: a.dataset.move });
   };
   document.addEventListener('click', onClick);
   return () => document.removeEventListener('click', onClick);

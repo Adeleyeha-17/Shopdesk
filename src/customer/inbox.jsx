@@ -1,4 +1,4 @@
-// New messages reach customers wherever they are in ShopDesk: a red number on My orders, in the tab title and on
+// New messages reach customers wherever they are in ShopDesk: a red number on the Orders tab, in the tab title and on
 // the app icon, and a pop-up the moment a shop writes (Open goes straight to that chat).
 import React, { useRef } from 'react';
 import { navigate } from '../lib/helpers.js';
@@ -38,19 +38,6 @@ export function useInbox(uid, { onAlert, quiet, open, title } = {}) {
   const count = unread.list.length;
   useCount(count, title || 'ShopDesk');
   return { unread, count, toast, closeToast: close };
-}
-
-export function MyOrdersLink({ count }) {
-  return (
-    <a className="top-link" href="/orders">
-      My orders
-      {count > 0 && (
-        <span className="badge" aria-label={count + ' new'}>
-          {count > 9 ? '9+' : count}
-        </span>
-      )}
-    </a>
-  );
 }
 
 export function InboxToast({ inbox }) {

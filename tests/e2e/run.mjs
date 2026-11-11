@@ -113,17 +113,24 @@ await step('a product with sizes opens the size picker, and tapping a size row a
   await p.locator('.sheet button:has-text("Done")').click();
 });
 
-await step('adding a second product puts 2 on the round cart button', async () => {
+const tab = (label) => p.locator(`nav.tabs a.tab:has-text("${label}")`);
+await step('adding a second product puts 2 on the Cart tab', async () => {
   await p.locator('.pcard:not(:has(.pname:text-is("Hair growth oil"))) button[data-inc]').first().click();
-  await p.locator('.cartfab .count').waitFor();
-  expect((await p.locator('.cartfab .count').innerText()).trim() === '2', 'the cart button does not show 2');
-  expect((await p.locator('.cartbar').count()) === 0, 'the old bottom cart bar is still there');
+  await tab('Cart').locator('.badge:text-is("2")').waitFor().catch(async () => {
+    throw new Error('the Cart tab shows ' + (await tab('Cart').innerText()).replace(/\s+/g, ' ') + ', not 2');
+  });
+  expect((await tab('Shop').getAttribute('aria-current')) === 'page', 'the Shop tab is not marked as open');
 });
 
-await step('the cart button opens the cart page, which goes to checkout', async () => {
-  await p.locator('a.cartfab').click();
+await step('the Cart tab opens the cart page; checkout has no tabs and its back arrow returns to the cart', async () => {
+  await tab('Cart').click();
   await see('Your cart');
   expect((await p.locator('.cart-line').count()) === 2, 'the cart page does not list 2 lines');
+  await p.locator('button:has-text("Checkout")').click();
+  await see('Place order');
+  expect((await p.locator('nav.tabs').count()) === 0, 'the tab bar shows on checkout');
+  await p.locator('.back-btn').click();
+  await see('Your cart');
   await p.locator('button:has-text("Checkout")').click();
   await see('Place order');
 });
@@ -155,7 +162,7 @@ await step('the shop owner sees the new order and confirms it with a delivery fe
 // ---------------- customer: pay ----------------
 await step('the customer sees the total and says they have paid', async () => {
   await as('Customer');
-  await p.locator('a:has-text("My orders")').click();
+  await tab('Orders').click();
   await p.locator(`a:has-text("${code}")`).click();
   await see('Account number');
   await p.locator('button:has-text("sent the money")').click();
@@ -187,26 +194,24 @@ await step('the shop owner packs the order and hands it to a rider', async () =>
 // ---------------- customer: delivered ----------------
 await step('the customer sees the rider and confirms delivery', async () => {
   await as('Customer');
-  await p.locator('a:has-text("My orders")').click();
+  await tab('Orders').click();
   await p.locator(`a:has-text("${code}")`).click();
   await see('Kola Ade');
   await p.locator('button:has-text("I got everything")').click();
   await see('Delivered');
 });
 
-await step('the round badge on My orders opens Account, which shows who is signed in, and leads back', async () => {
-  await p.locator('a:has-text("My orders")').first().click();
-  const badge = p.locator('a.avatar');
-  await badge.waitFor();
-  const letter = (await badge.innerText()).trim();
-  await badge.click();
+await step("the order page's back arrow goes to My orders; the Account tab shows who is signed in", async () => {
+  await p.locator('.back-btn').click();
+  await see('Past orders');
+  const letter = (await tab('Account').locator('.tab-letter').innerText()).trim();
+  await tab('Account').click();
   await see('Signed in as');
   const email = (await p.locator('.profile strong').innerText()).trim();
   expect(email.includes('@'), 'no email on the Account page');
   expect(letter === email[0].toUpperCase(), `the badge shows "${letter}", not the first letter of ${email}`);
   await see('Your details');
-  await p.locator('.top-row a:has-text("My orders")').click();
-  await p.locator('a.avatar').waitFor();
+  await tab('Orders').click();
   await see('Past orders');
 });
 

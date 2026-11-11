@@ -15,7 +15,7 @@ const root = path.resolve(here, '..');
 const FIXES = [
   // [file, text in the app, demo replacement, how many times it must appear]
   ['src/lib/motion.js', 'window.location.pathname', 'window.__demo.path', 1],
-  ['src/lib/helpers.js', "window.history.pushState({ k }, '', path);", 'window.__demo.go(path);', 1],
+  ['src/lib/helpers.js', "window.history.pushState({ k, from }, '', path);", 'window.__demo.go(path);', 1],
   ['src/lib/helpers.js', "window.history.replaceState({ k }, '', path);", 'window.__demo.go(path);', 1],
   [
     'src/vendor/VendorApp.jsx',
