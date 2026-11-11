@@ -3,6 +3,11 @@
 # Real files (the pictures and /assets/...) are sent as they are.
 Options -MultiViews -Indexes
 DirectoryIndex index.html
+
+# the record the automatic upload keeps of what it sent; never served
+<Files ".ftp-deploy-sync-state.json">
+  Require all denied
+</Files>
 AddType application/manifest+json .webmanifest
 
 <IfModule mod_rewrite.c>
