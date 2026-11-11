@@ -323,9 +323,7 @@ function SignedInOrders({ email, userId }) {
       <section className="card">
         <EmailSwitch />
       </section>
-      <p className="note" style={{ fontSize: 12 }}>
-        Signed in as {email}.
-      </p>
+      <footer className="page-foot">Signed in as {email}</footer>
       <InboxToast inbox={inbox} />
     </Page>
   );

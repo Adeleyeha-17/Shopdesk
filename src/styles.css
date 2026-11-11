@@ -169,6 +169,8 @@ a { color: inherit; }
 /* My orders: saved details shown as text until Edit */
 .saved-details { display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
 .saved-details span { color: var(--muted); }
+/* the last line of a page, centred like a footer; sits at the very bottom when the page is short */
+.page-foot { margin-top: auto; padding-top: 8px; text-align: center; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 /* a quiet destructive action at the bottom of a card: thin line above, red text with a bin icon */
 .danger-row { appearance: none; background: none; border: 0; border-top: 1px solid var(--line); margin-top: 4px; padding: 14px 0 2px; width: 100%;
   display: flex; align-items: center; gap: 8px; font: 600 14px var(--body); color: var(--bad); cursor: pointer; text-align: left; }
