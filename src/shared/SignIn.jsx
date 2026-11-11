@@ -130,7 +130,7 @@ export function SignIn({ title, note, path = '/', owner = false, footer = null, 
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            placeholder="yourname@gmail.com"
           />
         </div>
         {err && <p className="err">{err}</p>}

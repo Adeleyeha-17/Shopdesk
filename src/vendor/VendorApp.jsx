@@ -91,8 +91,8 @@ function VendorSignIn() {
         path="/"
         footer={
           <p className="note">
-            New here? The same code opens your shop. Use an email you don't shop with. By signing in you agree
-            to the <a href="/privacy">shop rules</a>.
+            New here? The same code also opens your shop. By signing in you agree to the{' '}
+            <a href="/privacy">shop rules</a>.
           </p>
         }
       />
