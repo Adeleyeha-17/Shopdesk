@@ -1,0 +1,15 @@
+/* The demo bar above the app: switch between the shop owner's app and the customer's view. Uses the app's own colours. */
+.demo-bar { background: var(--soft); border-bottom: 1px solid var(--line); }
+.demo-in { max-width: 480px; margin: 0 auto; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px;
+  display: flex; flex-direction: column; gap: 7px; }
+.demo-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.demo-tag { font: 700 11px var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); flex: none; }
+.demo-seg { display: flex; flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; }
+.demo-seg button { flex: 1; min-width: 0; appearance: none; border: 0; background: none; color: var(--muted); cursor: pointer;
+  font: 600 13px var(--body); padding: 7px 8px; border-radius: 999px; white-space: nowrap; }
+.demo-seg button[aria-pressed="true"] { background: var(--btn); color: var(--on-btn); }
+.demo-reset { flex: none; appearance: none; border: 0; background: none; color: var(--ink); cursor: pointer;
+  font: 600 13px var(--body); text-decoration: underline; text-underline-offset: 3px; padding: 6px 2px; }
+.demo-seg button:focus-visible, .demo-reset:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.demo-note { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }

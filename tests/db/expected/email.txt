@@ -1,0 +1,35 @@
+E1 nothing goes out in the first 10 minutes (expect 0):
+0
+E2 after 10 minutes one email holds everything waiting for that person, newest too; each alert goes once (expect 1, tola@example.com|customer|2, then 0):
+1
+tola@example.com|customer|2
+0
+E3 no more than one email every 30 minutes (expect 0, then 1):
+0
+1
+E4 if you had ShopDesk open after it happened, or read it, no email (expect 0, 0):
+
+0
+0
+E5 nothing older than a day; 10 emails a day at most (expect 0, then 0):
+0
+0
+E6 an email that failed waits for the next one (expect 1, then 0, then 1 with the same alert):
+1
+
+0
+1
+E7 the switch in the app, and the stop link without signing in (expect t, false, then 0 emails, then t***@example.com|false, true, error):
+t
+
+false
+0
+t***@example.com|false
+true
+psql:email.sql:75: ERROR:  This link has expired.
+CONTEXT:  PL/pgSQL function email_by_token(uuid,boolean) line N at RAISE
+E8 a shop gets its own emails with its name (expect shop|Mail Shop):
+shop|Mail Shop
+E9 rights: only the push sender can take emails; nobody reads the settings table (expect f, f, f, t, t, t, then permission denied):
+f|f|f|t|t|t
+psql:email.sql:85: ERROR:  permission denied for table email_settings

@@ -1,11 +1,11 @@
 name: Site
 
-# Every push to main is checked, built and (once FTP is set up) published.
-# Pull requests are checked and built only.
+# Every push to main is tested, built and, after approval, published.
+# Pull requests and other branches are tested and built only.
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 
@@ -17,7 +17,52 @@ permissions:
   contents: read
 
 jobs:
+  database:
+    name: Database tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash tests/db/run.sh
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: database-test-output
+          path: tests/db/out
+
+  app:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build:demo
+      - run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-test-screenshots
+          path: tests/e2e/out
+
   build:
+    name: Build the site
     runs-on: ubuntu-latest
     env:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
@@ -25,12 +70,10 @@ jobs:
       VITE_PRIVACY_EMAIL: ${{ vars.VITE_PRIVACY_EMAIL }}
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-
       - run: npm ci
 
       - name: Check the build settings
@@ -62,10 +105,13 @@ jobs:
           retention-days: 30
 
   publish:
-    needs: build
+    name: Publish to shopdesk.com.ng
+    needs: [database, app, build]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_TARGET == 'ftp'
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: production
+      url: https://shopdesk.com.ng
     steps:
       - uses: actions/download-artifact@v7
         with:

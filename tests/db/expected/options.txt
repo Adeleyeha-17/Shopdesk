@@ -1,0 +1,124 @@
+O1 a plain product with a sale price (expect the id, then 9500|8000|12|3|):
+t
+9500|8000|12|3|
+O2 what the form checks (expect 9 plain errors):
+psql:options.sql:23: ERROR:  Add a photo. Customers want to see what they're buying.
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+psql:options.sql:24: ERROR:  Give the product a name.
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+psql:options.sql:25: ERROR:  Shorten the name to 60 letters or fewer.
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+psql:options.sql:26: ERROR:  Enter a price in naira.
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+psql:options.sql:27: ERROR:  The sale price must be less than the price (₦500).
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+psql:options.sql:28: ERROR:  Enter how many you have (0 is fine).
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+psql:options.sql:29: ERROR:  Upload the photo again.
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+psql:options.sql:31: ERROR:  Two choices are called "big". Give each one its own name.
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+psql:options.sql:33: ERROR:  A product can have up to 20 choices.
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+1
+O3 a product with sizes: the label defaults to Size, its price is the lowest and its stock the total (expect Size|15000|9|null, then 3 sizes):
+Size|15000|9|null
+30ml:15000:-:4 50ml:22000:19500:3 100ml:38000:-:2
+O4 the order page shows sale prices and sizes (expect 8000, Size, 3, 19500):
+8000
+Size
+3
+19500
+O5 ordering: the size is needed, the sale price is paid, each line names its size (expect the choose error, then 2 lines, 47000):
+psql:options.sql:55: ERROR:  Choose a size for Sweet Obsession.
+CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+Sweet Obsession · 50ml x2 @19500 [50ml] / Kettle x1 @8000 []
+47000
+O6 stock: the size goes down and the product follows (expect 1|7, then 11):
+1|7
+11
+O7 not enough of a size (expect the only-left error naming the size):
+psql:options.sql:68: ERROR:  Sweet Obsession (100ml) has only 2 left.
+CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+O8 prices change any time; orders already placed keep theirs (expect 47000, then 9000|null, then 21000):
+t
+t
+47000
+9000|null|11
+21000:-:1
+O9 the photo stays when none is sent; the warning level stays (expect so.jpg|1):
+so.jpg|1
+O10 cancelling puts each size back (expect 3|9, kettle 12):
+
+3|9
+12
+O11 the same product twice in one order goes back twice (expect 12 -> 9 -> 12):
+9
+
+12
+O12 a size removed while an order holds it: the order keeps its name; cancelling it puts nothing back anywhere (expect 2 sizes, 7|7, name kept, 7):
+t
+2
+7|7
+Sweet Obsession · 100ml [100ml] gone
+
+7
+O13 adding stock: to a size, not to a product with sizes (expect 7, then the each-size error, then 15):
+7
+psql:options.sql:113: ERROR:  Add stock to each size instead.
+CONTEXT:  PL/pgSQL function add_stock(uuid,integer) line N at RAISE
+15
+O14 another shop can’t see, change or stock your sizes (expect 0, the not-in-your-shop error, the not-found error, 7):
+0
+psql:options.sql:119: ERROR:  That product isn't in your shop. Refresh the page.
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+psql:options.sql:120: ERROR:  Product not found.
+CONTEXT:  PL/pgSQL function add_option_stock(uuid,integer) line N at RAISE
+7
+O15 changes go through save_product: price can’t be set directly; hiding still works (expect permission denied, then f):
+psql:options.sql:125: ERROR:  permission denied for table products
+f
+O16 the helpers aren’t for the app (expect 2 permission errors, f) and anon sees no sizes table (expect permission denied):
+psql:options.sql:131: ERROR:  permission denied for function restock
+psql:options.sql:132: ERROR:  permission denied for function json_int
+f
+psql:options.sql:135: ERROR:  permission denied for table product_options
+O17 from sizes back to one price: it needs a stock (expect the stock error, then 12000|6|)
+psql:options.sql:139: ERROR:  Enter how many you have (0 is fine).
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+t
+12000|6|
+0
+O18 map pin: no address needed with a pin; the address says so; saved details keep the typed address (expect Map pin 6.52440, 3.37920|6.5244|3.3792, then Ikeja home):
+Map pin 6.52440, 3.37920|6.5244|3.3792
+12 Allen Avenue, Ikeja home
+O19 a typed address with a pin keeps both; pick-up and a bad pin keep none; no address and no pin is refused (expect 3 lines, then the address error):
+Blue gate by the church|6.6|3.35
+|-|-
+Somewhere in Yaba|-|-
+psql:options.sql:162: ERROR:  Add a delivery address.
+CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+O20 the pin goes with the address after 180 days (expect t, then |-|-):
+t
+|-|-
+O21 unpaid for 48 hours: the size goes back by itself (expect 5 -> 4 -> 5):
+t
+4
+t
+5
+O22 your shop page and records show sizes (expect 2, then 2):
+2
+2
+O23 deleting a product: not while an open order has it; not someone else’s; not one ShopDesk hid (expect 3 errors):
+psql:options.sql:193: ERROR:  Kettle is in an order that isn't finished yet. Hide it now, and delete it once that order is delivered or cancelled.
+CONTEXT:  PL/pgSQL function delete_product(uuid) line N at RAISE
+psql:options.sql:195: ERROR:  That product isn't in your shop. Refresh the page.
+CONTEXT:  PL/pgSQL function delete_product(uuid) line N at RAISE
+psql:options.sql:199: ERROR:  ShopDesk hid this product, so it stays. Message ShopDesk about it.
+CONTEXT:  PL/pgSQL function delete_product(uuid) line N at RAISE
+O24 deleting a product with sizes: it and its sizes go; past orders keep their lines (expect 0|0, then lines kept with no product):
+
+0|0
+3 lines kept, 3 without a product, names: Sweet Obsession · 100ml, Sweet Obsession · 50ml
+O25 the app can call it; visitors can’t (expect t|f):
+t|f

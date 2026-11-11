@@ -1,0 +1,123 @@
+P1 a new shop gets its initials for order codes, and the vendor can’t change them (expect KK OS, then permission denied):
+KK OS
+psql:problems.sql:22: ERROR:  permission denied for table shops
+P2 the order page and My orders show the code (expect t t):
+t
+t
+P3 packing: can’t send before every item is ticked; another shop can’t tick; then it goes (expect 3 errors, then out):
+
+t
+psql:problems.sql:43: ERROR:  Tick every item as packed first.
+CONTEXT:  PL/pgSQL function hand_to_rider(bigint,text,text,timestamp with time zone) line N at RAISE
+psql:problems.sql:49: ERROR:  Tick every item as packed first.
+CONTEXT:  PL/pgSQL function hand_to_rider(bigint,text,text,timestamp with time zone) line N at RAISE
+psql:problems.sql:50: ERROR:  Order not found.
+CONTEXT:  PL/pgSQL function owned_order(bigint) line N at RAISE
+PL/pgSQL function pack_item(bigint,boolean) line N at assignment
+out
+P4 ticks are locked once it’s gone; pick-ups need ticks too (expect 2 errors):
+psql:problems.sql:57: ERROR:  This order has already gone out.
+CONTEXT:  PL/pgSQL function pack_item(bigint,boolean) line N at RAISE
+psql:problems.sql:61: ERROR:  Tick every item as packed first.
+CONTEXT:  PL/pgSQL function mark_ready(bigint,timestamp with time zone) line N at RAISE
+P5 packing photo: wrong name refused, right name kept; a customer can’t set it (expect error, t, error):
+psql:problems.sql:64: ERROR:  That photo can't be used. Take it again.
+CONTEXT:  PL/pgSQL function set_packing_photo(bigint,text) line N at RAISE
+t
+psql:problems.sql:69: ERROR:  Order not found.
+CONTEXT:  PL/pgSQL function owned_order(bigint) line N at RAISE
+PL/pgSQL function set_packing_photo(bigint,text) line N during statement block local variable initialization
+P6 before delivery (and not late) nobody can report yet (expect f, error):
+false
+psql:problems.sql:73: ERROR:  You can report up to 3 days after delivery.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+P7 delivered: only the customer who ordered can report; checks on what they send (expect t f f, then 6 errors):
+true
+false
+false
+psql:problems.sql:82: ERROR:  Sign in with the email you ordered with.
+CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
+PL/pgSQL function report_problem(uuid,text,text,text[]) line N during statement block local variable initialization
+psql:problems.sql:83: ERROR:  This email runs a shop. Use another email to order.
+CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
+PL/pgSQL function report_problem(uuid,text,text,text[]) line N during statement block local variable initialization
+psql:problems.sql:85: ERROR:  Choose what went wrong.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+psql:problems.sql:86: ERROR:  Say what happened.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+psql:problems.sql:87: ERROR:  A photo didn't attach. Add it again.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+psql:problems.sql:88: ERROR:  A photo didn't attach. Add it again.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+P8 a proper report goes in, once (expect t, error):
+t
+psql:problems.sql:94: ERROR:  You've already reported this order.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+P9 the shop sees its problem; another shop doesn’t; the public sees only that there is one (expect 1 0, then true and an empty problem):
+1
+0
+true|(none)
+P10 the customer can’t go to ShopDesk while the shop still has time (expect error with a time):
+psql:problems.sql:101: ERROR:  The shop has until <day>, <clock> to answer.
+CONTEXT:  PL/pgSQL function problem_customer(uuid,text) line N at RAISE
+P11 the shop answers: checks, then a refund of 3000 (expect 4 errors, then answered refund 3000):
+psql:problems.sql:104: ERROR:  Choose how you'll sort it.
+CONTEXT:  PL/pgSQL function answer_problem(bigint,text,text,integer,text[]) line N at RAISE
+psql:problems.sql:105: ERROR:  Say what happened.
+CONTEXT:  PL/pgSQL function answer_problem(bigint,text,text,integer,text[]) line N at RAISE
+psql:problems.sql:106: ERROR:  Enter the amount you sent back (up to ₦25,000).
+CONTEXT:  PL/pgSQL function answer_problem(bigint,text,text,integer,text[]) line N at RAISE
+psql:problems.sql:107: ERROR:  A photo didn't attach. Add it again.
+CONTEXT:  PL/pgSQL function answer_problem(bigint,text,text,integer,text[]) line N at RAISE
+answered|refund|3000
+P12 only one answer (expect error):
+psql:problems.sql:113: ERROR:  You've already answered.
+CONTEXT:  PL/pgSQL function answer_problem(bigint,text,text,integer,text[]) line N at RAISE
+P13 the customer says the refund arrived: sorted and closed (expect sorted t t):
+sorted|t|t
+P14 send it again: the order goes back to packing, and when it arrives the problem is sorted (expect paid f f, error, then sorted delivered):
+paid|f|f
+psql:problems.sql:137: ERROR:  This order can't be marked received yet.
+CONTEXT:  PL/pgSQL function customer_received(uuid) line N at RAISE
+sorted|delivered
+P15 no answer in 48 hours: it goes to ShopDesk by itself; a late answer is kept but it stays with ShopDesk (expect with_shopdesk no_reply, attention t, with_shopdesk explain):
+with_shopdesk|no_reply
+t
+with_shopdesk|explain
+P16 your Problems list: problems with you show the customer’s email and phone, others don’t; only you can open it (expect with_shopdesk c2@example.com 08033334444, sorted null null, error):
+with_shopdesk|c2@example.com|08033334444
+sorted||
+psql:problems.sql:172: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_problems() line N at RAISE
+P17 you decide: only you, with a note, once; both sides see it, and it’s logged (expect 2 errors, decided shop, customer sees it, log line, error):
+psql:problems.sql:174: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_decide_problem(bigint,text,text,integer) line N at RAISE
+psql:problems.sql:178: ERROR:  Write your decision.
+CONTEXT:  PL/pgSQL function admin_decide_problem(bigint,text,text,integer) line N at RAISE
+decided|shop
+decided|shop|The packing photo shows the pots were fine.
+Order KK-11: the shop was right. The packing photo shows the pots were fine.
+psql:problems.sql:187: ERROR:  This problem is already closed.
+CONTEXT:  PL/pgSQL function admin_decide_problem(bigint,text,text,integer) line N at RAISE
+P18 three complaints decided against a shop in 30 days flag it (expect t):
+t
+P19 order photos: who may add and see them (expect insert ok ok, then 4 errors, then reads 1 1 0 1 and anon error):
+psql:problems.sql:208: ERROR:  new row violates row-level security policy for table "objects"
+psql:problems.sql:210: ERROR:  new row violates row-level security policy for table "objects"
+psql:problems.sql:212: ERROR:  new row violates row-level security policy for table "objects"
+psql:problems.sql:213: ERROR:  new row violates row-level security policy for table "objects"
+1
+1
+0
+1
+psql:problems.sql:218: ERROR:  permission denied for table objects
+P20 function rights: customers’ and shops’ new functions need an account; the helpers aren’t callable (expect f f f f f f f, t t t t t t t, f f f f f):
+f|f|f|f|f|f|f
+t|t|t|t|t|t|t
+f|f|f|f|f
+P21 the shop can’t write to problems directly (expect permission denied x2):
+psql:problems.sql:235: ERROR:  permission denied for table problems
+psql:problems.sql:236: ERROR:  permission denied for table problems
+P22 deleting the shop keeps a copy for you, and its order photos stay (expect t, then 1 copy with the orders):
+t
+1|true

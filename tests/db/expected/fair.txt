@@ -1,0 +1,172 @@
+F1 evidence: a photo is needed for a wrong, damaged or missing item, not for "didn’t arrive" (expect 3 errors, then t):
+psql:fair.sql:36: ERROR:  Add a photo of what you got.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+psql:fair.sql:37: ERROR:  Add a photo of what you got.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+psql:fair.sql:38: ERROR:  Add a photo of what you got.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+t
+F2 at most 2 open problems at once (expect t, then the open-problems error):
+t
+psql:fair.sql:54: ERROR:  You have 2 open problems. Wait for them to be sorted.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+F3 the order page says why reporting is closed (expect the same message):
+You have 2 open problems. Wait for them to be sorted.
+F4 at most 3 reports a month (expect the monthly error):
+psql:fair.sql:64: ERROR:  You've reported 3 orders this month. Contact ShopDesk.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+F5 two complaints decided against you in 90 days pause reporting for 30 days (expect the paused error, then null after 31 days):
+psql:fair.sql:69: ERROR:  Reporting is paused on your account for now. Contact ShopDesk.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+null
+F6 no hoarding stock: 3 unpaid orders per shop, then pay or cancel one (expect the unpaid error):
+psql:fair.sql:78: ERROR:  You have 3 unpaid orders here. Pay or cancel one first.
+CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+F7 the customer cancels an unpaid order: stock back, the shop hears, reason "customer"; then she can order again (expect +1 stock, cancelled|customer, 1 alert, t):
+t
+1
+cancelled|customer
+1
+t
+F8 nobody else can cancel it, and not after saying it’s paid (expect 2 errors):
+psql:fair.sql:92: ERROR:  Sign in with the email you ordered with.
+CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
+PL/pgSQL function customer_cancel(uuid) line N during statement block local variable initialization
+psql:fair.sql:97: ERROR:  You said you've paid. Message the shop.
+CONTEXT:  PL/pgSQL function customer_cancel(uuid) line N at RAISE
+F9 the shop cancels with a reason the customer sees; not within a day of "I’ve paid" (expect error, error, then cancelled|out_of_stock and the alert text):
+psql:fair.sql:103: ERROR:  The customer says they've paid. Check your bank app first.
+CONTEXT:  PL/pgSQL function cancel_order(bigint,text,text) line N at RAISE
+psql:fair.sql:104: ERROR:  Choose why you're cancelling.
+CONTEXT:  PL/pgSQL function cancel_order(bigint,text,text) line N at RAISE
+cancelled|out_of_stock
+FG-24 was cancelled: out of stock.
+F10 unpaid orders cancel themselves after 48 hours (stock back, both told); "I’ve paid" orders and part-paid ones stay (expect 1 cancelled, unpaid, +1 stock, 2 alerts, awaiting):
+t
+unpaid
+1
+2
+awaiting
+F11 the customer’s page shows the pay-by time and the reason (expect t, unpaid):
+t
+t
+F12 refunds: the shop needs a receipt photo; with one, the page isn’t paused while the customer checks (expect t, error, f):
+t
+psql:fair.sql:137: ERROR:  Add a photo of the transfer receipt.
+CONTEXT:  PL/pgSQL function refund_sent(bigint,text) line N at RAISE
+f
+F13 the customer says it didn’t arrive: paused again, you and the shop hear (expect t, 1, 1, then "already" error):
+t
+1
+1
+psql:fair.sql:151: ERROR:  ShopDesk is already on it.
+CONTEXT:  PL/pgSQL function problem_customer(uuid,text) line N at RAISE
+F13b a new receipt doesn’t end the dispute; it goes to you (expect t, 2):
+t
+2
+F14 Needs attention shows the disputed refund (expect 1):
+1
+F15 a customer who stays silent can’t keep the shop paused: 48 hours after a receipt it counts as received (expect auto|t, f); a disputed one doesn’t (expect null):
+t
+auto|true
+null
+F15b for 7 days after that she can still say it didn’t arrive; once you’ve closed it, it’s closed and both hear (expect null|t, then 2 alerts, then the closed error):
+null|true
+2
+psql:fair.sql:184: ERROR:  This refund is closed. Contact ShopDesk.
+CONTEXT:  PL/pgSQL function problem_customer(uuid,text) line N at RAISE
+F16 report a message: only the other side’s, once; a shop can report a rude customer (expect 3 errors, then t, error, then customer|t):
+psql:fair.sql:191: ERROR:  You can't report your own message.
+CONTEXT:  PL/pgSQL function report_message(bigint,text) line N at RAISE
+psql:fair.sql:192: ERROR:  Message not found.
+CONTEXT:  PL/pgSQL function report_message(bigint,text) line N at RAISE
+psql:fair.sql:193: ERROR:  Say what's wrong with it.
+CONTEXT:  PL/pgSQL function report_message(bigint,text) line N at RAISE
+t
+psql:fair.sql:198: ERROR:  You've already reported this message.
+CONTEXT:  PL/pgSQL function report_message(bigint,text) line N at RAISE
+customer|true
+F17 a shop sending a different account number in chat is flagged to you; its own number and phone numbers aren’t (expect other_account, null, null, null, then t, attention 1):
+other_account
+null
+null
+null
+t
+1
+F18 reporting a shop: sign in, once until it’s handled, 5 a day (expect error, t, "already" error):
+psql:fair.sql:214: ERROR:  Sign in to report a shop.
+CONTEXT:  PL/pgSQL function report_shop(text,text,text,uuid) line N at RAISE
+t
+psql:fair.sql:221: ERROR:  You've already reported this shop. ShopDesk is on it.
+CONTEXT:  PL/pgSQL function report_shop(text,text,text,uuid) line N at RAISE
+F19 you can block an abusive customer (with a reason; not a shop account); they can’t order, write, report or complain; unblocking lifts it (expect 3 errors, t, 4 errors, t):
+psql:fair.sql:224: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_block_user(uuid,boolean,text) line N at RAISE
+psql:fair.sql:226: ERROR:  Write the reason (it goes in the audit log).
+CONTEXT:  PL/pgSQL function admin_block_user(uuid,boolean,text) line N at RAISE
+psql:fair.sql:227: ERROR:  That isn't a customer account. Suspend the shop instead.
+CONTEXT:  PL/pgSQL function admin_block_user(uuid,boolean,text) line N at RAISE
+t
+psql:fair.sql:233: ERROR:  Your account can't place orders. Contact ShopDesk.
+CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+psql:fair.sql:234: ERROR:  Your account can't send messages. Contact ShopDesk.
+CONTEXT:  PL/pgSQL function send_message(bigint,text,text) line N at RAISE
+psql:fair.sql:235: ERROR:  Your account is blocked. Contact ShopDesk.
+CONTEXT:  PL/pgSQL function report_shop(text,text,text,uuid) line N at RAISE
+psql:fair.sql:236: ERROR:  Your account is blocked. Contact ShopDesk.
+CONTEXT:  PL/pgSQL function report_problem(uuid,text,text,text[]) line N at RAISE
+t
+F20 the shop can still write to a blocked customer about their order, and you see the block in Problems (expect t, t):
+t
+t
+F21 rights: the new functions need an account; the helpers and blocked list are closed (expect t x5, f x5, permission denied):
+t|t|t|t|t
+f|f|f|f|f
+psql:fair.sql:258: ERROR:  permission denied for table blocked_users
+F22 receipts: only the shop adds r- photos to its order (expect t f):
+t
+f
+F23 nothing is lost: a shop can’t delete a product (it hides it), each order line keeps the photo the customer saw, and a photo in use can’t be removed (expect permission denied, t, t, f, t):
+psql:fair.sql:266: ERROR:  permission denied for table products
+t
+t
+f
+t
+F24 the shop’s own photo files: one in use stays, an upload that didn’t save can go (expect 1 left, the kettle photo):
+1 left, kettle.jpg
+R1 an order’s chat with no report or problem opens only with your reason, which is logged (expect error, then t, 1 log line with the reason):
+psql:fair.sql:280: ERROR:  Write why you're reading this chat (it goes in the log).
+CONTEXT:  PL/pgSQL function admin_order_chat(bigint,text) line N at RAISE
+t
+1
+R2 find any order by its code; the lookup is logged; the cancel reason shows (expect FG|t|not paid in 48 hours, 1, then error):
+FG|true|not paid in 48 hours
+1
+psql:fair.sql:289: ERROR:  Type an order code, like FG-24.
+CONTEXT:  PL/pgSQL function admin_find_order(text) line N at RAISE
+R3 automatic actions are in your Log (expect t t):
+t|t
+R4 a shop deleted with its account (in Supabase) still leaves you a copy; its orders are found there; shops and customers can’t see copies (expect t, the deleted shop without its chat, then the reason error, error x2, permission denied):
+t
+Fair Goods · chat included: false
+psql:fair.sql:300: ERROR:  Write why you're opening it (it goes in the log).
+CONTEXT:  PL/pgSQL function admin_archive(bigint,text) line N at RAISE
+psql:fair.sql:301: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_archives() line N at RAISE
+psql:fair.sql:302: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_find_order(text) line N at RAISE
+psql:fair.sql:303: ERROR:  permission denied for table archives
+R5 you can download it with a reason (logged), and still see its photos (expect t, 1, t):
+t
+1
+t
+R6 clearing old customer details also clears them in copies (expect t):
+t
+F25 "Call rider" must ring: the rider’s number has to be a Nigerian mobile (expect the number error x2, then out x3):
+psql:fair.sql:321: ERROR:  Check the rider's number, like 0803 123 4567.
+CONTEXT:  PL/pgSQL function hand_to_rider(bigint,text,text,timestamp with time zone) line N at RAISE
+psql:fair.sql:322: ERROR:  Check the rider's number, like 0803 123 4567.
+CONTEXT:  PL/pgSQL function hand_to_rider(bigint,text,text,timestamp with time zone) line N at RAISE
+out
+out
+out

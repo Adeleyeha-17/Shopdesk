@@ -1,0 +1,134 @@
+C1 you hear about new shops waiting (expect 2 new_shop alerts for you, none for anyone else):
+2
+C2 a new order alerts the shop, not the customer (expect 1|New order TT-<n>|Ada · ₦20,000|/?order=<n>#orders, then 0):
+1|true|Ada · ₦20,000|true
+0
+C3 the order moving alerts the customer: confirmed, paid, on its way, delivered (expect confirmed paid out delivered, and the bodies):
+confirmed paid out delivered
+TT-15 confirmed. Pay ₦21,500. / TT-15: payment received. Packing now. / TT-15 is on its way with Musa, 08031234567. By <time>. / TT-15 delivered. Got everything?
+C4 the shop hears when the customer says they paid and when they got it, and nobody hears about their own action (expect says_paid received, 0):
+says_paid received
+1
+C5 chat: the shop and the customer write; another customer, another shop and visitors can’t (expect customer, the trimmed text, shop, 2, then 2 errors, then permission denied):
+customer
+Can I collect at 5?
+shop
+2
+psql:chat.sql:60: ERROR:  Order not found.
+CONTEXT:  PL/pgSQL function send_message(bigint,text,text) line N at RAISE
+psql:chat.sql:61: ERROR:  Order not found.
+CONTEXT:  PL/pgSQL function send_message(bigint,text,text) line N at RAISE
+psql:chat.sql:62: ERROR:  permission denied for function send_message
+C6 who reads a chat: the shop and the customer see 2, another customer and another shop see 0, nobody writes directly (expect 2 2 0 0, then permission denied x2):
+2
+2
+0
+0
+psql:chat.sql:70: ERROR:  permission denied for table messages
+psql:chat.sql:71: ERROR:  permission denied for table messages
+C7 messages alert the other side with a link to the chat (expect the shop: Ada · TT-<n>|Can I collect at 5?|/?chat=<n>#orders; the customer: Tola Tailoring|Yes, <clock> is fine|/o/<token>#chat):
+t|Can I collect at 5?|t
+Tola Tailoring|Yes, <clock> is fine|t
+C8 empty messages, bad photo paths and floods are refused; a good photo path works (expect 3 errors, then t, then the flood error once):
+psql:chat.sql:78: ERROR:  Write a message.
+CONTEXT:  PL/pgSQL function send_message(bigint,text,text) line N at RAISE
+psql:chat.sql:79: ERROR:  That photo can't be sent. Try again.
+CONTEXT:  PL/pgSQL function send_message(bigint,text,text) line N at RAISE
+psql:chat.sql:80: ERROR:  That photo can't be sent. Try again.
+CONTEXT:  PL/pgSQL function send_message(bigint,text,text) line N at RAISE
+t
+psql:chat.sql:85: ERROR:  Slow down a little.
+CONTEXT:  PL/pgSQL function send_message(bigint,text,text) line N at RAISE
+C9 chat photos: both sides may add m- photos to their order; nobody else (expect t t f f f):
+t
+t
+f
+f
+f
+C10 chat closes 7 days after the order is done (expect t, then f and the closed error):
+t
+f
+psql:chat.sql:99: ERROR:  Chat is closed for this order.
+CONTEXT:  PL/pgSQL function send_message(bigint,text,text) line N at RAISE
+C11 alerts: everyone reads only their own; nobody writes or edits them directly; mark_read marks only yours (expect t t, permission denied x2, then 0 and t):
+t
+t
+psql:chat.sql:106: ERROR:  permission denied for table notifications
+psql:chat.sql:107: ERROR:  permission denied for table notifications
+0
+t
+C12 a refund you order: decide for the customer with ₦15,000; wrong amounts and a refund for the shop are refused (expect 3 errors, then decided|15000|t):
+psql:chat.sql:124: ERROR:  The refund must be between ₦1 and ₦21,500.
+CONTEXT:  PL/pgSQL function admin_decide_problem(bigint,text,text,integer) line N at RAISE
+psql:chat.sql:125: ERROR:  The refund must be between ₦1 and ₦21,500.
+CONTEXT:  PL/pgSQL function admin_decide_problem(bigint,text,text,integer) line N at RAISE
+psql:chat.sql:126: ERROR:  The refund must be between ₦1 and ₦21,500.
+CONTEXT:  PL/pgSQL function admin_decide_problem(bigint,text,text,integer) line N at RAISE
+decided|15000|true
+C13 both sides hear the decision (expect the customer: You were right. Tola Tailoring must refund ₦15,000 by <time>.; the shop: Refund ₦15,000 by <time> or your page pauses.):
+You were right. Tola Tailoring must refund ₦15,000 by <time>.
+Refund ₦15,000 by <time> or your page pauses.
+C14 the shop still takes orders before the deadline; after it, its page closes and orders are refused (expect t, then t and the closed error):
+t
+t
+psql:chat.sql:141: ERROR:  This shop isn't taking orders right now.
+CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+C15 Needs attention shows the overdue refund (expect 1):
+1
+C16 the shop says it sent the refund; another shop can’t; the customer hears (expect error, then 1 refund_sent alert):
+psql:chat.sql:146: ERROR:  Order not found.
+CONTEXT:  PL/pgSQL function owned_order(bigint) line N at RAISE
+PL/pgSQL function refund_sent(bigint,text) line N during statement block local variable initialization
+1
+C17 the customer confirms it arrived: the page opens again and the shop hears (expect customer|t, t, 1):
+customer|true
+t
+1
+C18 the customer’s problem page shows the refund (expect 15000|t):
+15000|true
+C19 reports name their order: from the customer’s own order it’s linked, someone else’s order isn’t (expect t|t, then f|t):
+true|true
+false|true
+C20 visitors can’t report; a signed-in customer can report without an order, and the 3-value call still works (expect error, then 1):
+psql:chat.sql:178: ERROR:  Sign in to report a shop.
+CONTEXT:  PL/pgSQL function report_shop(text,text,text,uuid) line N at RAISE
+1
+C21 Reports show the order: what was ordered, money and times; your alert came in (expect TT-<n>|Ankara gown|t, then 2 report alerts):
+true|Ankara gown|true
+2
+C22 you read a chat only with a report or a problem with you (Bayo reported Femi Phones, so his order there opens), and it’s logged; shops and customers can’t (expect t, the chat, 1 log line, then 2 errors):
+t
+{"code": "FP-17", "shop": "Femi Phones", "customer": "Bayo", "messages": []}
+1
+psql:chat.sql:200: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_order_chat(bigint,text) line N at RAISE
+psql:chat.sql:201: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_order_chat(bigint,text) line N at RAISE
+C23 you can clear a refund yourself, with a reason (expect error, then admin):
+psql:chat.sql:205: ERROR:  Write why (it goes in the audit log).
+CONTEXT:  PL/pgSQL function admin_clear_owed(bigint,text) line N at RAISE
+admin
+C24 phones with alerts on: saved for your account, bad ones refused, up to 10 kept, only you remove yours (expect 1, error, 10, 10, 9):
+1
+psql:chat.sql:218: ERROR:  Alerts couldn't be turned on. Try again.
+CONTEXT:  PL/pgSQL function save_push_sub(text,text,text) line N at RAISE
+10
+10
+9
+C25 the push sender’s functions and the tables behind them are closed to the app (expect f f f f f f, then permission denied x3):
+f|f|f|f|f|f
+psql:chat.sql:239: ERROR:  permission denied for table push_subs
+psql:chat.sql:239: ERROR:  permission denied for table push_keys
+psql:chat.sql:239: ERROR:  permission denied for function push_claim
+C26 push_claim hands over each unsent alert once, with the phones it goes to (expect t|t, then 0):
+true|true
+0
+C27 the key is made once and kept (expect t, t):
+t
+t
+C28 the helpers aren’t callable from the app (expect f x10):
+f|f|f|f|f|f|f|f|f|f
+C29 the app’s new functions need an account (expect t x7):
+t|t|t|t|t|t|t
+C30 deleting a shop keeps its chats in your copy, photos included (expect t):
+t

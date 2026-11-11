@@ -6,3 +6,6 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+demo/dist/
+tests/db/out/
+tests/e2e/out/

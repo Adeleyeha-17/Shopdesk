@@ -39,14 +39,15 @@ Any static host works, provided every path falls back to `index.html`.
 
 `index.html` is served without caching and asset file names are content-hashed, so clients pick up a new release on their next load.
 
-## Automatic builds and publishing
+## Automatic tests, builds and publishing
 
-`.github/workflows/site.yml` runs on every push to `main` and on every pull request:
+`.github/workflows/site.yml` runs on every push and pull request. Three jobs run side by side:
 
-1. Installs dependencies and checks that the three `VITE_` settings are present and that the key is the publishable one.
-2. Builds the site and confirms the bundle contains the Supabase URL, so a build without settings can never be published.
-3. Keeps the built site for 30 days as the `shopdesk-site` artifact on the run's page.
-4. On `main` only, uploads it to the web server over FTPS, once publishing is switched on.
+- **Database tests** (`npm run test:db`): a fresh PostgreSQL 16 database gets `tests/db/stubs.sql` (stand-ins for Supabase's auth, roles and storage), the full `supabase/schema.sql`, then every file in `tests/db/`. Each file's output, with ids, times and dates masked, must match `tests/db/expected/` exactly. After an intended change, run `tests/db/run.sh --update` and review the diff before committing.
+- **Browser tests** (`npm run build:demo && npm run test:e2e`): the app is built against the in-browser sample database in `demo/` and driven on a phone-sized screen: shopping with sizes, cart, checkout, confirming, payment, packing, rider, delivery, adding, editing and deleting products, the Sales page and a new shop sign-up. Failing steps leave screenshots as a run artifact.
+- **Build**: checks the three `VITE_` settings (and that the key is the publishable one), builds the site, confirms the bundle contains the Supabase URL and keeps `dist/` for 30 days as the `shopdesk-site` artifact.
+
+**Publishing** runs only on `main`, only when all three jobs pass, and only after approval. The job uses the `production` environment, which requires a reviewer: the run stops at *Waiting for review* until it is approved on the run's page.
 
 **One-time setup** (Settings > Secrets and variables > Actions):
 
@@ -60,9 +61,13 @@ Any static host works, provided every path falls back to `index.html`.
 | Secret | `FTP_USERNAME` | An FTP account limited to the site's document root |
 | Secret | `FTP_PASSWORD` | Its password |
 
-Without `DEPLOY_TARGET`, every push is still built and checked, and the artifact can be uploaded by hand.
+Without `DEPLOY_TARGET`, every push is still tested and built, and the artifact can be uploaded by hand.
 
-Database updates are never applied automatically. Run them from the SQL Editor before pushing a site change that needs them.
+**Working on a feature.** Push to a branch, not `main`. The branch is tested and built but never published. Merge into `main` when the tests pass and the change is ready, then approve the publish.
+
+**Rolling back.** Open *Actions*, choose the last good run on `main` and select *Re-run all jobs*. That version is tested, built and, once approved, published again.
+
+Database updates are never applied automatically. Run them from the SQL Editor before publishing a site change that needs them.
 
 ## After a release
 
