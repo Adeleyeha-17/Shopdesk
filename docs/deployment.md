@@ -39,6 +39,31 @@ Any static host works, provided every path falls back to `index.html`.
 
 `index.html` is served without caching and asset file names are content-hashed, so clients pick up a new release on their next load.
 
+## Automatic builds and publishing
+
+`.github/workflows/site.yml` runs on every push to `main` and on every pull request:
+
+1. Installs dependencies and checks that the three `VITE_` settings are present and that the key is the publishable one.
+2. Builds the site and confirms the bundle contains the Supabase URL, so a build without settings can never be published.
+3. Keeps the built site for 30 days as the `shopdesk-site` artifact on the run's page.
+4. On `main` only, uploads it to the web server over FTPS, once publishing is switched on.
+
+**One-time setup** (Settings > Secrets and variables > Actions):
+
+| Kind | Name | Value |
+|---|---|---|
+| Variable | `VITE_SUPABASE_URL` | Project URL |
+| Variable | `VITE_SUPABASE_ANON_KEY` | Publishable key (`sb_publishable_...`) |
+| Variable | `VITE_PRIVACY_EMAIL` | Address shown on the privacy page |
+| Variable | `DEPLOY_TARGET` | `ftp` to switch publishing on |
+| Secret | `FTP_SERVER` | FTP host name |
+| Secret | `FTP_USERNAME` | An FTP account limited to the site's document root |
+| Secret | `FTP_PASSWORD` | Its password |
+
+Without `DEPLOY_TARGET`, every push is still built and checked, and the artifact can be uploaded by hand.
+
+Database updates are never applied automatically. Run them from the SQL Editor before pushing a site change that needs them.
+
 ## After a release
 
 - Open a shop page, the vendor app and `/admin`, and confirm each loads.

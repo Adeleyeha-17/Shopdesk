@@ -1,0 +1,83 @@
+name: Site
+
+# Every push to main is checked, built and (once FTP is set up) published.
+# Pull requests are checked and built only.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      VITE_PRIVACY_EMAIL: ${{ vars.VITE_PRIVACY_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check the build settings
+        run: |
+          for name in VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY VITE_PRIVACY_EMAIL; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is not set. Add it under Settings > Secrets and variables > Actions > Variables."
+              exit 1
+            fi
+          done
+          case "$VITE_SUPABASE_ANON_KEY" in
+            sb_secret_*|*service_role*)
+              echo "::error::VITE_SUPABASE_ANON_KEY must be the publishable key. The secret key never belongs in the site."
+              exit 1 ;;
+          esac
+
+      - run: npm run build
+
+      - name: Check the site points at the database
+        run: |
+          grep -qF "$VITE_SUPABASE_URL" dist/assets/*.js || { echo "::error::The build does not contain the Supabase URL."; exit 1; }
+          test -f dist/.htaccess || { echo "::error::dist/.htaccess is missing."; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shopdesk-site
+          path: dist
+          include-hidden-files: true
+          retention-days: 30
+
+  publish:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_TARGET == 'ftp'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: shopdesk-site
+          path: dist
+
+      - name: Upload to the web server
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./dist/
+          server-dir: ./
