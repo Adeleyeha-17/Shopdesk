@@ -61,7 +61,7 @@ export function ShopTab({ shop, reloadShop, say, email }) {
             className="btn small"
             onClick={() =>
               copyText(
-                `Order from ${shop.name} here: ${link}\nPick what you want and I see your order straight away.`,
+                `Order from ${shop.name} here: ${link}?s=wa\nPick what you want and I see your order straight away.`,
                 say,
                 'WhatsApp message copied',
               )

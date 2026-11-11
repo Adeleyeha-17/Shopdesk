@@ -17,7 +17,8 @@ import { forgetShop, hiddenShops, myShops } from './myShops.js';
 
 const inCart = (slug) => Object.values(loadCart(slug)).reduce((a, q) => a + (q > 0 ? q : 0), 0);
 const isLive = (o) =>
-  !['delivered', 'cancelled'].includes(o.status) || (o.status === 'delivered' && o.received_by !== 'customer');
+  !['delivered', 'cancelled'].includes(o.status) ||
+  (o.status === 'delivered' && o.received_by !== 'customer');
 
 // "Opened today", "Opened yesterday", "Opened 3 days ago", "Opened on Sat, 2 Nov"
 function openedText(at) {
@@ -30,12 +31,14 @@ function openedText(at) {
 
 // one line on where things stand with a shop: the cart, an order on its way, past orders, or when it was opened
 function stateOf(s) {
-  if (s.cart > 0)
-    return ['cart', `${s.cart} in your cart${s.cartTotal ? ' · ' + naira(s.cartTotal) : ''}`];
+  if (s.cart > 0) return ['cart', `${s.cart} in your cart${s.cartTotal ? ' · ' + naira(s.cartTotal) : ''}`];
   const live = s.orders.find(isLive);
   if (live) return ['go', `${live.code || '#' + live.order_id} · ${orderLabel(live)[1]}`];
   if (s.orders.length)
-    return ['', `${s.orders.length} order${s.orders.length === 1 ? '' : 's'} · last on ${dayOf(s.orders[0].created_at)}`];
+    return [
+      '',
+      `${s.orders.length} order${s.orders.length === 1 ? '' : 's'} · last on ${dayOf(s.orders[0].created_at)}`,
+    ];
   return ['', openedText(s.at)];
 }
 
@@ -52,7 +55,31 @@ export function ShopsPage() {
   const [find, setFind] = useState('');
   const [editing, setEditing] = useState(false);
   const [toast, say, closeToast] = useToast();
-  const inbox = useInbox(uid, { title: 'Shops' });
+  const [notes, setNotes] = useState({}); // the newest message from each shop: { slug: { body, at, unread } }
+  const inbox = useInbox(uid, {
+    title: 'Shops',
+    onAlert: (n) => n && n.kind === 'shop_message' && loadNotes(),
+  });
+  // messages shops sent this customer ("We have new stock in!"), shown on that shop's row; seeing them here reads them
+  async function loadNotes() {
+    const { data } = await supabase
+      .from('notifications')
+      .select('id, url, body, created_at, read_at')
+      .eq('kind', 'shop_message')
+      .order('id', { ascending: false })
+      .limit(100);
+    const m = {};
+    (data || []).forEach((n) => {
+      const slug = String(n.url || '').replace(/^\//, '');
+      if (slug && !m[slug]) m[slug] = { body: n.body, at: n.created_at, unread: !n.read_at };
+    });
+    setNotes(m);
+    if ((data || []).some((n) => !n.read_at))
+      setTimeout(() => inbox.unread.markRead(null, 'shop_message'), 1500);
+  }
+  useEffect(() => {
+    if (uid) loadNotes();
+  }, [uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const f = () => setKept(myShops());
@@ -117,7 +144,7 @@ export function ShopsPage() {
     say(`${s.name} is off your list. Opening its link brings it back.`);
   }
 
-  const tabs = <CustomerTabs active="shops" unread={inbox.count} />;
+  const tabs = <CustomerTabs active="shops" unread={inbox.count} shopNews={inbox.shopCount} />;
   if (!shops.length && orders !== null)
     return (
       <Page title="Your shops" tabs={tabs}>
@@ -129,8 +156,8 @@ export function ShopsPage() {
           </span>
           <h2>No shops yet</h2>
           <p className="note" style={{ maxWidth: 300 }}>
-            When a shop sends you its ShopDesk link on WhatsApp or Instagram, open it once. The shop stays here, so
-            you never have to dig for the link again.
+            When a shop sends you its ShopDesk link on WhatsApp or Instagram, open it once. The shop stays
+            here, so you never have to dig for the link again.
           </p>
         </div>
         <InboxToast inbox={inbox} />
@@ -156,7 +183,10 @@ export function ShopsPage() {
       {resume && (
         <section className="resume" aria-label="Pick up where you left off">
           {resume.photos && resume.photos.length > 0 && (
-            <div className="resume-photos" style={{ gridTemplateColumns: `repeat(${resume.photos.length}, minmax(0, 1fr))` }}>
+            <div
+              className="resume-photos"
+              style={{ gridTemplateColumns: `repeat(${resume.photos.length}, minmax(0, 1fr))` }}
+            >
               {resume.photos.map((p) => (
                 <img key={p} src={photoUrl(p)} alt="" />
               ))}
@@ -197,7 +227,11 @@ export function ShopsPage() {
               <li key={s.slug}>
                 <a className="shoprow" href={'/' + s.slug}>
                   <span className={'shop-pic' + (pic ? '' : ' letter')} aria-hidden="true">
-                    {pic ? <img src={photoUrl(pic)} alt="" loading="lazy" /> : (s.name.trim()[0] || '?').toUpperCase()}
+                    {pic ? (
+                      <img src={photoUrl(pic)} alt="" loading="lazy" />
+                    ) : (
+                      (s.name.trim()[0] || '?').toUpperCase()
+                    )}
                   </span>
                   <span className="shop-info">
                     <strong>{s.name}</strong>
@@ -206,11 +240,23 @@ export function ShopsPage() {
                       <i className="dot" />
                       {line}
                     </span>
+                    {notes[s.slug] && (
+                      <span className={'shop-note' + (notes[s.slug].unread ? ' new' : '')}>
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M4 6h16v10H8l-4 4z" />
+                        </svg>
+                        <span>{notes[s.slug].body}</span>
+                      </span>
+                    )}
                   </span>
                   {!editing && <Chevron />}
                 </a>
                 {editing && (
-                  <button className="shop-x" onClick={() => remove(s)} aria-label={`Take ${s.name} off your list`}>
+                  <button
+                    className="shop-x"
+                    onClick={() => remove(s)}
+                    aria-label={`Take ${s.name} off your list`}
+                  >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M6 12h12" />
                     </svg>

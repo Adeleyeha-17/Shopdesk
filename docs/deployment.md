@@ -21,6 +21,7 @@ Each file in `supabase/updates/` upgrades a live database by one step and is saf
 | `010` | Ordered items in the admin support view |
 | `011` | Reserves `account` as a shop link name (the customer Account page) |
 | `012` | Reserves `shops` as a shop link name (the customer Shops tab) |
+| `013` | Sales report: money out, monthly goal, customer area at checkout, where orders come from, price before a sale |
 
 ## Building
 

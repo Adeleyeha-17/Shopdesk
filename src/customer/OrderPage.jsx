@@ -154,7 +154,7 @@ export function OrderPage({ token }) {
   useEffect(() => {
     if (shopOf) rememberShop(shopOf.slug, shopOf.name);
   }, [shopOf]);
-  const tabs = <CustomerTabs active="orders" unread={inbox.count} />;
+  const tabs = <CustomerTabs active="orders" unread={inbox.count} shopNews={inbox.shopCount} />;
   if (o === undefined)
     return (
       <Page back="/orders" tabs={tabs}>

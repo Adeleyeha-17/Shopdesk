@@ -129,6 +129,24 @@ const STREETS = [
   'CMD Road, Magodo',
   'Aguda Road, Ogba',
 ];
+// the area part of each street above, as a customer picks it at checkout
+const AREA_OF = {
+  'Allen Avenue, Ikeja': 'Ikeja',
+  'Bode Thomas Street, Surulere': 'Surulere',
+  'Admiralty Way, Lekki Phase 1': 'Lekki Phase 1',
+  'Abraham Adesanya, Ajah': 'Ajah',
+  'Herbert Macaulay Way, Yaba': 'Yaba',
+  'Isaac John Street, Ikeja GRA': 'Ikeja GRA',
+  'Adeola Odeku Street, Victoria Island': 'Victoria Island',
+  '2nd Avenue, Festac Town': 'Festac',
+  'Okota Road, Isolo': 'Isolo',
+  'Mende Street, Maryland': 'Maryland',
+  'Coker Road, Ilupeju': 'Ilupeju',
+  'Ogunusi Road, Ojodu Berger': 'Ojodu',
+  'Diya Street, Gbagada Phase 2': 'Gbagada',
+  'CMD Road, Magodo': 'Magodo',
+  'Aguda Road, Ogba': 'Ogba',
+};
 const RIDERS = [
   ['Musa Bello', '0800 000 0901'],
   ['Sunday Okon', '0800 000 0902'],
@@ -181,6 +199,7 @@ function seed() {
     created_at: iso(opened),
     last_active_at: iso(now),
     paid_until: null,
+    monthly_goal: 1500000,
   };
   const P = (key, name, price, stock, low, daysAgo, pop) => ({
     id: uuid(),
@@ -221,6 +240,7 @@ function seed() {
       name: `${FIRST[i % FIRST.length]} ${LAST[(i * 7) % LAST.length]}.`,
       phone: `0800 000 0${String(100 + i).padStart(3, '0')}`,
       address: `${3 + ((i * 13) % 40)}, ${STREETS[i % STREETS.length]}`,
+      area: AREA_OF[STREETS[i % STREETS.length]],
       joined: Math.floor(i * 5.4), // days after the shop opened
       weight: i < 12 ? 6 : 1,
     });
@@ -230,6 +250,7 @@ function seed() {
     name: 'Funmi Adebayo',
     phone: '0800 000 0123',
     address: 'Flat 4, 12 Adeola Odeku Street, Victoria Island',
+    area: 'Victoria Island',
     joined: 300,
     weight: 0,
   };
@@ -251,7 +272,32 @@ function seed() {
     }
     return chosen.map((p) => ({ p, qty: R() < 0.72 ? 1 : R() < 0.75 ? 2 : 3 }));
   }
+  // Sales in the past: the glow serum has been ₦8,500 (from ₦9,500) for the last 45 days, shea butter was
+  // ₦3,000 last December. Where customers came from: a separate random stream, so the rest of the sample stays the same.
+  const R2 = rng(4242);
+  const saleAt = (p, at) => {
+    const m = new Date(at).getMonth();
+    if (p.name.startsWith('Glow serum') && at > t0 - 45 * DAY) return 8500;
+    if (p.name.startsWith('Shea butter') && m === 11 && at < t0 - 30 * DAY) return 3000;
+    return null;
+  };
+  const sourceAt = (at) => {
+    const recent = 1 - (t0 - at) / (400 * DAY); // 0 a year ago, 1 today: TikTok and Instagram grow
+    const r = R2();
+    const tt = 0.04 + 0.12 * recent,
+      ig = 0.22 + 0.08 * recent;
+    if (r < 0.4) return 'whatsapp';
+    if (r < 0.4 + ig) return 'instagram';
+    if (r < 0.4 + ig + tt) return 'tiktok';
+    if (r < 0.4 + ig + tt + 0.05) return 'facebook';
+    return 'direct';
+  };
   function addOrder(c, at, lines, mode, fee) {
+    lines.forEach((l) => {
+      const sale = saleAt(l.p, at);
+      l.price = sale || l.p.price;
+      l.was = sale ? l.p.price : null;
+    });
     const o = {
       id: 0,
       shop_id: shop.id,
@@ -261,7 +307,9 @@ function seed() {
       customer_phone: c.phone,
       mode,
       address: mode === 'delivery' ? c.address : '',
-      items_total: lines.reduce((s, l) => s + l.p.price * l.qty, 0),
+      area: mode === 'delivery' ? c.area || null : null,
+      source: sourceAt(at),
+      items_total: lines.reduce((s, l) => s + l.price * l.qty, 0),
       delivery_fee: mode === 'delivery' ? fee : null,
       delivery_paid_by: 'customer',
       amount_paid: 0,
@@ -402,7 +450,8 @@ function seed() {
         order_id: o.id,
         product_id: l.p.id,
         name: l.p.name,
-        price: l.p.price,
+        price: l.price,
+        was_price: l.was,
         qty: l.qty,
         packed: sent,
       }),
@@ -468,6 +517,14 @@ function seed() {
       created_at: oil.created_at,
     }),
   );
+  // orders from before the sizes were added were all the 100ml: name them the way new orders are named
+  items.forEach((i) => {
+    if (i.product_id === oil.id) {
+      i.name = 'Hair growth oil · 100ml';
+      i.option_id = product_options[1].id;
+      i.option_name = '100ml';
+    }
+  });
   Object.assign(oil, {
     name: 'Hair growth oil',
     option_label: 'Size',
@@ -475,9 +532,43 @@ function seed() {
     stock: 7 + oil.stock + 4,
   });
   products[5].sale_price = 8500;
+  // Money out: what Bimpe spends to run the shop (restocking, packaging, transport, data and her ShopDesk plan)
+  const money_out = [];
+  {
+    const R3 = rng(777);
+    const out = (at, amount, kind, note) =>
+      money_out.push({
+        id: 0,
+        shop_id: shop.id,
+        amount: Math.round(amount / 100) * 100,
+        kind,
+        note,
+        spent_on: iso(at).slice(0, 10),
+        created_at: iso(at),
+      });
+    for (let d = 398; d >= 0; d--) {
+      const day = t0 - d * DAY + 11 * HOUR;
+      const date = new Date(day);
+      const grow = 1 + 3.2 * (1 - d / 400);
+      if (date.getDate() === 3 || date.getDate() === 17)
+        out(day, 38000 * grow + R3() * 25000, 'restock', 'Restock from the market');
+      if (date.getDate() === 5) out(day, 6000 + R3() * 5000, 'packaging', 'Packaging nylons and boxes');
+      if (date.getDate() === 1) out(day, 5000, 'data', 'Data and airtime');
+      if (date.getDate() === 1 && d < 300) out(day, 3000, 'shopdesk', 'ShopDesk plan');
+      if (date.getDay() === 2) out(day, 2500 + R3() * 3000, 'transport', 'Transport to the market');
+    }
+    money_out.forEach((m, i) => (m.id = i + 1));
+  }
   const custRows = [funmi, ...customers]
     .filter((c) => orders.some((o) => o.customer_id === c.id))
-    .map((c) => ({ user_id: c.id, name: c.name, phone: c.phone, address: c.address, updated_at: iso(now) }));
+    .map((c) => ({
+      user_id: c.id,
+      name: c.name,
+      phone: c.phone,
+      address: c.address,
+      area: c.area || '',
+      updated_at: iso(now),
+    }));
   R = rng(now % 100000);
   // Chats: Funmi and the shop about her order on its way; a customer who says she has paid, waiting for the shop's reply
   const messages = [];
@@ -512,7 +603,7 @@ function seed() {
   msg(says, 'customer', "I've sent the money. Please check and send it today 🙏", ago(1.4));
   notifications[notifications.length - 1].read_at = null;
   return {
-    v: 10,
+    v: 11,
     day: t0,
     uid: VENDOR.id,
     path: '/',
@@ -523,6 +614,7 @@ function seed() {
     orders,
     order_items: items,
     payments,
+    money_out,
     customers: custRows,
     reports: [],
     problems,
@@ -530,6 +622,40 @@ function seed() {
     messages,
     notifications,
   };
+}
+
+// The month-end alert, for showing it in the demo (the real one is sent by the database on the last day of the month).
+export function monthEndAlert() {
+  const s = S.shops.find((x) => x.owner_id === VENDOR.id);
+  const n = new Date();
+  const first = new Date(n.getFullYear(), n.getMonth(), 1);
+  const share = (p) => {
+    const o = S.orders.find((x) => x.id === p.order_id);
+    const fee = o && o.delivery_paid_by === 'customer' ? o.delivery_fee || 0 : 0;
+    return fee ? Math.round((p.amount * o.items_total) / (o.items_total + fee)) : p.amount;
+  };
+  const inn = S.payments
+    .filter((p) => p.shop_id === s.id && Date.parse(p.created_at) >= +first)
+    .reduce((a, p) => a + share(p), 0);
+  const orders = S.orders.filter(
+    (o) => o.shop_id === s.id && o.status !== 'cancelled' && Date.parse(o.created_at) >= +first,
+  ).length;
+  const out = S.money_out
+    .filter((m) => m.shop_id === s.id && m.spent_on >= iso(+first).slice(0, 10))
+    .reduce((a, m) => a + m.amount, 0);
+  const ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+  const month = n.toLocaleDateString('en-NG', { month: 'long' });
+  const was = S.uid;
+  S.uid = null; // sent by ShopDesk, not by the shop itself
+  notify(
+    s.owner_id,
+    null,
+    'monthly_report',
+    `Your ${month} report is ready`,
+    `${naira(inn)} in from ${orders} orders${out ? ` · ${naira(inn - out)} left after money out` : ''}. Tap to see it.`,
+    `/?report=${ym}#sales`,
+  );
+  S.uid = was;
 }
 
 // ---------- keeping the demo in this browser ----------
@@ -540,7 +666,7 @@ try {
   S = null;
 }
 // A fresh sample each day, so "today" always has orders in it.
-if (!S || S.v !== 10 || S.day !== startOfDay(Date.now())) S = seed();
+if (!S || S.v !== 11 || S.day !== startOfDay(Date.now())) S = seed();
 demo.go(S.path || '/');
 let saveTimer = null;
 function save() {
@@ -1207,6 +1333,15 @@ const RPC = {
         .slice(0, 20),
       mode,
       address,
+      area:
+        mode === 'delivery'
+          ? String(c.area || '')
+              .trim()
+              .slice(0, 40) || null
+          : null,
+      source: ['whatsapp', 'instagram', 'tiktok', 'facebook', 'snapchat', 'x', 'direct'].includes(c.source)
+        ? c.source
+        : 'direct',
       delivery_lat: pin ? pin.lat : null,
       delivery_lng: pin ? pin.lng : null,
       items_total: 0,
@@ -1234,12 +1369,14 @@ const RPC = {
       name: o.customer_name,
       phone: o.customer_phone,
       address: (pin && address.startsWith('Map pin') ? '' : o.address) || (old ? old.address : ''),
+      area: o.area || (old ? old.area : '') || '',
       updated_at: nowIso(),
     };
     if (old) Object.assign(old, row);
     else S.customers.push(row);
     lines.forEach(({ p, o: opt, qty }) => {
       const pay = opt ? (opt.sale_price ?? opt.price) : (p.sale_price ?? p.price);
+      const full = opt ? opt.price : p.price;
       if (opt) {
         opt.stock -= qty;
         syncProduct(p);
@@ -1252,6 +1389,7 @@ const RPC = {
         option_name: opt ? opt.name : '',
         name: opt ? `${p.name} · ${opt.name}` : p.name,
         price: pay,
+        was_price: pay < full ? full : null,
         qty,
         photo_path: p.photo_path,
       });
@@ -1596,6 +1734,31 @@ const RPC = {
       );
     return m;
   },
+  // a shop writes to one of its customers (shown on that shop in their Shops tab)
+  message_customer: ({ p_customer, p_body }) => {
+    const s = myShop();
+    if (!s) fail('Not allowed.');
+    const b = String(p_body || '')
+      .trim()
+      .slice(0, 300);
+    if (!b) fail('Write a message.');
+    if (!p_customer || !S.orders.some((o) => o.shop_id === s.id && o.customer_id === p_customer))
+      fail('You can only message customers who have ordered from you.');
+    if (/\d{10,}/.test(b.replace(/[\s.-]/g, '')))
+      fail("Send account and phone numbers in an order's chat instead.");
+    if (
+      S.notifications.some(
+        (n) =>
+          n.user_id === p_customer &&
+          n.kind === 'shop_message' &&
+          n.url === '/' + s.slug &&
+          Date.parse(n.created_at) > Date.now() - 7 * DAY,
+      )
+    )
+      fail('You messaged this customer in the last 7 days. Try again later.');
+    notify(p_customer, null, 'shop_message', s.name, b, '/' + s.slug);
+    return null;
+  },
   mark_read: ({ p_order = null, p_kind = null }) => {
     S.notifications.forEach((n) => {
       if (
@@ -1678,6 +1841,7 @@ function visible(table) {
   if (table === 'product_options') return S.product_options.filter((x) => x.shop_id === s.id);
   if (table === 'orders') return S.orders.filter((x) => x.shop_id === s.id);
   if (table === 'payments') return S.payments.filter((x) => x.shop_id === s.id);
+  if (table === 'money_out') return S.money_out.filter((x) => x.shop_id === s.id);
   if (table === 'problems') return S.problems.filter((x) => x.shop_id === s.id);
   return [];
 }
@@ -1855,6 +2019,19 @@ class Query {
           last_active_at: nowIso(),
           ...v,
         });
+      } else if (t === 'money_out') {
+        const s = myShop();
+        if (!s || v.shop_id !== s.id) fail('new row violates row-level security policy');
+        if (!(v.amount > 0))
+          fail('new row for relation "money_out" violates check constraint "money_out_amount_check"');
+        S.money_out.push({
+          id: Math.max(0, ...S.money_out.map((m) => m.id)) + 1,
+          kind: 'other',
+          note: '',
+          spent_on: nowIso().slice(0, 10),
+          created_at: nowIso(),
+          ...v,
+        });
       } else if (t === 'customers') {
         if (v.user_id !== u) fail('new row violates row-level security policy');
         if (hasShop(u)) fail(SHOP_EMAIL);
@@ -1881,8 +2058,9 @@ class Query {
         Object.assign(r, this.values, t === 'shops' ? { status: r.status, owner_id: r.owner_id } : {}),
       );
     } else if (this.kind === 'delete') {
-      if (t !== 'customers') fail('Not allowed.');
-      S.customers = S.customers.filter((c) => !rows.includes(c));
+      if (t === 'money_out') S.money_out = S.money_out.filter((m) => !rows.includes(m));
+      else if (t === 'customers') S.customers = S.customers.filter((c) => !rows.includes(c));
+      else fail('Not allowed.');
     }
     save();
     return { data: null, error: null };

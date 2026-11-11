@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 DB=${TEST_DB:-shopdesk_test}
-FILES=(orders problems chat fair email options)
+FILES=(orders problems chat fair email options report)
 mkdir -p out expected
 
 # fixed locale and time zone, so sorting and dates read the same on every machine

@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import '../src/styles.css';
 import './demo.css';
 import { demo } from './runtime.js';
-import { signInAs, whoIsIn, resetDemo, VENDOR, CUSTOMER } from './database.js';
+import { signInAs, whoIsIn, resetDemo, VENDOR, CUSTOMER, monthEndAlert } from './database.js';
 import { App } from '../src/App.jsx';
 import { navigate } from '../src/lib/helpers.js';
 
@@ -35,6 +35,9 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   navigate(href, { move: a.dataset.move });
 });
+
+// shows the month-end report alert, which the real database sends on the last day of each month
+demo.monthEndAlert = monthEndAlert;
 
 function switchTo(kind) {
   demo.setHint('');

@@ -391,6 +391,26 @@ alter table public.order_items add column if not exists option_name text not nul
 -- The customer's map pin, when they tap "Use my current location". It goes with the address after 180 days.
 alter table public.orders add column if not exists delivery_lat double precision check (delivery_lat between -90 and 90);
 alter table public.orders add column if not exists delivery_lng double precision check (delivery_lng between -180 and 180);
+-- The sales report (update 013): the customer's area, where they came from (Instagram, TikTok, a WhatsApp link...),
+-- the price before a sale on each line, and the shop's monthly goal.
+alter table public.orders add column if not exists area text not null default '' check (char_length(area) <= 40);
+alter table public.orders add column if not exists source text not null default 'direct'
+  check (source in ('whatsapp', 'instagram', 'tiktok', 'facebook', 'snapchat', 'x', 'direct'));
+alter table public.order_items add column if not exists was_price integer check (was_price > 0);
+alter table public.customers add column if not exists area text not null default '' check (char_length(area) <= 40);
+alter table public.shops add column if not exists monthly_goal integer not null default 0 check (monthly_goal between 0 and 2000000000);
+-- Money out: what a shop spends to run (restock, packaging, transport...), so Sales shows what's left.
+-- ShopDesk plan payments are added here automatically (money_out_from_plan below).
+create table if not exists public.money_out (
+  id bigint generated always as identity primary key,
+  shop_id uuid not null references public.shops(id) on delete cascade,
+  amount integer not null check (amount > 0 and amount <= 1000000000),
+  kind text not null default 'other' check (kind in ('restock', 'packaging', 'transport', 'data', 'rent', 'staff', 'ads', 'shopdesk', 'other')),
+  note text not null default '' check (char_length(note) <= 80),
+  spent_on date not null default ((now() at time zone 'Africa/Lagos')::date) check (spent_on >= date '2020-01-01'),
+  created_at timestamptz not null default now()
+);
+create index if not exists money_out_shop on public.money_out (shop_id, spent_on);
 
 -- ---------- helpers ----------
 -- owner-lock.sql later pins is_admin() to your one owner account. If you run this file again, run owner-lock.sql again too.
@@ -540,6 +560,7 @@ alter table public.push_keys enable row level security;
 alter table public.blocked_users enable row level security;
 alter table public.archives enable row level security;
 alter table public.email_settings enable row level security;
+alter table public.money_out enable row level security;
 alter table public.product_options enable row level security;
 
 drop policy if exists shops_owner_read on public.shops;
@@ -560,6 +581,8 @@ create policy orders_owner_read on public.orders for select to authenticated usi
 drop policy if exists items_owner_read on public.order_items;
 create policy items_owner_read on public.order_items for select to authenticated
   using (exists (select 1 from public.orders o where o.id = order_id and o.shop_id = public.my_shop_id()));
+drop policy if exists money_out_owner on public.money_out;
+create policy money_out_owner on public.money_out for all to authenticated using (shop_id = public.my_shop_id()) with check (shop_id = public.my_shop_id());
 drop policy if exists payments_owner_read on public.payments;
 create policy payments_owner_read on public.payments for select to authenticated using (shop_id = public.my_shop_id());
 drop policy if exists customers_own on public.customers;
@@ -577,11 +600,12 @@ create policy notifications_own_read on public.notifications for select to authe
 
 -- Table rights: customers (anon) get nothing directly. Vendors can't change a shop's status or move money fields by hand.
 revoke all on public.shops, public.products, public.orders, public.order_items, public.payments, public.reports, public.admins, public.audit_log, public.settings, public.plan_payments, public.announcements, public.customers, public.problems,
-  public.messages, public.notifications, public.push_subs, public.push_keys, public.blocked_users, public.archives, public.email_settings, public.product_options from anon, authenticated;
+  public.messages, public.notifications, public.push_subs, public.push_keys, public.blocked_users, public.archives, public.email_settings, public.product_options,
+  public.money_out from anon, authenticated;
 grant select on public.shops to authenticated;
 -- Vendors fill in these columns only; status, review fields and dates are set by the database and by you.
 grant insert (owner_id, name, slug, bank, account_number, account_name, whatsapp, allow_part_payment, delivery_paid_by, sells, location, social) on public.shops to authenticated;
-grant update (name, slug, bank, account_number, account_name, whatsapp, allow_part_payment, delivery_paid_by, sells, location, social, last_active_at) on public.shops to authenticated;
+grant update (name, slug, bank, account_number, account_name, whatsapp, allow_part_payment, delivery_paid_by, sells, location, social, last_active_at, monthly_goal) on public.shops to authenticated;
 -- Vendors hide a product instead of deleting it, so orders and your records keep it.
 -- Changes to a product (name, photo, prices, choices, stock) go through save_product, which checks them; only hiding is direct.
 grant select on public.products, public.product_options to authenticated;
@@ -590,8 +614,11 @@ grant update (active) on public.products to authenticated;
 grant select on public.orders, public.order_items, public.payments, public.problems, public.messages, public.notifications to authenticated;
 -- A customer reads, saves and deletes only their own saved details (the policy above).
 grant select, delete on public.customers to authenticated;
-grant insert (user_id, name, phone, address) on public.customers to authenticated;
-grant update (name, phone, address, updated_at) on public.customers to authenticated;
+grant insert (user_id, name, phone, address, area) on public.customers to authenticated;
+grant update (name, phone, address, area, updated_at) on public.customers to authenticated;
+-- A shop keeps its own money out: adds, reads and removes (the policy above keeps it to its own rows).
+grant select, delete on public.money_out to authenticated;
+grant insert (shop_id, amount, kind, note, spent_on) on public.money_out to authenticated;
 
 -- ---------- vetted shops: watch what changes after approval ----------
 -- Once a shop has been approved, a change of name, link or payment account goes in your audit log,
@@ -726,7 +753,7 @@ create or replace function public.place_order(p_slug text, p_customer jsonb, p_i
 language plpgsql security definer set search_path = public as $$
 declare
   v_shop public.shops; v_order public.orders; v_item jsonb; v_prod public.products; v_opt public.product_options; v_qty int; v_total int := 0;
-  v_mode text; v_price int; v_addr text; v_lat float8; v_lng float8;
+  v_mode text; v_price int; v_full int; v_addr text; v_lat float8; v_lng float8; v_area text; v_source text;
 begin
   if auth.uid() is null then raise exception 'Sign in to order.'; end if;
   if public.has_shop(auth.uid()) then raise exception 'This email runs a shop. Use another email to order.'; end if;
@@ -751,20 +778,24 @@ begin
     if v_lat is null then raise exception 'Add a delivery address.'; end if;
     v_addr := 'Map pin ' || round(v_lat::numeric, 5) || ', ' || round(v_lng::numeric, 5);
   end if;
+  -- the area picked at checkout (deliveries only), and where the customer came from (for the shop's report)
+  v_area := case when v_mode = 'delivery' then left(trim(coalesce(p_customer->>'area', '')), 40) else '' end;
+  v_source := case when p_customer->>'source' in ('whatsapp', 'instagram', 'tiktok', 'facebook', 'snapchat', 'x') then p_customer->>'source' else 'direct' end;
   -- no more than 10 orders a minute per shop from the order page, to stop floods
   if (select count(*) from public.orders where shop_id = v_shop.id and created_at > now() - interval '1 minute') >= 10 then
     raise exception 'Too many orders at once. Try again in a minute.';
   end if;
-  insert into public.orders (shop_id, customer_id, customer_name, customer_phone, mode, address, items_total, delivery_paid_by, delivery_lat, delivery_lng)
+  insert into public.orders (shop_id, customer_id, customer_name, customer_phone, mode, address, items_total, delivery_paid_by, delivery_lat, delivery_lng, area, source)
   values (v_shop.id, auth.uid(), left(trim(p_customer->>'name'), 60), left(trim(coalesce(p_customer->>'phone', '')), 20), v_mode,
-          v_addr, 0, v_shop.delivery_paid_by, v_lat, v_lng)
+          v_addr, 0, v_shop.delivery_paid_by, v_lat, v_lng, v_area, v_source)
   returning * into v_order;
   -- signed-in customers: remember their details for next time (an address they typed, not a map pin)
   if auth.uid() is not null then
-    insert into public.customers (user_id, name, phone, address)
-    values (auth.uid(), v_order.customer_name, v_order.customer_phone, case when v_addr like 'Map pin %' then '' else v_addr end)
+    insert into public.customers (user_id, name, phone, address, area)
+    values (auth.uid(), v_order.customer_name, v_order.customer_phone, case when v_addr like 'Map pin %' then '' else v_addr end, v_area)
     on conflict (user_id) do update set name = excluded.name, phone = excluded.phone,
-      address = case when excluded.address <> '' then excluded.address else public.customers.address end, updated_at = now();
+      address = case when excluded.address <> '' then excluded.address else public.customers.address end,
+      area = case when excluded.area <> '' then excluded.area else public.customers.area end, updated_at = now();
   end if;
   for v_item in select * from jsonb_array_elements(p_items) loop
     v_qty := (v_item->>'qty')::int;
@@ -778,15 +809,16 @@ begin
       if v_opt.stock = 0 then raise exception '% (%) is sold out.', v_prod.name, v_opt.name; end if;
       if v_opt.stock < v_qty then raise exception '% (%) has only % left.', v_prod.name, v_opt.name, v_opt.stock; end if;
       update public.product_options set stock = stock - v_qty where id = v_opt.id;
-      v_price := coalesce(v_opt.sale_price, v_opt.price);
+      v_price := coalesce(v_opt.sale_price, v_opt.price); v_full := v_opt.price;
     else
       if v_prod.stock = 0 then raise exception '% is sold out.', v_prod.name; end if;
       if v_prod.stock < v_qty then raise exception '% has only % left.', v_prod.name, v_prod.stock; end if;
       update public.products set stock = stock - v_qty where id = v_prod.id;
-      v_price := coalesce(v_prod.sale_price, v_prod.price);
+      v_price := coalesce(v_prod.sale_price, v_prod.price); v_full := v_prod.price;
     end if;
-    insert into public.order_items (order_id, product_id, option_id, option_name, name, price, qty, photo_path)
-    values (v_order.id, v_prod.id, v_opt.id, coalesce(v_opt.name, ''), v_prod.name || coalesce(' · ' || v_opt.name, ''), v_price, v_qty, v_prod.photo_path);
+    insert into public.order_items (order_id, product_id, option_id, option_name, name, price, qty, photo_path, was_price)
+    values (v_order.id, v_prod.id, v_opt.id, coalesce(v_opt.name, ''), v_prod.name || coalesce(' · ' || v_opt.name, ''), v_price, v_qty, v_prod.photo_path,
+            case when v_price < v_full then v_full end);
     v_total := v_total + v_price * v_qty;
   end loop;
   update public.orders set items_total = v_total where id = v_order.id;
@@ -2019,6 +2051,21 @@ begin
   return v_until;
 end $$;
 
+-- Each plan payment you record is added to that shop's money out, so its report shows what ShopDesk costs.
+create or replace function public.money_out_from_plan() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.amount > 0 then
+    insert into public.money_out (shop_id, amount, kind, note, spent_on, created_at)
+    values (new.shop_id, new.amount, 'shopdesk', 'ShopDesk plan · ' || new.months || ' month' || case when new.months = 1 then '' else 's' end,
+            (new.created_at at time zone 'Africa/Lagos')::date, new.created_at);
+  end if;
+  return new;
+end $$;
+drop trigger if exists plan_payments_money_out on public.plan_payments;
+create trigger plan_payments_money_out after insert on public.plan_payments for each row execute function public.money_out_from_plan();
+revoke all on function public.money_out_from_plan() from public, anon, authenticated;
+
 -- What a vendor sees about their own plan, and where to pay you.
 create or replace function public.my_plan() returns jsonb
 language sql stable security definer set search_path = public as $$
@@ -2206,6 +2253,64 @@ begin
   return a.data;
 end $$;
 
+-- ---------- in-app messages to customers, and the month-end report ----------
+-- A shop writes to one of its customers inside ShopDesk ("We miss you, new stock is in"). It shows on that shop in the
+-- customer's Shops tab, with a phone alert. Only customers who have ordered from the shop, one message a week each,
+-- 50 a day per shop, and no account numbers (those belong in an order's chat, where the scam check runs).
+create or replace function public.message_customer(p_customer uuid, p_body text) returns void
+language plpgsql security definer set search_path = public as $$
+declare s public.shops; b text := left(trim(coalesce(p_body, '')), 300);
+begin
+  select * into s from public.shops where owner_id = auth.uid();
+  if not found then raise exception 'Not allowed.'; end if;
+  if s.status <> 'active' then raise exception 'Your shop isn''t open right now.'; end if;
+  if b = '' then raise exception 'Write a message.'; end if;
+  if p_customer is null or not exists (select 1 from public.orders where shop_id = s.id and customer_id = p_customer) then
+    raise exception 'You can only message customers who have ordered from you.'; end if;
+  if exists (select 1 from regexp_matches(regexp_replace(b, '[\s.-]', '', 'g'), '\d+', 'g') x where char_length(x[1]) >= 10) then
+    raise exception 'Send account and phone numbers in an order''s chat instead.'; end if;
+  if exists (select 1 from public.notifications where user_id = p_customer and kind = 'shop_message' and url = '/' || s.slug
+             and created_at > now() - interval '7 days') then
+    raise exception 'You messaged this customer in the last 7 days. Try again later.'; end if;
+  if (select count(*) from public.notifications where kind = 'shop_message' and url = '/' || s.slug and created_at > now() - interval '1 day') >= 50 then
+    raise exception 'That''s 50 messages today. Try again tomorrow.'; end if;
+  perform public.notify(p_customer, null, 'shop_message', s.name, b, '/' || s.slug);
+end $$;
+
+-- On the last day of each month (9pm in Lagos, from cron below) every open shop gets "Your November report is ready",
+-- which opens that month's report in the app. p_today is for tests. Sends once per shop per month.
+create or replace function public.send_monthly_reports(p_today date default null) returns int
+language plpgsql security definer set search_path = public as $$
+declare
+  v_today date := coalesce(p_today, (now() at time zone 'Africa/Lagos')::date);
+  v_first date := date_trunc('month', v_today)::date;
+  v_start timestamptz := v_first::timestamp at time zone 'Africa/Lagos';
+  v_key text := to_char(v_today, 'YYYY-MM');
+  s public.shops; v_in bigint; v_orders int; v_out bigint; v_left bigint; n int := 0;
+begin
+  if auth.uid() is not null and not public.is_admin() then raise exception 'Not allowed.'; end if;
+  if extract(day from v_today + 1) <> 1 then return 0; end if; -- only on the last day of the month
+  perform set_config('shopdesk.system', 'on', true);
+  for s in select * from public.shops where status = 'active' loop
+    if exists (select 1 from public.notifications where user_id = s.owner_id and kind = 'monthly_report' and url = '/?report=' || v_key || '#sales') then
+      continue; end if;
+    -- money in for goods (each payment's delivery part is the rider's), orders placed, money out
+    select coalesce(sum(case when o.delivery_paid_by = 'customer' and coalesce(o.delivery_fee, 0) > 0
+                             then round(p.amount::numeric * o.items_total / (o.items_total + o.delivery_fee)) else p.amount end), 0)
+      into v_in from public.payments p join public.orders o on o.id = p.order_id
+      where p.shop_id = s.id and p.created_at >= v_start;
+    select count(*) into v_orders from public.orders where shop_id = s.id and status <> 'cancelled' and created_at >= v_start;
+    select coalesce(sum(amount), 0) into v_out from public.money_out where shop_id = s.id and spent_on between v_first and v_today;
+    v_left := v_in - v_out;
+    perform public.notify(s.owner_id, null, 'monthly_report', 'Your ' || to_char(v_today, 'FMMonth') || ' report is ready',
+      public.naira(v_in::int) || ' in from ' || v_orders || ' order' || case when v_orders = 1 then '' else 's' end ||
+      case when v_out > 0 then ' · ' || case when v_left < 0 then '-' else '' end || public.naira(abs(v_left)::int) || ' left after money out' else '' end ||
+      '. Tap to see it.', '/?report=' || v_key || '#sales');
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+
 -- Function rights: customers may only use the order-page functions.
 revoke all on all functions in schema public from public, anon;
 grant execute on function public.get_storefront(text), public.get_order_public(uuid), public.report_shop(text, text, text, uuid), public.customer_says_paid(uuid), public.customer_received(uuid) to anon, authenticated;
@@ -2223,7 +2328,7 @@ grant execute on function public.is_admin(), public.my_shop_id(), public.set_del
   public.refund_sent(bigint, text), public.admin_clear_owed(bigint, text), public.admin_order_chat(bigint, text), public.cancel_order(bigint, text, text),
   public.customer_cancel(uuid), public.report_message(bigint, text), public.admin_block_user(uuid, boolean, text),
   public.admin_find_order(text), public.admin_archives(), public.admin_archive(bigint, text),
-  public.seen_app(), public.my_email_settings(), public.set_email_alerts(boolean) to authenticated;
+  public.seen_app(), public.my_email_settings(), public.set_email_alerts(boolean), public.message_customer(uuid, text) to authenticated;
 -- the "Stop these emails" page works without signing in (the secret link is the key)
 grant execute on function public.email_by_token(uuid, boolean) to anon, authenticated;
 revoke execute on function public.owned_order(bigint) from authenticated;
@@ -2238,6 +2343,7 @@ revoke execute on function public.naira(int), public.lagos_time(timestamptz), pu
   public.is_blocked(uuid), public.report_block(uuid), public.cancel_text(text), public.tidy(uuid),
   public.admin_chat_free(public.orders), public.shop_snapshot(uuid), public.shops_archive(), public.email_claim(int), public.email_unclaim(uuid, bigint[]) from authenticated;
 revoke execute on function public.restock(bigint[]), public.product_options_sync(), public.json_int(jsonb) from authenticated;
+revoke execute on function public.send_monthly_reports(date), public.money_out_from_plan() from authenticated;
 
 -- Who may see or add a photo in an order's folder (order-photos/<order number>/...): the shop, the customer who placed it, and you.
 -- Shops add packing photos (pack-...), answer photos (v-...) and refund receipts (r-...); customers add problem photos (c-...);
@@ -2329,3 +2435,17 @@ begin
       $job$select net.http_post(url := 'https://buvzjgzoctmpgthelddr.supabase.co/functions/v1/push', body := '{"action":"email"}'::jsonb)$job$);
   end if;
 end $mail$;
+-- The month-end report: 9pm Lagos time (8pm UTC) on the 28th to the 31st; send_monthly_reports only acts on the last day.
+-- With pg_net it also asks the push sender to send the phone alerts straight away.
+do $monthly$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule(jobid) from cron.job where jobname = 'shopdesk-monthly';
+    if exists (select 1 from pg_extension where extname = 'pg_net') then
+      perform cron.schedule('shopdesk-monthly', '0 20 28-31 * *',
+        $job$select public.send_monthly_reports(); select net.http_post(url := 'https://buvzjgzoctmpgthelddr.supabase.co/functions/v1/push', body := '{"action":"flush"}'::jsonb)$job$);
+    else
+      perform cron.schedule('shopdesk-monthly', '0 20 28-31 * *', 'select public.send_monthly_reports()');
+    end if;
+  end if;
+end $monthly$;

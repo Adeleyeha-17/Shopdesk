@@ -43,7 +43,8 @@ function useEmail() {
 }
 
 // active: 'shops', 'orders', 'cart' or 'account'. unread: new messages and updates on their orders.
-export function CustomerTabs({ active, unread = 0 }) {
+// shopNews: messages from shops (on the Shops tab).
+export function CustomerTabs({ active, unread = 0, shopNews = 0 }) {
   // the Cart tab: the newest shop with something in its cart, or else the shop opened last
   const shops = myShops();
   const cartShop = shops.find((s) => countIn(s.slug) > 0) || shops[0];
@@ -92,13 +93,22 @@ export function CustomerTabs({ active, unread = 0 }) {
               </svg>
             )}
             {label}
+            {k === 'shops' && shopNews > 0 && (
+              <span className="badge" aria-label={shopNews + ' new from shops'}>
+                {shopNews > 9 ? '9+' : shopNews}
+              </span>
+            )}
             {k === 'orders' && unread > 0 && (
               <span className="badge" aria-label={unread + ' new'}>
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
             {k === 'cart' && inCart > 0 && (
-              <span key={bump} className={'badge ink' + (bump ? ' bump' : '')} aria-label={inCart + ' in the cart'}>
+              <span
+                key={bump}
+                className={'badge ink' + (bump ? ' bump' : '')}
+                aria-label={inCart + ' in the cart'}
+              >
                 {inCart > 99 ? '99+' : inCart}
               </span>
             )}

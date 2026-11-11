@@ -36,7 +36,12 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const url = `${origin}/demo/index.html`;
 
 const browser = await chromium.launch();
-const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, timezoneId: 'Africa/Lagos' });
+const context = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 1,
+  timezoneId: 'Africa/Lagos',
+  acceptDownloads: true,
+});
 const p = await context.newPage();
 const pageErrors = [];
 p.on('pageerror', (e) => pageErrors.push(e.message));
@@ -146,6 +151,17 @@ await step('the Shops tab keeps the shop, with what is in its cart at the top', 
   await see('Your cart');
   await p.locator('button:has-text("Checkout")').click();
   await see('Place order');
+});
+
+await step('checkout reads the area from the address; Change picks another', async () => {
+  await p.locator('.co-addr .linkbtn:has-text("Change")').click();
+  await p.locator('#cAddr').fill('4 Admiralty Way, Lekki Phase 1');
+  expect((await p.locator('.area-line').innerText()).includes('Lekki Phase 1'), 'the area was not read from the address');
+  await p.locator('.area-line .linkbtn').click();
+  await p.locator('.area-sheet input[type=search]').fill('yab');
+  await p.locator('.area-row:has-text("Yaba")').click();
+  await p.locator('.area-sheet').waitFor({ state: 'detached' });
+  expect((await p.locator('.area-line').innerText()).includes('Yaba'), 'the picked area is not shown');
 });
 
 await step('placing an order shows the order code and waits for the shop', async () => {
@@ -268,10 +284,66 @@ await step('the shop owner deletes the product', async () => {
   });
 });
 
-await step('the Sales page opens', async () => {
+await step('the Sales page shows the goal, where the money stands and what to do today', async () => {
   await nav('Sales');
-  await p.locator('h2').first().waitFor();
-  expect(/₦/.test(await text()), 'no money figures on the Sales page');
+  await p.locator('.filter:has-text("This month")').click();
+  await p.locator('.goal .ring').waitFor();
+  await see('Where the money stands');
+  await see('Do this today');
+  expect(/₦/.test(await p.locator('.stmt-row.total').innerText()), 'no money left line');
+});
+
+await step('the Full report opens its sheets, sorts a column and downloads the Excel file', async () => {
+  await p.locator('button:has-text("Full report")').click();
+  await p.locator('.report').waitFor();
+  await p.locator('.report-tabs .filter:has-text("Products")').click();
+  await p.locator('.rt th button:has-text("Sold")').first().click();
+  expect((await p.locator('.rt tfoot').innerText()).startsWith('Total'), 'no total line');
+  const file = p.waitForEvent('download');
+  await p.locator('.report-top button:has-text("Excel")').click();
+  const d = await file;
+  const saved = path.join(out, 'report.xlsx');
+  await d.saveAs(saved);
+  const head = fs.readFileSync(saved).subarray(0, 2).toString();
+  expect(head === 'PK' && fs.statSync(saved).size > 20000, 'the Excel file is missing or empty');
+  fs.rmSync(saved);
+  await p.locator('.back-btn').click();
+  await p.locator('.report').waitFor({ state: 'detached' });
+});
+
+await step('a regular can be messaged inside ShopDesk, not on WhatsApp', async () => {
+  await p.locator('button:has-text("Full report")').click();
+  await p.locator('.report-tabs .filter:has-text("Customers")').click();
+  expect(!(await p.locator('.report a[href*="wa.me"]').count()), 'a WhatsApp link is still there');
+  await p.locator('.rt .send-btn:has-text("Message"):not([disabled])').first().click();
+  await p.locator('.compose textarea').waitFor();
+  await p.locator('.compose button:has-text("Send in ShopDesk")').click();
+  await see('in ShopDesk');
+  await p.locator('.back-btn').click();
+  await p.locator('.report').waitFor({ state: 'detached' });
+});
+
+await step('the monthly reports list opens a month, and the month-end alert opens that report', async () => {
+  await p.locator('.month-row').nth(1).click();
+  await p.locator('.report').waitFor();
+  expect(/1 \w+ \d+ – \d+ \w+/.test(await p.locator('.report-title .sub').innerText()), 'no month dates');
+  await p.locator('.back-btn').click();
+  await p.evaluate(() => window.__demo.monthEndAlert());
+  await p.locator('.toast:has-text("report is ready") button:has-text("Open")').click();
+  await p.locator('.report').waitFor();
+  await p.locator('.back-btn').click();
+});
+
+await step('money out can be added, and shows in the Full report', async () => {
+  await p.locator('button:has-text("+ Add money out")').first().click();
+  await p.locator('#outAmount').fill('12500');
+  await p.locator('.kinds .filter:has-text("Packaging")').click();
+  await p.locator('.sheet button:has-text("Add money out")').click();
+  await see('₦12,500 money out added');
+  await p.locator('button:has-text("Full report")').click();
+  await p.locator('.report-tabs .filter:has-text("Money out")').click();
+  await see('Packaging');
+  await p.locator('.back-btn').click();
 });
 
 // ---------------- a new shop owner signs up ----------------

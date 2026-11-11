@@ -18,6 +18,9 @@ import { loadCart, saveCart, clearCart, fitCart } from './cart.js';
 import { onSale, optionWord, options, payPrice, priceFrom } from '../lib/products.js';
 import { useBusy } from '../lib/busy.js';
 import { Skeleton } from '../shared/Skeleton.jsx';
+import { AreaPicker } from './AreaPicker.jsx';
+import { areaIn } from './areas.js';
+import { noteSource, sourceFor } from './source.js';
 
 // "₦8,000 ₦9,500": the price to pay, with the old one crossed out during a sale
 function Price({ x }) {
@@ -174,7 +177,11 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [picking, setPicking] = useState(null); // the product whose sizes are open
   const [find, setFind] = useState(''); // search this shop's products
   const [inSearch, setInSearch] = useState(false); // the search box is being used
-  const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '' });
+  const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '', area: '' });
+  const [areaOpen, setAreaOpen] = useState(false);
+  const [areaPicked, setAreaPicked] = useState(false); // they chose the area themselves: typing doesn't change it
+  // where this customer came from (Instagram, TikTok, a WhatsApp link...), for the shop's report
+  useEffect(() => noteSource(slug), [slug]);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -195,7 +202,7 @@ export function ShopPage({ slug, step = 'shop' }) {
       // Ask both questions at once (is this a shop's account? any saved details?), then show the form already filled in.
       const [{ data: a }, { data: c }] = await Promise.all([
         supabase.rpc('my_account'),
-        supabase.from('customers').select('name, phone, address').maybeSingle(),
+        supabase.from('customers').select('name, phone, address, area').maybeSingle(),
       ]);
       const shopAccount = !!(a && a.vendor);
       if (c && !shopAccount) setSaved(c);
@@ -205,6 +212,7 @@ export function ShopPage({ slug, step = 'shop' }) {
           name: f.name || c.name,
           phone: f.phone || c.phone,
           address: f.address || c.address,
+          area: f.area || c.area || areaIn(c.address),
         }));
       setIsShop(shopAccount);
       setMe(session.user.email);
@@ -276,7 +284,13 @@ export function ShopPage({ slug, step = 'shop' }) {
   const inbox = useInbox(uid, { title: state.shop ? state.shop.name : 'ShopDesk' });
   const closeSheet = useCallback(() => setPicking(null), []);
   // the bar at the bottom on the shop and the cart (not on checkout)
-  const tabs = checkout ? null : <CustomerTabs active={step === 'cart' ? 'cart' : 'shops'} unread={inbox.count} />;
+  const tabs = checkout ? null : (
+    <CustomerTabs
+      active={step === 'cart' ? 'cart' : 'shops'}
+      unread={inbox.count}
+      shopNews={inbox.shopCount}
+    />
+  );
 
   if (state.loading)
     return (
@@ -365,7 +379,7 @@ export function ShopPage({ slug, step = 'shop' }) {
     setMsg('');
     const { data, error } = await supabase.rpc('place_order', {
       p_slug: slug,
-      p_customer: form,
+      p_customer: { ...form, source: sourceFor(slug) },
       p_items: items,
     });
     setBusy(false);
@@ -638,12 +652,7 @@ export function ShopPage({ slug, step = 'shop' }) {
         <Skeleton kind="list" />
       ) : me === '' ? (
         <section className="card">
-          <SignIn
-            compact
-            title="Sign in to order"
-            path={'/' + slug + '/checkout'}
-            note="Your cart stays."
-          />
+          <SignIn compact title="Sign in to order" path={'/' + slug + '/checkout'} note="Your cart stays." />
           <p className="note" style={{ fontSize: 12 }}>
             <a href="/privacy">Privacy</a>
           </p>
@@ -734,9 +743,25 @@ export function ShopPage({ slug, step = 'shop' }) {
                     id="cAddr"
                     autoComplete="street-address"
                     value={form.address}
-                    onChange={(e) => setForm({ ...form, address: e.target.value })}
-                    placeholder="Street, area and a landmark"
+                    onChange={(e) => {
+                      const address = e.target.value;
+                      // the area comes from what they type ("…, Lekki Phase 1"), unless they picked one themselves
+                      setForm((f) => ({ ...f, address, area: areaPicked ? f.area : areaIn(address) }));
+                    }}
+                    placeholder="House number, street and area"
                   />
+                  <span className="area-line">
+                    {form.area ? (
+                      <>
+                        Area: <strong>{form.area}</strong>
+                      </>
+                    ) : (
+                      'Add your area so the shop knows where you are.'
+                    )}{' '}
+                    <button className="linkbtn" onClick={() => setAreaOpen(true)}>
+                      {form.area ? 'Change' : 'Pick area'}
+                    </button>
+                  </span>
                 </div>
               ) : (
                 <div className="co-addr">
@@ -746,9 +771,22 @@ export function ShopPage({ slug, step = 'shop' }) {
                       Change
                     </button>
                   </div>
-                  <p className="co-line">{form.address}</p>
+                  <p className="co-line">
+                    {form.address}
+                    {form.area && <span className="area-tag">{form.area}</span>}
+                  </p>
                 </div>
               ))}
+            {areaOpen && (
+              <AreaPicker
+                value={form.area}
+                onPick={(a) => {
+                  setAreaPicked(true);
+                  setForm((f) => ({ ...f, area: a }));
+                }}
+                onClose={() => setAreaOpen(false)}
+              />
+            )}
           </section>
           <section className="card" aria-label="Order summary">
             <div className="row">

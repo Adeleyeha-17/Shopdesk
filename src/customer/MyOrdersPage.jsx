@@ -221,7 +221,7 @@ function SignedInOrders({ email, userId, view }) {
   const initial = ((email || '').trim()[0] || '?').toUpperCase();
   if (view === 'account')
     return (
-      <Page title="Account" kind="me" tabs={<CustomerTabs active="account" unread={inbox.count} />}>
+      <Page title="Account" kind="me" tabs={<CustomerTabs active="account" unread={inbox.count} shopNews={inbox.shopCount} />}>
         <section className="card boxed profile">
           <span className="avatar big" aria-hidden="true">
             {initial}
@@ -335,7 +335,7 @@ function SignedInOrders({ email, userId, view }) {
     );
   const olderLeft = past.length - pastShown;
   return (
-    <Page title="My orders" kind="me" tabs={<CustomerTabs active="orders" unread={inbox.count} />}>
+    <Page title="My orders" kind="me" tabs={<CustomerTabs active="orders" unread={inbox.count} shopNews={inbox.shopCount} />}>
       {msg && <p className="note">{msg}</p>}
       <AlertsPrompt who="customer" userId={userId} />
       {orders === null ? (

@@ -122,14 +122,25 @@ function focusFromUrl() {
   return { id, chat: q.has('chat') };
 }
 
+// Opened from the month-end alert? /?report=2026-11#sales opens that month's Full report.
+function reportFromUrl() {
+  const m = new URLSearchParams(window.location.search).get('report');
+  if (!/^\d{4}-\d{2}$/.test(m || '')) return null;
+  window.history.replaceState(null, '', '/#sales');
+  return m;
+}
+
 function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
   const [focus, setFocus] = useState(focusFromUrl);
+  const [month, setMonth] = useState(reportFromUrl); // a month's report to open on the Sales tab
   const [tab, setTab] = useState(() =>
-    focus
-      ? 'orders'
-      : /^#(sales|orders|stock|shop)$/.test(window.location.hash)
-        ? window.location.hash.slice(1)
-        : 'sales',
+    month
+      ? 'sales'
+      : focus
+        ? 'orders'
+        : /^#(sales|orders|stock|shop)$/.test(window.location.hash)
+          ? window.location.hash.slice(1)
+          : 'sales',
   );
   const [data, setData] = useState({ products: [], orders: [], payments: [], problems: [], loaded: false });
   const [loadErr, setLoadErr] = useState(null);
@@ -191,7 +202,14 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
     unread.reload();
     if (!n) return;
     if (n.kind === 'new_order') say(n.title + ' · ' + n.body);
-    else if (n.kind === 'message' && !document.querySelector(`[data-chat-open="${n.order_id}"]`))
+    else if (n.kind === 'monthly_report') {
+      const m = (String(n.url).match(/report=(\d{4}-\d{2})/) || [])[1];
+      say({
+        title: n.title,
+        text: n.body,
+        action: m && { label: 'Open', run: () => (setMonth(m), setTab('sales')) },
+      });
+    } else if (n.kind === 'message' && !document.querySelector(`[data-chat-open="${n.order_id}"]`))
       say({ title: n.title, text: n.body, action: { label: 'Open', run: () => openChat(n.order_id) } });
   });
   useEffect(() => {
@@ -223,7 +241,7 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
     data.problems.filter((p) => !p.reply && ['open', 'with_shopdesk'].includes(problemState(p))).length +
     Object.keys(unread.chats).length;
   useCount(unpaid, shop.name);
-  const ctx = { shop, data, load, run, say, reloadShop, setTab, unread, focus, setFocus };
+  const ctx = { shop, data, load, run, say, reloadShop, setTab, unread, focus, setFocus, month, setMonth };
   useBusy(!data.loaded && !loadErr);
   return (
     <div className="app">

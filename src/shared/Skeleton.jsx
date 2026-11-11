@@ -1,5 +1,5 @@
 // Grey shapes with a soft shine where a page's content is about to appear, instead of the word "Loading".
-// kind: 'shop' (a shop's products), 'list' (cards, e.g. orders), 'page' (a heading and a few lines).
+// kind: 'shop' (a shop's products), 'list' (cards, e.g. orders), 'page' (a heading and a few lines), 'sales' (the Sales tab).
 import React from 'react';
 
 const Line = ({ w = 100, h = 14 }) => <div className="sk" style={{ width: w + '%', height: h }} />;
@@ -24,6 +24,17 @@ export function Skeleton({ kind = 'list' }) {
               </div>
             ))}
           </div>
+        </>
+      ) : kind === 'sales' ? (
+        <>
+          <div className="sk" style={{ height: 118, borderRadius: 18 }} />
+          <div className="sk" style={{ height: 150, borderRadius: 18 }} />
+          <div className="sk-tiles">
+            {[0, 1, 2, 3].map((i) => (
+              <div className="sk" key={i} style={{ height: 76, borderRadius: 14 }} />
+            ))}
+          </div>
+          <div className="sk" style={{ height: 220, borderRadius: 18 }} />
         </>
       ) : kind === 'page' ? (
         <>

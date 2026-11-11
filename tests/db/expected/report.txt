@@ -1,0 +1,43 @@
+R1 a delivery order keeps the area, where the customer came from and the price before a sale (expect Lekki Phase 1|instagram, then Argan oil 8000 was 9500 / Soap 2000 was -, then Lekki Phase 1):
+Lekki Phase 1|instagram
+Argan oil 8000 was 9500 / Soap 2000 was -
+Lekki Phase 1
+R2 pick-up has no area, an unknown source counts as direct, and the saved area stays (expect |direct, then Lekki Phase 1):
+|direct
+Lekki Phase 1
+R3 money out: a shop adds and reads its own, removes it, and cannot touch another shop (expect 2|47500, then 2 plain errors, then 0, then 1):
+2|47500
+psql:report.sql:42: ERROR:  new row violates row-level security policy for table "money_out"
+psql:report.sql:43: ERROR:  new row for relation "money_out" violates check constraint "money_out_amount_check"
+0
+1
+R4 what money out takes: a known kind only, and no changing it afterwards (expect 2 plain errors):
+psql:report.sql:52: ERROR:  new row for relation "money_out" violates check constraint "money_out_kind_check"
+psql:report.sql:53: ERROR:  permission denied for table money_out
+R5 visitors and customers see no money out (expect a permission error, then 0):
+psql:report.sql:56: ERROR:  permission denied for table money_out
+0
+R6 the monthly goal: the shop sets it, not below zero (expect 750000, then a plain error):
+750000
+psql:report.sql:64: ERROR:  new row for relation "shops" violates check constraint "shops_monthly_goal_check"
+R7 a plan payment you record shows in the money out of that shop (expect 1|shopdesk|3000|ShopDesk plan · 1 month):
+1|shopdesk|3000|ShopDesk plan · 1 month
+R8 a shop messages its own customers inside ShopDesk: no account numbers, only its customers, once a week (expect 3 plain errors, then shop_message|Report Shop|/reportshop, then 2 plain errors):
+psql:report.sql:74: ERROR:  Send account and phone numbers in an order's chat instead.
+CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
+psql:report.sql:75: ERROR:  You can only message customers who have ordered from you.
+CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
+psql:report.sql:76: ERROR:  Write a message.
+CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
+
+shop_message|Report Shop|/reportshop
+psql:report.sql:80: ERROR:  You messaged this customer in the last 7 days. Try again later.
+CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
+psql:report.sql:82: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
+R9 the month-end report: only on the last day, once per shop, and the app cannot send it (expect 0, then t, then true|true, then 0, then a permission error):
+0
+t
+true|true
+0
+psql:report.sql:92: ERROR:  permission denied for function send_monthly_reports
