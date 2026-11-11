@@ -19,6 +19,7 @@ Each file in `supabase/updates/` upgrades a live database by one step and is saf
 | `008` | Product options, sale prices, product editing, delivery map pins |
 | `009` | Deleting products |
 | `010` | Ordered items in the admin support view |
+| `011` | Reserves `account` as a shop link name (the customer Account page) |
 
 ## Building
 
