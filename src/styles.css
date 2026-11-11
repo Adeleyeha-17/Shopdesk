@@ -171,8 +171,15 @@ a { color: inherit; }
 .saved-details span { color: var(--muted); }
 /* the last line of a page, centred like a footer; sits at the very bottom when the page is short */
 /* the round initial in the top corner of My orders that opens Account */
-.avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); color: var(--ink); font: 700 15px var(--body); text-decoration: none; }
-.page-foot { margin-top: auto; padding-top: 8px; text-align: center; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+/* the round badge with the first letter of the customer's email (My orders top bar, Account page) */
+.avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); color: var(--ink);
+  font: 700 18px/1 var(--body); text-decoration: none; transition: transform .12s ease; -webkit-tap-highlight-color: transparent; }
+a.avatar:active { transform: scale(.92); }
+.avatar.big { width: 56px; height: 56px; font-size: 24px; }
+.app.me .top-row { min-height: 40px; } /* My orders and Account: the top bar keeps one height when moving between them */
+.profile { flex-direction: row; align-items: center; gap: 14px; }
+.profile div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.profile strong { font-size: 16px; overflow-wrap: anywhere; }
 /* a quiet destructive action at the bottom of a card: thin line above, red text with a bin icon */
 .danger-row { appearance: none; background: none; border: 0; border-top: 1px solid var(--line); margin-top: 4px; padding: 14px 0 2px; width: 100%;
   display: flex; align-items: center; gap: 8px; font: 600 14px var(--body); color: var(--bad); cursor: pointer; text-align: left; }
@@ -498,7 +505,10 @@ a.orow { text-decoration: none; color: inherit; }
 .switch[aria-checked="true"] span { transform: translateX(18px); }
 .switch:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .switch-row .err { flex-basis: 100%; }
-@media (prefers-reduced-motion: reduce) { .switch, .switch span { transition: none; } }
+/* a new page (or a part that appears) fades in gently instead of popping */
+@keyframes appear { from { opacity: 0; } }
+main > * { animation: appear .16s ease-out; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch span, .avatar { transition: none; } main > * { animation: none; } }
 /* ---------- errors and connection ---------- */
 .offline-bar { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 20; background: var(--ink); color: var(--bg);
   font-size: 13px; font-weight: 600; text-align: center; padding: 7px 16px; }

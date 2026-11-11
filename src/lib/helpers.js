@@ -60,8 +60,27 @@ export function copyText(text, say, done) {
   else backup();
 }
 
-// Moves to another page of the app without reloading it.
-export function navigate(path) {
-  window.history.pushState(null, '', path);
+// Moves to another page of the app without reloading it; the new page starts at the top.
+// replace: true swaps the current page in the history instead of adding one, so Back skips it.
+export function navigate(path, { replace = false } = {}) {
+  if (replace) window.history.replaceState(null, '', path);
+  else window.history.pushState(null, '', path);
   window.dispatchEvent(new Event('popstate'));
+  window.scrollTo(0, 0);
+}
+
+// Links to other ShopDesk pages (<a href="/orders">) move like navigate() instead of loading the site again.
+// Links to other sites, new tabs, phone numbers, WhatsApp and #tabs work as normal links.
+export function keepLinksInApp() {
+  const onClick = (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return;
+    const href = a.getAttribute('href');
+    if (!href || href[0] !== '/' || href[1] === '/') return;
+    e.preventDefault();
+    navigate(href);
+  };
+  document.addEventListener('click', onClick);
+  return () => document.removeEventListener('click', onClick);
 }

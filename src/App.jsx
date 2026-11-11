@@ -10,6 +10,7 @@
 //   /<shop-name>/checkout   that shop's checkout
 import React, { useEffect, useState } from 'react';
 import { configured } from './lib/database.js';
+import { keepLinksInApp } from './lib/helpers.js';
 import { VendorApp } from './vendor/VendorApp.jsx';
 import { AdminApp } from './admin/AdminApp.jsx';
 import { ShopPage } from './customer/ShopPage.jsx';
@@ -23,7 +24,11 @@ export function App() {
   useEffect(() => {
     const f = () => setPath(window.location.pathname);
     window.addEventListener('popstate', f);
-    return () => window.removeEventListener('popstate', f);
+    const stopLinks = keepLinksInApp();
+    return () => {
+      window.removeEventListener('popstate', f);
+      stopLinks();
+    };
   }, []);
   if (!configured) {
     return (

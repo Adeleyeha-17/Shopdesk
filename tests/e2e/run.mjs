@@ -185,6 +185,22 @@ await step('the customer sees the rider and confirms delivery', async () => {
   await see('Delivered');
 });
 
+await step('the round badge on My orders opens Account, which shows who is signed in, and leads back', async () => {
+  await p.locator('a:has-text("My orders")').first().click();
+  const badge = p.locator('a.avatar');
+  await badge.waitFor();
+  const letter = (await badge.innerText()).trim();
+  await badge.click();
+  await see('Signed in as');
+  const email = (await p.locator('.profile strong').innerText()).trim();
+  expect(email.includes('@'), 'no email on the Account page');
+  expect(letter === email[0].toUpperCase(), `the badge shows "${letter}", not the first letter of ${email}`);
+  await see('Your details');
+  await p.locator('.top-row a:has-text("My orders")').click();
+  await p.locator('a.avatar').waitFor();
+  await see('Past orders');
+});
+
 // ---------------- shop owner: products ----------------
 const NAME = 'Test serum';
 await step('the shop owner adds a product with two sizes', async () => {

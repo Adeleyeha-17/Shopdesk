@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { dayOf, whenText } from '../lib/dates.js';
-import { errText } from '../lib/helpers.js';
+import { errText, navigate } from '../lib/helpers.js';
 import { signOut } from '../lib/alerts.js';
 import { useInbox, InboxToast } from './inbox.jsx';
 import { Page } from '../shared/Page.jsx';
@@ -39,15 +39,16 @@ export function MyOrdersPage({ view = 'orders' }) {
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => data.subscription.unsubscribe();
   }, []);
+  const title = view === 'account' ? 'Account' : 'My orders';
   if (session === undefined)
     return (
-      <Page title="My orders">
+      <Page title={title} kind="me">
         <p className="note">Loading…</p>
       </Page>
     );
   if (!session)
     return (
-      <Page title="My orders">
+      <Page title={title} kind="me">
         <SignIn
           title="Your orders"
           path={view === 'account' ? '/account' : '/orders'}
@@ -66,14 +67,27 @@ export function MyOrdersPage({ view = 'orders' }) {
 // how many past orders show at first, and how many more each "Show older orders" adds
 const PAST_STEP = 10;
 
+// What was on screen last time, so coming back from an order shows the list straight away while it refreshes.
+// Kept in memory only (gone when the tab closes) and only for the same account.
+let last = null;
+
 function SignedInOrders({ email, userId, view }) {
-  const [orders, setOrders] = useState(null);
-  const [pastShown, setPastShown] = useState(PAST_STEP);
+  const seen = last && last.userId === userId ? last : null;
+  const [orders, setOrders] = useState(seen ? seen.orders : null);
+  const [pastShown, setPastShown] = useState(seen ? seen.pastShown : PAST_STEP);
   // saved details are shown as text; Edit opens a copy in the form, so the minute refresh never overwrites typing
-  const [me, setMe] = useState({ name: '', phone: '', address: '' });
+  const [me, setMe] = useState(seen ? seen.me : { name: '', phone: '', address: '' });
   const [draft, setDraft] = useState(null); // null: not editing
   const [confirmForget, setConfirmForget] = useState(false);
-  const [had, setHad] = useState(false);
+  const [had, setHad] = useState(seen ? seen.had : false);
+  useEffect(() => {
+    last = { userId, orders, pastShown, me, had };
+  }, [userId, orders, pastShown, me, had]);
+  async function leave() {
+    last = null;
+    await signOut();
+    navigate('/orders', { replace: true });
+  }
   const [msg, setMsg] = useState('');
   const [isShop, setIsShop] = useState(false);
   const [loadErr, setLoadErr] = useState(null);
@@ -142,8 +156,9 @@ function SignedInOrders({ email, userId, view }) {
     return (
       <Page
         title="My orders"
+        kind="me"
         right={
-          <button className="linkbtn" onClick={signOut}>
+          <button className="linkbtn" onClick={leave}>
             Sign out
           </button>
         }
@@ -155,7 +170,7 @@ function SignedInOrders({ email, userId, view }) {
             <a className="btn small" href="/" style={{ textDecoration: 'none' }}>
               Open my shop
             </a>
-            <button className="linkbtn" onClick={signOut}>
+            <button className="linkbtn" onClick={leave}>
               Sign out
             </button>
           </div>
@@ -193,17 +208,28 @@ function SignedInOrders({ email, userId, view }) {
       </a>
     );
   };
-  const initial = ((me.name || email || '?').trim()[0] || '?').toUpperCase();
+  // the round badge: the first letter of their email
+  const initial = ((email || '').trim()[0] || '?').toUpperCase();
   if (view === 'account')
     return (
       <Page
         title="Account"
+        kind="me"
         right={
           <a className="linkbtn" href="/orders">
             My orders
           </a>
         }
       >
+        <section className="card boxed profile">
+          <span className="avatar big" aria-hidden="true">
+            {initial}
+          </span>
+          <div>
+            <span className="sub">Signed in as</span>
+            <strong>{email}</strong>
+          </div>
+        </section>
         {msg && <p className="note">{msg}</p>}
         <section className="card">
           <div className="row">
@@ -301,16 +327,16 @@ function SignedInOrders({ email, userId, view }) {
         <section className="card">
           <EmailSwitch />
         </section>
-        <button className="btn ghost" onClick={signOut}>
+        <button className="btn ghost" onClick={leave}>
           Sign out
         </button>
-        <footer className="page-foot">Signed in as {email}</footer>
       </Page>
     );
   const olderLeft = past.length - pastShown;
   return (
     <Page
       title="My orders"
+      kind="me"
       right={
         <a className="avatar" href="/account" aria-label="Account" title="Account">
           {initial}
