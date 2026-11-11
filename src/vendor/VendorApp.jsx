@@ -87,7 +87,6 @@ function VendorSignIn() {
     <VendorFrame>
       <SignIn
         title="Sign in to your shop"
-        note="No password needed."
         path="/"
         footer={
           <div className="signin-foot">

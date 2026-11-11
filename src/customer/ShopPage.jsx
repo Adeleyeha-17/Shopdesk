@@ -597,7 +597,7 @@ export function ShopPage({ slug, step = 'shop' }) {
             compact
             title="Sign in to order"
             path={'/' + slug + '/checkout'}
-            note="No password needed. Your cart stays."
+            note="Your cart stays."
           />
           <p className="note" style={{ fontSize: 12 }}>
             <a href="/privacy">Privacy</a>
