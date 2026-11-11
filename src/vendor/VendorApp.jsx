@@ -7,7 +7,8 @@ import { supabase } from '../lib/database.js';
 import { DAY } from '../lib/dates.js';
 import { errText, errInfo } from '../lib/helpers.js';
 import { problemState } from '../lib/problems.js';
-import { transition } from '../lib/motion.js';
+import { useBusy } from '../lib/busy.js';
+import { Skeleton } from '../shared/Skeleton.jsx';
 import { withOptions } from '../lib/products.js';
 import { kick, useCount, useLive, useUnread } from '../lib/alerts.js';
 import { SignIn } from '../shared/SignIn.jsx';
@@ -51,10 +52,11 @@ export function VendorApp() {
     else setIsOwner(false);
   }, [session]);
 
+  useBusy(session === undefined || (!!session && shop === undefined && !shopErr));
   if (session === undefined)
     return (
       <VendorFrame>
-        <p className="note">Loading…</p>
+        <Skeleton kind="page" />
       </VendorFrame>
     );
   if (!session) return <VendorSignIn />;
@@ -176,21 +178,13 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
   // Live: the moment a customer orders, pays, writes or reports a problem. A new message pops up with Open,
   // unless that chat is already open on screen.
   const openChat = useCallback((id) => {
-    transition(() => {
-      setTab('orders');
-      setFocus({ id, chat: true, at: Date.now() });
-    });
+    setTab('orders');
+    setFocus({ id, chat: true, at: Date.now() });
   }, []);
-  // tapping a tab cross-fades to it; tapping the tab already open scrolls back to the top
+  // tapping a tab opens it at once; tapping the tab already open scrolls back to the top
   const pick = (k) => {
-    if (k === tab) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    transition(() => {
-      setTab(k);
-      window.scrollTo(0, 0);
-    });
+    if (k === tab) window.scrollTo({ top: 0, behavior: 'smooth' });
+    else setTab(k);
   };
   useLive(userId, (n) => {
     load();
@@ -230,6 +224,7 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
     Object.keys(unread.chats).length;
   useCount(unpaid, shop.name);
   const ctx = { shop, data, load, run, say, reloadShop, setTab, unread, focus, setFocus };
+  useBusy(!data.loaded && !loadErr);
   return (
     <div className="app">
       <header className="top">
@@ -248,7 +243,7 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
           </div>
         </div>
       </header>
-      <main>
+      <main className="with-tabs">
         <StatusBanner shop={shop} reloadShop={reloadShop} />
         <RefundBanner shop={shop} problems={data.problems} orders={data.orders} run={run} say={say} />
         <PlanBanner shop={shop} />
@@ -266,7 +261,7 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
           loadErr ? (
             <LoadError error={loadErr} onRetry={load} what="your orders" />
           ) : (
-            <p className="note">Loading…</p>
+            <Skeleton kind="page" />
           )
         ) : tab === 'sales' ? (
           <SalesTab {...ctx} />

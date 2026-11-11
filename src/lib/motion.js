@@ -1,8 +1,7 @@
-// Smooth moves between pages and tabs.
-// Browsers with view transitions (Chrome, Edge, Safari 18+, recent Firefox) slide the page: deeper pages come in
-// from the right, going back comes in from the left, tabs cross-fade. The top bar and the tab bar stay put.
-// Other browsers change the page at once and the new page fades in (main > * in styles.css), so nothing waits on this.
-// Phones set to "reduce motion" get no slides.
+// Moving between pages like a phone app: the next page slides in from the right over the last one, Back slides it
+// away to the right. The top bar stays put. Uses the browser's view transitions (Chrome, Edge, Safari 18+, recent
+// Firefox); other browsers just change the page. Phones set to "reduce motion" get no slides.
+// While the next page loads its data, the loading bar runs at the top (lib/busy.js).
 import { flushSync } from 'react-dom';
 
 // The page address without the domain.
@@ -11,14 +10,14 @@ export const currentPath = () => window.location.pathname;
 const calm = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 let seq = 0;
 
-// Runs change() (which updates the page) as one smooth move. dir: 'forward', 'back' or 'fade'.
+// Runs change() (which updates the page) as one smooth move. dir: 'forward', 'back', or 'none' (just change it).
 // after() runs once the new page is in place, before it shows (e.g. to put the scroll back where it was).
-export function transition(change, dir = 'fade', after) {
+export function transition(change, dir = 'none', after) {
   const run = () => {
     flushSync(change);
     if (after) after();
   };
-  if (!document.startViewTransition || calm() || document.visibilityState !== 'visible') {
+  if (dir === 'none' || !document.startViewTransition || calm() || document.visibilityState !== 'visible') {
     run();
     return;
   }
@@ -42,15 +41,15 @@ export function transition(change, dir = 'fade', after) {
 export function depth(path) {
   const p = String(path || '/').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
   if (p === '/' || p === '/admin') return 0;
-  if (p === '/orders' || p === '/email-off' || /^\/[^/]+\/checkout$/.test(p)) return 2;
-  if (p === '/account' || p.startsWith('/o/')) return 3;
-  if (p === '/privacy') return 4;
+  if (p === '/orders' || p === '/email-off' || /^\/[^/]+\/cart$/.test(p)) return 2;
+  if (p === '/account' || /^\/[^/]+\/checkout$/.test(p)) return 3;
+  if (p.startsWith('/o/')) return 4;
+  if (p === '/privacy') return 5;
   return 1; // a shop's page
 }
+// moving up (to a shallower page) slides back; anything else slides forward
 export function direction(from, to) {
-  const a = depth(from),
-    b = depth(to);
-  return b > a ? 'forward' : b < a ? 'back' : 'fade';
+  return depth(to) < depth(from) ? 'back' : 'forward';
 }
 
 // Where each page in the history was scrolled to, so Back returns to the same spot in a list.

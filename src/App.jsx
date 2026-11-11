@@ -7,6 +7,7 @@
 //   /o/<link>      one order, as the customer sees it
 //   /email-off     "Stop these emails" (the link in every email)
 //   /<shop-name>   a shop's order page and cart
+//   /<shop-name>/cart       that shop's cart
 //   /<shop-name>/checkout   that shop's checkout
 import React, { useEffect, useRef, useState } from 'react';
 import { configured } from './lib/database.js';
@@ -20,8 +21,19 @@ import { OrderPage } from './customer/OrderPage.jsx';
 import { MyOrdersPage } from './customer/MyOrdersPage.jsx';
 import { PrivacyPage } from './shared/PrivacyPage.jsx';
 import { EmailOffPage } from './shared/EmailOffPage.jsx';
+import { LoadingBar } from './shared/LoadingBar.jsx';
 
+// The loading bar sits above every page.
 export function App() {
+  return (
+    <>
+      <LoadingBar />
+      <Pages />
+    </>
+  );
+}
+
+function Pages() {
   const [path, setPath] = useState(currentPath);
   const shown = useRef(path);
   useEffect(() => {
@@ -78,8 +90,8 @@ export function App() {
   if (p === '/email-off') return <EmailOffPage />;
   const o = p.match(/^\/o\/([0-9a-f-]{36})$/i);
   if (o) return <OrderPage token={o[1]} />;
-  const s = p.match(/^\/([a-z0-9-]{3,30})(\/checkout)?$/i);
-  if (s) return <ShopPage slug={s[1].toLowerCase()} step={s[2] ? 'checkout' : 'shop'} />;
+  const s = p.match(/^\/([a-z0-9-]{3,30})(?:\/(cart|checkout))?$/i);
+  if (s) return <ShopPage slug={s[1].toLowerCase()} step={s[2] ? s[2].toLowerCase() : 'shop'} />;
   return (
     <div className="app">
       <main>

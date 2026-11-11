@@ -15,6 +15,8 @@ import { rememberOrder } from './savedOrders.js';
 import { loadCart, saveCart, clearCart, fitCart } from './cart.js';
 import { onSale, optionWord, options, payPrice, priceFrom } from '../lib/products.js';
 import { currentPlace } from '../lib/location.js';
+import { useBusy } from '../lib/busy.js';
+import { Skeleton } from '../shared/Skeleton.jsx';
 
 // "₦8,000 ₦9,500": the price to pay, with the old one crossed out during a sale
 function Price({ x }) {
@@ -123,8 +125,71 @@ function OptionSheet({ p, cart, set, onClose }) {
   );
 }
 
+// The cart button at the top right, with how many things are in it. The number gives a little bump when something is added.
+function CartLink({ slug, count, ready }) {
+  const last = useRef(count);
+  const [bump, setBump] = useState(0);
+  useEffect(() => {
+    if (ready && count > last.current) setBump((b) => b + 1);
+    last.current = count;
+  }, [count, ready]);
+  return (
+    <a
+      className="iconbtn"
+      href={'/' + slug + '/cart'}
+      aria-label={count ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart'}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 4h2.2l2.3 10.6a1.6 1.6 0 0 0 1.6 1.3h8.1a1.6 1.6 0 0 0 1.6-1.2L20.6 8H6" />
+        <circle cx="9.5" cy="19.6" r="1.3" />
+        <circle cx="17" cy="19.6" r="1.3" />
+      </svg>
+      {count > 0 && (
+        <span key={bump} className={'count' + (bump ? ' bump' : '')} aria-hidden="true">
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+    </a>
+  );
+}
+
+// The search box's hint types out the shop's products one after another, like someone typing, until the customer
+// taps the box. Phones set to reduce motion just see "Search <shop>".
+function useTypingHint(names, plain, on) {
+  const [hint, setHint] = useState(plain);
+  const key = names.join('|');
+  useEffect(() => {
+    const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setHint(plain);
+    if (!on || calm || names.length < 2) return undefined;
+    let i = 0;
+    let n = 0;
+    let back = false;
+    let t = setTimeout(function tick() {
+      const word = names[i % names.length];
+      n += back ? -1 : 1;
+      setHint(n > 0 ? `Search “${word.slice(0, n)}${n < word.length || back ? '' : '”'}` : plain);
+      let wait = back ? 28 : 70;
+      if (!back && n >= word.length) {
+        back = true;
+        wait = 1600;
+      } else if (back && n <= 0) {
+        back = false;
+        i++;
+        wait = 900;
+      }
+      t = setTimeout(tick, wait);
+    }, 1400);
+    return () => clearTimeout(t);
+    // names are compared by their text (key), so a fresh list of the same products doesn't restart it
+  }, [key, plain, on]);
+  return hint;
+}
+
+// /<shop>: the products; /<shop>/cart: the cart; /<shop>/checkout: who it's for, delivery, and placing the order.
 export function ShopPage({ slug, step = 'shop' }) {
   const checkout = step === 'checkout';
+  const cartPage = step === 'cart';
   const [state, setState] = useState({ loading: true, shop: null, products: [], error: null });
   const [cart, setCart] = useState({}); // product id, or "product id:size id", -> how many (see cart.js)
   const [cartNote, setCartNote] = useState(''); // what changed in a saved cart since last time
@@ -133,13 +198,12 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [saved, setSaved] = useState(null); // the customer's saved details, from their last order
   const [editDetails, setEditDetails] = useState(false);
   const [editAddr, setEditAddr] = useState(false);
-  const [cartEl, setCartEl] = useState(null); // the cart and order form, to scroll to and to hide the cart bar
-  const [cartInView, setCartInView] = useState(false);
   const [picking, setPicking] = useState(null); // the product whose sizes are open
   const [pin, setPin] = useState(null); // { lat, lng, acc } when the customer shared their location
   const [locating, setLocating] = useState(false);
   const [locMsg, setLocMsg] = useState('');
   const [find, setFind] = useState(''); // search this shop's products
+  const [inSearch, setInSearch] = useState(false); // the search box is being used
   const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '' });
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -212,30 +276,15 @@ export function ShopPage({ slug, step = 'shop' }) {
     setCartNote(fit.note);
     setReady(true);
   }, [state.loading, state.shop, state.products, slug]);
-  // moving between the shop and checkout: checkout starts at the top; back at the shop, the cart is in view
-  const lastStep = useRef(step);
-  const backFromCheckout = useRef(false);
-  useEffect(() => {
-    if (lastStep.current === step) return;
-    backFromCheckout.current = lastStep.current === 'checkout';
-    lastStep.current = step;
-    if (step === 'checkout') window.scrollTo(0, 0);
-  }, [step]);
-  useEffect(() => {
-    if (step !== 'shop' || !cartEl || !backFromCheckout.current) return;
-    backFromCheckout.current = false;
-    cartEl.scrollIntoView();
-  }, [step, cartEl]);
   useEffect(() => {
     if (restored.current) saveCart(slug, cart);
   }, [cart, slug]);
-  // the cart bar hides while the cart and order form are on screen
-  useEffect(() => {
-    if (!cartEl || typeof IntersectionObserver === 'undefined') return undefined;
-    const io = new IntersectionObserver(([e]) => setCartInView(e.isIntersecting), { threshold: 0.05 });
-    io.observe(cartEl);
-    return () => io.disconnect();
-  }, [cartEl]);
+  useBusy(state.loading || busy);
+  const hint = useTypingHint(
+    state.products.slice(0, 6).map((p) => p.name),
+    'Search ' + (state.shop ? state.shop.name : 'this shop'),
+    step === 'shop' && !find && !inSearch,
+  );
   // a shop writes about another order while they browse: a pop-up, and the count on My orders
   const inbox = useInbox(uid, { title: state.shop ? state.shop.name : 'ShopDesk' });
   const closeSheet = useCallback(() => setPicking(null), []);
@@ -243,7 +292,7 @@ export function ShopPage({ slug, step = 'shop' }) {
   if (state.loading)
     return (
       <Page>
-        <p className="note">Loading…</p>
+        <Skeleton kind={step === 'shop' ? 'shop' : 'list'} />
       </Page>
     );
   if (!state.shop && state.error)
@@ -283,9 +332,29 @@ export function ShopPage({ slug, step = 'shop' }) {
     setCartNote('');
   };
   const count = lines.reduce((a, l) => a + l.q, 0);
-  const goCart = () => cartEl && cartEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const toShop = () => navigate('/' + slug);
+  const toCart = () => navigate('/' + slug + '/cart');
   const toCheckout = () => navigate('/' + slug + '/checkout');
-  const backToCart = () => navigate('/' + slug);
+  // the top bar on every page of the shop: the shop's name (back to the shop), My orders and the cart
+  const top = {
+    title: shop.name,
+    titleHref: '/' + slug,
+    right: (
+      <>
+        <MyOrdersLink count={inbox.count} />
+        <CartLink slug={slug} count={count} ready={ready} />
+      </>
+    ),
+  };
+  const foot = (
+    <footer className="page-foot">
+      <button className="linkbtn" onClick={() => setReporting(!reporting)} aria-expanded={reporting}>
+        Report this shop
+      </button>
+      <span aria-hidden="true">·</span>
+      <a href="/privacy">Privacy</a>
+    </footer>
+  );
   // returning customers see their saved details in one line, with Change; first-timers fill them in
   const detailsForm = editDetails || !(saved && saved.name && saved.phone);
   const addrForm = editAddr || !!pin || !(saved && saved.address && form.address);
@@ -362,13 +431,14 @@ export function ShopPage({ slug, step = 'shop' }) {
     navigate('/o/' + data.token);
   }
 
-  if (!checkout)
+  if (step === 'shop')
     return (
-      <Page title={shop.name} right={<MyOrdersLink count={inbox.count} />}>
+      <Page {...top}>
         <div>
           <h2>{shop.name}</h2>
           <p className="note">Pick what you want, then pay in one transfer.</p>
         </div>
+        {cartNote && <p className="note cart-note">{cartNote}</p>}
         {products.length > 4 && (
           <div className="search">
             <label htmlFor="shopSearch" className="visually-hidden">
@@ -379,7 +449,9 @@ export function ShopPage({ slug, step = 'shop' }) {
               type="search"
               value={find}
               onChange={(e) => setFind(e.target.value)}
-              placeholder={`Search ${shop.name}`}
+              onFocus={() => setInSearch(true)}
+              onBlur={() => setInSearch(false)}
+              placeholder={hint}
               autoComplete="off"
             />
           </div>
@@ -479,135 +551,136 @@ export function ShopPage({ slug, step = 'shop' }) {
         ) : (
           <p className="note">This shop hasn't added products yet.</p>
         )}
-        <div className="cart-stack" ref={setCartEl}>
-          {isShop && (
-            <p className="note">
-              <strong>This email runs a shop.</strong> {me} can't order.{' '}
-              <button className="linkbtn" onClick={signOut}>
-                Sign out
-              </button>{' '}
-              and use another email to order.
-            </p>
-          )}
-          {cartNote && !lines.length && <p className="note cart-note">{cartNote}</p>}
-          {lines.length > 0 && (
-            <section className="card cart" aria-label="Your cart">
-              <div className="row">
-                <h2 className="cart-title">Your cart</h2>
-                <span className="sub">
-                  {count} item{count === 1 ? '' : 's'}
-                </span>
-              </div>
-              {cartNote && <p className="note cart-note">{cartNote}</p>}
-              <ul className="oitems">
-                {lines.map((l) => {
-                  const left = l.o ? l.o.stock : l.p.stock;
-                  return (
-                    <li key={l.key} className="oitem cart-line">
-                      <img className="oitem-img" src={photoUrl(l.p.photo_path)} alt="" />
-                      <span className="oitem-name">
-                        {l.name}
-                        <span className="sub num">
-                          {' '}
-                          {l.q > 1 ? `${naira(l.price)} each · ` : ''}
-                          {naira(l.price * l.q)}
-                        </span>
-                      </span>
-                      <span className="stepper">
-                        <button
-                          className="step"
-                          onClick={() => set(l.key, l.q - 1)}
-                          aria-label={l.q === 1 ? `Remove ${l.name}` : `One less ${l.name}`}
-                        >
-                          {l.q === 1 ? '×' : '−'}
-                        </button>
-                        <span className="qty">{l.q}</span>
-                        <button
-                          className="step"
-                          onClick={() => set(l.key, Math.min(left, 99, l.q + 1))}
-                          disabled={l.q >= Math.min(left, 99)}
-                          aria-label={`One more ${l.name}`}
-                        >
-                          +
-                        </button>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="row">
-                <span className="sub">Items</span>
-                <span className="num">{naira(sub)}</span>
-              </div>
-              <button className="btn" onClick={toCheckout}>
-                Checkout · {naira(sub)}
-              </button>
-            </section>
-          )}
-        </div>
-        <div className="btns">
-          <button className="linkbtn" onClick={() => setReporting(!reporting)}>
-            Report this shop
-          </button>
-        </div>
+        {foot}
         {reporting && (
           <ReportShopForm slug={slug} orders={mine} signedIn={me !== ''} done={() => setReporting(false)} />
         )}
         {sheet && <OptionSheet p={sheet} cart={cart} set={set} onClose={closeSheet} />}
-        {count > 0 && (
-          <button
-            className={'cartbar' + (cartInView || sheet ? ' hide' : '')}
-            onClick={goCart}
-            aria-hidden={cartInView || sheet ? true : undefined}
-            tabIndex={cartInView || sheet ? -1 : undefined}
-          >
-            <span className="cartbar-count" aria-hidden="true">
-              {count}
-            </span>
-            <span className="grow">
-              View cart<span className="visually-hidden">, {count} items</span>
-            </span>
-            <span className="num">{naira(sub)}</span>
+        <InboxToast inbox={inbox} />
+      </Page>
+    );
+
+  if (!ready)
+    return (
+      <Page {...top}>
+        <Skeleton kind="list" />
+      </Page>
+    );
+  if (!lines.length)
+    return (
+      <Page {...top}>
+        <div className="center empty">
+          <span className="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M3 4h2.2l2.3 10.6a1.6 1.6 0 0 0 1.6 1.3h8.1a1.6 1.6 0 0 0 1.6-1.2L20.6 8H6" />
+              <circle cx="9.5" cy="19.6" r="1.3" />
+              <circle cx="17" cy="19.6" r="1.3" />
+            </svg>
+          </span>
+          <h2>Your cart is empty</h2>
+          {cartNote ? (
+            <p className="note cart-note">{cartNote}</p>
+          ) : (
+            <p className="note">Add something from {shop.name}.</p>
+          )}
+          <button className="btn" onClick={toShop}>
+            Start shopping
           </button>
+        </div>
+        <InboxToast inbox={inbox} />
+      </Page>
+    );
+
+  // ---------- the cart: what's in it, how many of each, and on to checkout ----------
+  if (cartPage)
+    return (
+      <Page {...top}>
+        <div className="page-head">
+          <h2>Your cart</h2>
+          <span className="sub">
+            {count} item{count === 1 ? '' : 's'}
+          </span>
+        </div>
+        {isShop && (
+          <p className="note">
+            <strong>This email runs a shop.</strong> {me} can't order.{' '}
+            <button className="linkbtn" onClick={signOut}>
+              Sign out
+            </button>{' '}
+            and use another email to order.
+          </p>
         )}
+        {cartNote && <p className="note cart-note">{cartNote}</p>}
+        <section className="card boxed cart" aria-label="Your cart">
+          <ul className="oitems">
+            {lines.map((l) => {
+              const left = l.o ? l.o.stock : l.p.stock;
+              return (
+                <li key={l.key} className="oitem cart-line">
+                  <img className="oitem-img" src={photoUrl(l.p.photo_path)} alt="" />
+                  <span className="oitem-name">
+                    {l.name}
+                    <span className="sub num">
+                      {' '}
+                      {l.q > 1 ? `${naira(l.price)} each · ` : ''}
+                      {naira(l.price * l.q)}
+                    </span>
+                  </span>
+                  <span className="stepper">
+                    <button
+                      className="step"
+                      onClick={() => set(l.key, l.q - 1)}
+                      aria-label={l.q === 1 ? `Remove ${l.name}` : `One less ${l.name}`}
+                    >
+                      {l.q === 1 ? '×' : '−'}
+                    </button>
+                    <span className="qty">{l.q}</span>
+                    <button
+                      className="step"
+                      onClick={() => set(l.key, Math.min(left, 99, l.q + 1))}
+                      disabled={l.q >= Math.min(left, 99)}
+                      aria-label={`One more ${l.name}`}
+                    >
+                      +
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="row">
+            <span className="sub">Items</span>
+            <span className="num">{naira(sub)}</span>
+          </div>
+          <div className="row">
+            <span className="sub">Delivery</span>
+            <span className="sub">{custPays ? 'The shop adds it' : 'Free'}</span>
+          </div>
+        </section>
+        <div className="stack-sm">
+          <button className="btn" onClick={toCheckout}>
+            Checkout · {naira(sub)}
+          </button>
+          <button className="btn ghost" onClick={toShop}>
+            Continue shopping
+          </button>
+        </div>
         <InboxToast inbox={inbox} />
       </Page>
     );
 
   // ---------- checkout: who it's for, how it gets to them, and the order ----------
-  if (!ready)
-    return (
-      <Page title={shop.name}>
-        <p className="note">Loading…</p>
-      </Page>
-    );
-  if (!lines.length)
-    return (
-      <Page title={shop.name} right={<MyOrdersLink count={inbox.count} />}>
-        <div className="center">
-          <h2>Your cart is empty</h2>
-          {cartNote ? (
-            <p className="note cart-note">{cartNote}</p>
-          ) : (
-            <p className="note">Add something first.</p>
-          )}
-          <button className="btn" onClick={() => navigate('/' + slug)}>
-            Back to {shop.name}
-          </button>
-        </div>
-      </Page>
-    );
   const feeText = form.mode === 'pickup' ? 'None (pick-up)' : custPays ? 'The shop adds it' : 'Free';
   return (
-    <Page title={shop.name} right={<MyOrdersLink count={inbox.count} />}>
+    <Page {...top}>
       <div className="checkout-head">
-        <button className="linkbtn" onClick={backToCart}>
+        <button className="linkbtn back" onClick={toCart}>
           ← Back to cart
         </button>
         <h2>Checkout</h2>
       </div>
       {me === null ? (
-        <p className="note">Loading…</p>
+        <Skeleton kind="list" />
       ) : me === '' ? (
         <section className="card">
           <SignIn
@@ -766,7 +839,7 @@ export function ShopPage({ slug, step = 'shop' }) {
               <h3 className="co-title">
                 Order summary · {count} item{count === 1 ? '' : 's'}
               </h3>
-              <button className="linkbtn" onClick={backToCart}>
+              <button className="linkbtn" onClick={toCart}>
                 Edit cart
               </button>
             </div>

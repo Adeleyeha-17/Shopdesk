@@ -254,10 +254,10 @@ export function StockTab({ shop, data, load, run, say }) {
                 <button className="btn small ghost" onClick={() => setEditing(p.id)}>
                   Edit
                 </button>
-                <button className="linkbtn" onClick={() => toggle(p)}>
+                <button className="btn small ghost" onClick={() => toggle(p)}>
                   {p.active ? 'Hide from order page' : 'Show on order page'}
                 </button>
-                <button className="linkbtn" onClick={() => setDeleting(p.id)}>
+                <button className="btn small ghost danger" onClick={() => setDeleting(p.id)}>
                   Delete
                 </button>
               </div>

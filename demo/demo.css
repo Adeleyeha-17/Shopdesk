@@ -10,6 +10,6 @@
   font: 600 13px var(--body); padding: 7px 8px; border-radius: 999px; white-space: nowrap; }
 .demo-seg button[aria-pressed="true"] { background: var(--btn); color: var(--on-btn); }
 .demo-reset { flex: none; appearance: none; border: 0; background: none; color: var(--ink); cursor: pointer;
-  font: 600 13px var(--body); text-decoration: underline; text-underline-offset: 3px; padding: 6px 2px; }
+  font: 600 13px var(--body); text-decoration: none; padding: 6px 2px; }
 .demo-seg button:focus-visible, .demo-reset:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .demo-note { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }

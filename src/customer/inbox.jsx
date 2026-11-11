@@ -42,7 +42,7 @@ export function useInbox(uid, { onAlert, quiet, open, title } = {}) {
 
 export function MyOrdersLink({ count }) {
   return (
-    <a className="linkbtn top-link" href="/orders">
+    <a className="top-link" href="/orders">
       My orders
       {count > 0 && (
         <span className="badge" aria-label={count + ' new'}>

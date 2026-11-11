@@ -8,6 +8,8 @@ import { errText, navigate } from '../lib/helpers.js';
 import { signOut } from '../lib/alerts.js';
 import { useInbox, InboxToast } from './inbox.jsx';
 import { Page } from '../shared/Page.jsx';
+import { Skeleton } from '../shared/Skeleton.jsx';
+import { useBusy } from '../lib/busy.js';
 import { LoadError } from '../shared/LoadError.jsx';
 import { EmailSwitch } from '../shared/EmailSwitch.jsx';
 import { SignIn } from '../shared/SignIn.jsx';
@@ -40,10 +42,11 @@ export function MyOrdersPage({ view = 'orders' }) {
     return () => data.subscription.unsubscribe();
   }, []);
   const title = view === 'account' ? 'Account' : 'My orders';
+  useBusy(session === undefined);
   if (session === undefined)
     return (
       <Page title={title} kind="me">
-        <p className="note">Loading…</p>
+        <Skeleton kind={view === 'account' ? 'page' : 'list'} />
       </Page>
     );
   if (!session)
@@ -152,6 +155,7 @@ function SignedInOrders({ email, userId, view }) {
       setMsg('');
     }
   }
+  useBusy(orders === null && !loadErr && !isShop);
   if (isShop)
     return (
       <Page
@@ -216,7 +220,7 @@ function SignedInOrders({ email, userId, view }) {
         title="Account"
         kind="me"
         right={
-          <a className="linkbtn" href="/orders">
+          <a className="top-link" href="/orders">
             My orders
           </a>
         }
@@ -248,14 +252,14 @@ function SignedInOrders({ email, userId, view }) {
           </div>
           {!draft ? (
             had && (
-              <div className="saved-details reveal">
+              <div className="saved-details">
                 {me.name && <strong>{me.name}</strong>}
                 {me.phone && <span>{me.phone}</span>}
                 {me.address && <span>{me.address}</span>}
               </div>
             )
           ) : (
-            <div className="reveal stack-sm">
+            <div className="stack-sm">
               <div className="field">
                 <label htmlFor="mName">Name</label>
                 <input
@@ -349,7 +353,7 @@ function SignedInOrders({ email, userId, view }) {
         loadErr ? (
           <LoadError error={loadErr} onRetry={load} what="your orders" compact />
         ) : (
-          <p className="note">Loading your orders…</p>
+          <Skeleton kind="list" />
         )
       ) : !orders.length ? (
         <section className="card">

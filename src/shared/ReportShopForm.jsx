@@ -2,7 +2,7 @@
 // From an order page the report names that order; on a shop page a signed-in customer can pick one of their orders,
 // so you see what was ordered and when. Reports need an account (so nobody can flood a shop with fake ones):
 // one open report per shop, and a few a day.
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase, privacyEmail } from '../lib/database.js';
 import { errText } from '../lib/helpers.js';
 import { kick } from '../lib/alerts.js';
@@ -23,6 +23,11 @@ export function ReportShopForm({
   const [pick, setPick] = useState(token || (orders[0] && orders[0].token) || '');
   const [out, setOut] = useState('');
   const [busy, setBusy] = useState(false);
+  // it opens under the page's footer, so bring it into view
+  const box = useRef(null);
+  useEffect(() => {
+    if (box.current) box.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
   async function send() {
     setBusy(true);
     const { error } = await supabase.rpc('report_shop', {
@@ -40,7 +45,7 @@ export function ReportShopForm({
   }
   if (!signedIn)
     return (
-      <section className="card boxed">
+      <section className="card boxed" ref={box}>
         <SignIn compact title="Sign in to report this shop" path={path || '/' + slug} />
         <div className="btns">
           <button className="btn small ghost" onClick={done}>
@@ -50,7 +55,7 @@ export function ReportShopForm({
       </section>
     );
   return (
-    <section className="card boxed">
+    <section className="card boxed" ref={box}>
       <h2>Report this shop</h2>
       {token && code ? (
         <p className="sub">About order {code}</p>

@@ -1,5 +1,6 @@
 // Small helpers used all over the app.
 import { currentPath, direction, keepSpot, newKey, nowShowing, transition } from './motion.js';
+import { pulse } from './busy.js';
 
 export const slugify = (s) =>
   String(s || '')
@@ -70,6 +71,7 @@ export function navigate(path, { replace = false } = {}) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
+  pulse();
   transition(() => {
     keepSpot();
     const k = newKey();

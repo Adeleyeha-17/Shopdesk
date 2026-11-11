@@ -12,6 +12,8 @@ import { copyText, errText, telLink } from '../lib/helpers.js';
 import { kick } from '../lib/alerts.js';
 import { useInbox, MyOrdersLink, InboxToast } from './inbox.jsx';
 import { Page } from '../shared/Page.jsx';
+import { Skeleton } from '../shared/Skeleton.jsx';
+import { useBusy } from '../lib/busy.js';
 import { LoadError } from '../shared/LoadError.jsx';
 import { SignIn } from '../shared/SignIn.jsx';
 import { ReportShopForm } from '../shared/ReportShopForm.jsx';
@@ -144,13 +146,14 @@ export function OrderPage({ token }) {
       load();
     }
   }
+  useBusy(o === undefined && !loadErr);
   if (o === undefined)
     return (
       <Page>
         {loadErr ? (
           <LoadError error={loadErr} onRetry={load} what="your order" />
         ) : (
-          <p className="note">Loading your order…</p>
+          <Skeleton kind="page" />
         )}
       </Page>
     );
@@ -205,7 +208,7 @@ export function OrderPage({ token }) {
     o.status !== 'cancelled' && (canReceive || (unpaid && !feeWait && !o.customer_says_paid));
   const gate = wantsCustomer && !canAct && who !== undefined;
   return (
-    <Page title={o.shop.name} right={<MyOrdersLink count={inbox.count} />}>
+    <Page title={o.shop.name} titleHref={'/' + o.shop.slug} right={<MyOrdersLink count={inbox.count} />}>
       <section className="card">
         <div className="row">
           <span className="order-id">
@@ -483,11 +486,13 @@ export function OrderPage({ token }) {
       >
         Order something else
       </a>
-      <div className="btns">
-        <button className="linkbtn" onClick={() => setReporting(!reporting)}>
+      <footer className="page-foot">
+        <button className="linkbtn" onClick={() => setReporting(!reporting)} aria-expanded={reporting}>
           Report this shop
         </button>
-      </div>
+        <span aria-hidden="true">·</span>
+        <a href="/privacy">Privacy</a>
+      </footer>
       {reporting && (
         <ReportShopForm
           slug={o.shop.slug}

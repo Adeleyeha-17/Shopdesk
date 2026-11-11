@@ -113,15 +113,18 @@ await step('a product with sizes opens the size picker, and tapping a size row a
   await p.locator('.sheet button:has-text("Done")').click();
 });
 
-await step('adding a second product updates the cart bar', async () => {
+await step('adding a second product puts 2 on the cart button at the top', async () => {
   await p.locator('.pcard:not(:has(.pname:text-is("Hair growth oil"))) button[data-inc]').first().click();
-  await p.locator('.cartbar').waitFor();
-  expect((await p.locator('.cartbar').innerText()).trim().startsWith('2'), 'cart bar does not show 2 items');
+  await p.locator('.iconbtn .count').waitFor();
+  expect((await p.locator('.iconbtn .count').innerText()).trim() === '2', 'the cart button does not show 2');
+  expect((await p.locator('.cartbar').count()) === 0, 'the old bottom cart bar is still there');
 });
 
-await step('the cart opens and goes to checkout', async () => {
-  await p.locator('.cartbar').click();
-  await p.locator('.cart button:has-text("Checkout")').click();
+await step('the cart button opens the cart page, which goes to checkout', async () => {
+  await p.locator('a.iconbtn[href$="/cart"]').click();
+  await see('Your cart');
+  expect((await p.locator('.cart-line').count()) === 2, 'the cart page does not list 2 lines');
+  await p.locator('button:has-text("Checkout")').click();
   await see('Place order');
 });
 
@@ -130,6 +133,12 @@ await step('placing an order shows the order code and waits for the shop', async
   await p.locator('button:has-text("Place order")').click();
   await see('Waiting for the shop');
   code = (await text()).match(/Order ([A-Z]{2,4}-\d+)/)[1];
+});
+
+await step("the shop's name at the top goes back to the shop", async () => {
+  await p.locator('a.brand').click();
+  await p.locator('.pcard').first().waitFor();
+  expect((await p.locator('.page-foot').innerText()).includes('Report this shop'), 'Report this shop is not in the footer');
 });
 
 // ---------------- shop owner: confirm ----------------

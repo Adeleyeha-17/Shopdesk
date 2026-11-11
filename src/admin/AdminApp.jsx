@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { signOut } from '../lib/alerts.js';
 import { errText } from '../lib/helpers.js';
-import { transition } from '../lib/motion.js';
 import { SignIn } from '../shared/SignIn.jsx';
 import { LoadError } from '../shared/LoadError.jsx';
 import { ActionPopup } from './ActionPopup.jsx';
@@ -129,11 +128,10 @@ function AdminLayout({ out, email, userId }) {
     window.location.hash = r;
   }, []);
   useEffect(() => {
-    const f = () =>
-      transition(() => {
-        setRoute(window.location.hash.slice(1) || 'overview');
-        window.scrollTo(0, 0);
-      });
+    const f = () => {
+      setRoute(window.location.hash.slice(1) || 'overview');
+      window.scrollTo(0, 0);
+    };
     window.addEventListener('hashchange', f);
     return () => window.removeEventListener('hashchange', f);
   }, []);
