@@ -24,11 +24,11 @@ jobs:
       VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       VITE_PRIVACY_EMAIL: ${{ vars.VITE_PRIVACY_EMAIL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -54,7 +54,7 @@ jobs:
           grep -qF "$VITE_SUPABASE_URL" dist/assets/*.js || { echo "::error::The build does not contain the Supabase URL."; exit 1; }
           test -f dist/.htaccess || { echo "::error::dist/.htaccess is missing."; exit 1; }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: shopdesk-site
           path: dist
@@ -67,13 +67,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: shopdesk-site
           path: dist
 
       - name: Upload to the web server
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
