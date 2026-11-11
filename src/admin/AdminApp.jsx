@@ -67,7 +67,7 @@ export function AdminApp() {
           owner
           path="/admin"
           title="Admin sign-in"
-          note="For the ShopDesk admin only. We'll email you a code."
+          note="For the ShopDesk admin only. No password needed."
         />
       </AdminFrame>
     );

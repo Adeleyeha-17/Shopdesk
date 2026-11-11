@@ -11,6 +11,7 @@
   --line: #e9eaec;
   --ink: #101114;
   --muted: #6a6f78;
+  --hint: #6a6f78; /* placeholder text: 4.6:1 on --soft */
   --btn: #101114;
   --on-btn: #ffffff;
   --good: #16a34a;
@@ -22,11 +23,11 @@
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0d0e10; --soft: #17181b; --line: #25272b; --ink: #f2f3f5; --muted: #9ea3ab; --btn: #f2f3f5; --on-btn: #0d0e10;
+  --bg: #0d0e10; --soft: #17181b; --line: #25272b; --ink: #f2f3f5; --muted: #9ea3ab; --hint: #80848b; --btn: #f2f3f5; --on-btn: #0d0e10;
   --good: #34c46b; --bad: #ff6b6f; --wait: #f2b84b; --info: #6ea0ff; color-scheme: dark;
   --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; } }
 :root[data-theme="dark"] {
-  --bg: #0d0e10; --soft: #17181b; --line: #25272b; --ink: #f2f3f5; --muted: #9ea3ab; --btn: #f2f3f5; --on-btn: #0d0e10;
+  --bg: #0d0e10; --soft: #17181b; --line: #25272b; --ink: #f2f3f5; --muted: #9ea3ab; --hint: #80848b; --btn: #f2f3f5; --on-btn: #0d0e10;
   --good: #34c46b; --bad: #ff6b6f; --wait: #f2b84b; --info: #6ea0ff; color-scheme: dark;
   --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; }
 
@@ -50,7 +51,8 @@ main { flex: 1; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding
 
 /* ---------- boxes, rows and labels ---------- */
 h1, h2, h3 { margin: 0; text-wrap: balance; }
-h2 { font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+h2, .signin-title { font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+::placeholder { color: var(--hint); opacity: 1; }
 .label { font-size: 12px; color: var(--muted); font-weight: 600; }
 .card { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 article.card { border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
@@ -158,6 +160,14 @@ a { color: inherit; }
 .linkbtn { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--muted); text-decoration: underline; cursor: pointer; }
 .linkbtn:disabled { opacity: .55; cursor: default; text-decoration: none; }
 .field input.code { font: 500 24px var(--mono); letter-spacing: .25em; text-align: center; padding: 14px; }
+/* the code box's label with the Paste code button beside it */
+.field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* under the sign-in box: a word for new shops, then the fine print */
+.signin-foot { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.signin-foot p { margin: 0; font-size: 15px; line-height: 1.35; color: var(--muted); }
+.signin-foot p strong { color: var(--ink); }
+.signin-foot p.fine { font-size: 13px; }
+.signin-foot a { color: inherit; }
 
 /* Messages at the top of the vendor's app (waiting for approval, not approved, plan, announcements) */
 .banner { margin-top: 0; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--soft); font-size: 13px; line-height: 1.4; }

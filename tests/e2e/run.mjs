@@ -32,10 +32,12 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const url = `http://127.0.0.1:${server.address().port}/demo/index.html`;
+const origin = `http://127.0.0.1:${server.address().port}`;
+const url = `${origin}/demo/index.html`;
 
 const browser = await chromium.launch();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, timezoneId: 'Africa/Lagos' });
+await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
 const p = await context.newPage();
 const pageErrors = [];
 p.on('pageerror', (e) => pageErrors.push(e.message));
@@ -231,13 +233,15 @@ await step('the Sales page opens', async () => {
 });
 
 // ---------------- a new shop owner signs up ----------------
-await step('a new shop owner can sign up, type a link name with a dash, and send the shop for approval', async () => {
+await step('a new shop owner can sign up (pasting the code), type a link name with a dash, and send the shop for approval', async () => {
   await patch((S) => {
     S.uid = null;
   }, '/');
   await p.locator('#email').fill('newshop@example.com');
   await p.locator('button:has-text("Email me a code")').click();
-  await p.locator('#code').pressSequentially('123456');
+  // the code arrives in the email's subject line; copying it and tapping Paste code signs in
+  await p.evaluate(() => navigator.clipboard.writeText('123456 is your ShopDesk code'));
+  await p.locator('button:has-text("Paste code")').click();
   await p.locator('#sName').waitFor();
   await p.locator('#sName').fill('Ada Fabrics');
   await p.locator('#sSlug').fill('');

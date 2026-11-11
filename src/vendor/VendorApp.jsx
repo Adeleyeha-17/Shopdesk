@@ -87,13 +87,17 @@ function VendorSignIn() {
     <VendorFrame>
       <SignIn
         title="Sign in to your shop"
-        note="We'll email you a code."
+        note="No password needed."
         path="/"
         footer={
-          <p className="note">
-            New here? The same code also opens your shop. By signing in you agree to the{' '}
-            <a href="/privacy">shop rules</a>.
-          </p>
+          <div className="signin-foot">
+            <p>
+              <strong>New here?</strong> The same code also opens your shop.
+            </p>
+            <p className="fine">
+              By signing in you agree to the <a href="/privacy">shop rules</a>.
+            </p>
+          </div>
         }
       />
     </VendorFrame>

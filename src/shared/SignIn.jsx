@@ -21,6 +21,17 @@ export function SignIn({ title, note, path = '/', owner = false, footer = null, 
     return () => clearTimeout(t);
   }, [wait]);
   const em = email.trim().toLowerCase();
+  // the browser tab reads "Sign in · ShopDesk" while the full sign-in page is showing
+  useEffect(() => {
+    if (compact) return undefined;
+    const before = document.title;
+    document.title = 'Sign in · ShopDesk';
+    return () => {
+      document.title = before;
+    };
+  }, [compact]);
+  const Title = compact ? 'h2' : 'h1';
+  const canPaste = typeof navigator !== 'undefined' && !!(navigator.clipboard && navigator.clipboard.readText);
 
   async function send(e) {
     if (e) e.preventDefault();
@@ -69,16 +80,45 @@ export function SignIn({ title, note, path = '/', owner = false, footer = null, 
     // When it works, the page that showed this form sees the new session and moves on.
   }
 
+  // "Paste code": takes the first 6-digit number from what was copied (the code alone, the email's subject line or
+  // a whole sentence) and signs in with it.
+  async function paste() {
+    let text = '';
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      setErr("Couldn't paste. Press and hold the box, then choose Paste.");
+      return;
+    }
+    const found = (text || '').match(/(^|\D)(\d{6})(?!\d)/);
+    if (!found) {
+      setErr('No 6-digit code to paste. Copy the code from the email first.');
+      return;
+    }
+    setCode(found[2]);
+    setErr('');
+    verify(null, found[2]);
+  }
+
   if (step === 'code') {
     return (
       <div className={box}>
-        <h2 style={compact ? { fontSize: 16 } : null}>Check your email</h2>
+        <Title className={compact ? null : 'signin-title'} style={compact ? { fontSize: 16 } : null}>
+          Check your email
+        </Title>
         <p className="note">
           Code sent to <strong>{em}</strong>. Not there? Check Spam.
         </p>
         <form onSubmit={verify} className={compact ? 'stack-sm' : 'card'}>
           <div className="field">
-            <label htmlFor="code">6-digit code</label>
+            <div className="field-head">
+              <label htmlFor="code">6-digit code</label>
+              {canPaste && (
+                <button type="button" className="btn small ghost" onClick={paste} disabled={busy}>
+                  Paste code
+                </button>
+              )}
+            </div>
             <input
               id="code"
               className="code"
@@ -95,7 +135,11 @@ export function SignIn({ title, note, path = '/', owner = false, footer = null, 
               autoFocus
             />
           </div>
-          {err && <p className="err">{err}</p>}
+          {err && (
+            <p className="err" role="alert">
+              {err}
+            </p>
+          )}
           <button className="btn" disabled={busy}>
             {busy ? 'Checking…' : 'Sign in'}
           </button>
@@ -119,7 +163,9 @@ export function SignIn({ title, note, path = '/', owner = false, footer = null, 
   }
   return (
     <div className={box}>
-      <h2 style={compact ? { fontSize: 16 } : null}>{title}</h2>
+      <Title className={compact ? null : 'signin-title'} style={compact ? { fontSize: 16 } : null}>
+        {title}
+      </Title>
       {note && <p className="note">{note}</p>}
       <form onSubmit={send} className={compact ? 'stack-sm' : 'card'}>
         <div className="field">
@@ -128,12 +174,19 @@ export function SignIn({ title, note, path = '/', owner = false, footer = null, 
             id="email"
             type="email"
             autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            enterKeyHint="send"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="yourname@gmail.com"
           />
         </div>
-        {err && <p className="err">{err}</p>}
+        {err && (
+          <p className="err" role="alert">
+            {err}
+          </p>
+        )}
         <button className="btn" disabled={busy}>
           {busy ? 'Sending…' : 'Email me a code'}
         </button>
