@@ -2,7 +2,8 @@
 //   /              the vendor's app (sign in, set up your shop, then Sales / Orders / Stock / Shop)
 //   /admin         ShopDesk Admin (only your owner account)
 //   /privacy       privacy notice and shop rules
-//   /orders        a customer's own orders and saved details
+//   /orders        a customer's own orders
+//   /account       a customer's saved details, email alerts and sign out
 //   /o/<link>      one order, as the customer sees it
 //   /email-off     "Stop these emails" (the link in every email)
 //   /<shop-name>   a shop's order page and cart
@@ -44,7 +45,7 @@ export function App() {
   if (p === '/') return <VendorApp />;
   if (p === '/admin') return <AdminApp />;
   if (p === '/privacy') return <PrivacyPage />;
-  if (p === '/orders') return <MyOrdersPage />;
+  if (p === '/orders' || p === '/account') return <MyOrdersPage view={p === '/account' ? 'account' : 'orders'} />;
   if (p === '/email-off') return <EmailOffPage />;
   const o = p.match(/^\/o\/([0-9a-f-]{36})$/i);
   if (o) return <OrderPage token={o[1]} />;

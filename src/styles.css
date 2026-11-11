@@ -170,6 +170,8 @@ a { color: inherit; }
 .saved-details { display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
 .saved-details span { color: var(--muted); }
 /* the last line of a page, centred like a footer; sits at the very bottom when the page is short */
+/* the round initial in the top corner of My orders that opens Account */
+.avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); color: var(--ink); font: 700 15px var(--body); text-decoration: none; }
 .page-foot { margin-top: auto; padding-top: 8px; text-align: center; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 /* a quiet destructive action at the bottom of a card: thin line above, red text with a bin icon */
 .danger-row { appearance: none; background: none; border: 0; border-top: 1px solid var(--line); margin-top: 4px; padding: 14px 0 2px; width: 100%;

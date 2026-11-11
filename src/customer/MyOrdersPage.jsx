@@ -1,5 +1,5 @@
-// /orders: a customer's account. Every order they've placed (updating live, with a dot on orders with news),
-// and the name, phone and address they saved.
+// /orders: every order a customer has placed (updating live, with a dot on orders with news).
+// /account: the name, phone and address they saved, email alerts and signing out.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -31,8 +31,8 @@ function orderLabel(o) {
   return ['owe', 'Waiting for payment'];
 }
 
-// A customer's account: every order they've placed with ShopDesk shops, and their saved details.
-export function MyOrdersPage() {
+// A customer's orders with ShopDesk shops (view 'orders') or their account (view 'account').
+export function MyOrdersPage({ view = 'orders' }) {
   const [session, setSession] = useState(undefined);
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -50,7 +50,7 @@ export function MyOrdersPage() {
       <Page title="My orders">
         <SignIn
           title="Your orders"
-          path="/orders"
+          path={view === 'account' ? '/account' : '/orders'}
           note="Sign in to follow your orders."
           footer={
             <p className="note" style={{ fontSize: 12 }}>
@@ -60,11 +60,15 @@ export function MyOrdersPage() {
         />
       </Page>
     );
-  return <SignedInOrders email={session.user.email} userId={session.user.id} />;
+  return <SignedInOrders email={session.user.email} userId={session.user.id} view={view} />;
 }
 
-function SignedInOrders({ email, userId }) {
+// how many past orders show at first, and how many more each "Show older orders" adds
+const PAST_STEP = 10;
+
+function SignedInOrders({ email, userId, view }) {
   const [orders, setOrders] = useState(null);
+  const [pastShown, setPastShown] = useState(PAST_STEP);
   // saved details are shown as text; Edit opens a copy in the form, so the minute refresh never overwrites typing
   const [me, setMe] = useState({ name: '', phone: '', address: '' });
   const [draft, setDraft] = useState(null); // null: not editing
@@ -189,13 +193,128 @@ function SignedInOrders({ email, userId }) {
       </a>
     );
   };
+  const initial = ((me.name || email || '?').trim()[0] || '?').toUpperCase();
+  if (view === 'account')
+    return (
+      <Page
+        title="Account"
+        right={
+          <a className="linkbtn" href="/orders">
+            My orders
+          </a>
+        }
+      >
+        {msg && <p className="note">{msg}</p>}
+        <section className="card">
+          <div className="row">
+            <h2>Your details</h2>
+            {!draft && (
+              <button
+                className="btn small ghost"
+                onClick={() => {
+                  setDraft({ ...me });
+                  setConfirmForget(false);
+                }}
+              >
+                {had ? 'Edit' : 'Add'}
+              </button>
+            )}
+          </div>
+          {!draft ? (
+            had && (
+              <div className="saved-details">
+                {me.name && <strong>{me.name}</strong>}
+                {me.phone && <span>{me.phone}</span>}
+                {me.address && <span>{me.address}</span>}
+              </div>
+            )
+          ) : (
+            <>
+              <div className="field">
+                <label htmlFor="mName">Name</label>
+                <input
+                  id="mName"
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  autoComplete="name"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="mPhone">Phone number</label>
+                <input
+                  id="mPhone"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={draft.phone}
+                  onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="mAddr">Delivery address</label>
+                <input
+                  id="mAddr"
+                  value={draft.address}
+                  onChange={(e) => setDraft({ ...draft, address: e.target.value })}
+                  placeholder="Street, area and a landmark"
+                  autoComplete="street-address"
+                />
+              </div>
+              <div className="btns">
+                <button className="btn small" onClick={save}>
+                  Save
+                </button>
+                <button className="linkbtn" onClick={() => setDraft(null)}>
+                  Cancel
+                </button>
+              </div>
+              {had &&
+                (confirmForget ? (
+                  <div className="confirm-del" role="alert">
+                    <span>Delete your saved name, phone number and address?</span>
+                    <div className="btns">
+                      <button className="btn small bad" onClick={forget}>
+                        Delete
+                      </button>
+                      <button className="linkbtn" onClick={() => setConfirmForget(false)}>
+                        Keep them
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="danger-row" onClick={() => setConfirmForget(true)}>
+                    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                      <path
+                        d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Delete my saved details
+                  </button>
+                ))}
+            </>
+          )}
+        </section>
+        <section className="card">
+          <EmailSwitch />
+        </section>
+        <button className="btn ghost" onClick={signOut}>
+          Sign out
+        </button>
+        <footer className="page-foot">Signed in as {email}</footer>
+      </Page>
+    );
+  const olderLeft = past.length - pastShown;
   return (
     <Page
       title="My orders"
       right={
-        <button className="linkbtn" onClick={signOut}>
-          Sign out
-        </button>
+        <a className="avatar" href="/account" aria-label="Account" title="Account">
+          {initial}
+        </a>
       }
     >
       {msg && <p className="note">{msg}</p>}
@@ -222,108 +341,16 @@ function SignedInOrders({ email, userId }) {
           {past.length > 0 && (
             <>
               <h2>Past orders</h2>
-              {past.map(row)}
+              {past.slice(0, pastShown).map(row)}
+              {olderLeft > 0 && (
+                <button className="btn ghost" onClick={() => setPastShown(pastShown + PAST_STEP)}>
+                  Show older orders
+                </button>
+              )}
             </>
           )}
         </>
       )}
-      <section className="card">
-        <div className="row">
-          <h2>Your details</h2>
-          {!draft && (
-            <button
-              className="btn small ghost"
-              onClick={() => {
-                setDraft({ ...me });
-                setConfirmForget(false);
-              }}
-            >
-              {had ? 'Edit' : 'Add'}
-            </button>
-          )}
-        </div>
-        {!draft ? (
-          had && (
-            <div className="saved-details">
-              {me.name && <strong>{me.name}</strong>}
-              {me.phone && <span>{me.phone}</span>}
-              {me.address && <span>{me.address}</span>}
-            </div>
-          )
-        ) : (
-          <>
-            <div className="field">
-              <label htmlFor="mName">Name</label>
-              <input
-                id="mName"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                autoComplete="name"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="mPhone">Phone number</label>
-              <input
-                id="mPhone"
-                inputMode="tel"
-                autoComplete="tel"
-                value={draft.phone}
-                onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="mAddr">Delivery address</label>
-              <input
-                id="mAddr"
-                value={draft.address}
-                onChange={(e) => setDraft({ ...draft, address: e.target.value })}
-                placeholder="Street, area and a landmark"
-                autoComplete="street-address"
-              />
-            </div>
-            <div className="btns">
-              <button className="btn small" onClick={save}>
-                Save
-              </button>
-              <button className="linkbtn" onClick={() => setDraft(null)}>
-                Cancel
-              </button>
-            </div>
-            {had &&
-              (confirmForget ? (
-                <div className="confirm-del" role="alert">
-                  <span>Delete your saved name, phone number and address?</span>
-                  <div className="btns">
-                    <button className="btn small bad" onClick={forget}>
-                      Delete
-                    </button>
-                    <button className="linkbtn" onClick={() => setConfirmForget(false)}>
-                      Keep them
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button className="danger-row" onClick={() => setConfirmForget(true)}>
-                  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
-                    <path
-                      d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  Delete my saved details
-                </button>
-              ))}
-          </>
-        )}
-      </section>
-      <section className="card">
-        <EmailSwitch />
-      </section>
-      <footer className="page-foot">Signed in as {email}</footer>
       <InboxToast inbox={inbox} />
     </Page>
   );
