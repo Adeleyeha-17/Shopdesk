@@ -5,6 +5,17 @@ import { slugify } from '../lib/helpers.js';
 
 export const BANKS = ['OPay', 'Moniepoint', 'Kuda', 'PalmPay', 'Other bank'];
 
+// While the link name is being typed, a dash at the end stays, so "rose-perfumes" can be typed letter by letter.
+// It is tidied (no dash at either end) for the preview, the check and the save.
+const slugTyping = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 30);
+const cleanSlug = (s) => String(s || '').replace(/-+$/, '');
+
 export function ShopFields({ v, set }) {
   const f = (k) => (e) => set({ ...v, [k]: e.target.value });
   return (
@@ -25,11 +36,11 @@ export function ShopFields({ v, set }) {
         <input
           id="sSlug"
           value={v.slug}
-          onChange={(e) => set({ ...v, slug: slugify(e.target.value), slugTouched: true })}
+          onChange={(e) => set({ ...v, slug: slugTyping(e.target.value), slugTouched: true })}
           placeholder="e.g. rosesperfumes"
         />
         <span className="sub">
-          {window.location.host}/{v.slug || 'yourshop'}
+          {window.location.host}/{cleanSlug(v.slug) || 'yourshop'}
         </span>
       </div>
       <div className="field">
@@ -95,7 +106,7 @@ export function ShopFields({ v, set }) {
 export const checkShop = (v) =>
   v.name.trim().length < 2
     ? 'Enter your business name.'
-    : !/^[a-z0-9-]{3,30}$/.test(v.slug)
+    : !/^[a-z0-9-]{3,30}$/.test(cleanSlug(v.slug))
       ? 'Your link name needs 3 to 30 letters, numbers or dashes.'
       : !/^\d{10}$/.test(v.account_number.replace(/\s/g, ''))
         ? 'Enter your 10-digit account number.'
@@ -111,7 +122,7 @@ export const checkShop = (v) =>
 
 export const shopRow = (v) => ({
   name: v.name.trim(),
-  slug: v.slug,
+  slug: cleanSlug(v.slug),
   bank: v.bank,
   account_number: v.account_number.replace(/\s/g, ''),
   account_name: v.account_name.trim(),
