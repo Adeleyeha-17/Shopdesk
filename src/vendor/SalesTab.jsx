@@ -318,7 +318,8 @@ function GoalCard({ goal, saveGoal }) {
 }
 
 // Where the money stands, as a short statement: what orders were placed for, how much of that is in and how much
-// is still owed; money in for the period, money out, and what's left.
+// is still owed; money in for the period. Money out and what's left only show once the shop has noted some spending
+// itself (until then it's one quiet "Track what you spend" link), so a half-empty "left" never looks like profit.
 function MoneyCard({ r, openFull, addOut }) {
   const m = r.money;
   return (
@@ -354,18 +355,22 @@ function MoneyCard({ r, openFull, addOut }) {
           )}
         </div>
         <div className="stmt-gap" />
-        <div className="stmt-row">
+        <div className={'stmt-row' + (m.hasOut ? '' : ' total')}>
           <span>Money in (your sales)</span>
           <span className="num">{naira(m.sales)}</span>
         </div>
-        <button className="stmt-row tap" onClick={() => openFull('out')}>
-          <span>Money out</span>
-          <span className="num">− {naira(m.spent)} ›</span>
-        </button>
-        <div className="stmt-row total">
-          <span>Left</span>
-          <span className={'num' + (m.left < 0 ? ' neg' : '')}>{naira(m.left)}</span>
-        </div>
+        {m.hasOut && (
+          <>
+            <button className="stmt-row tap" onClick={() => openFull('out')}>
+              <span>Money out</span>
+              <span className="num">− {naira(m.spent)} ›</span>
+            </button>
+            <div className="stmt-row total">
+              <span>Left</span>
+              <span className={'num' + (m.left < 0 ? ' neg' : '')}>{naira(m.left)}</span>
+            </div>
+          </>
+        )}
         <div className="stmt-notes">
           {m.delivery > 0 && <span>Delivery money for riders {naira(m.delivery)} (not yours)</span>}
           {m.discounts > 0 && (
@@ -380,9 +385,15 @@ function MoneyCard({ r, openFull, addOut }) {
           )}
         </div>
       </div>
-      <button className="btn small ghost add-out" onClick={addOut}>
-        + Add money out
-      </button>
+      {m.hasOut ? (
+        <button className="btn small ghost add-out" onClick={addOut}>
+          + Add money out
+        </button>
+      ) : (
+        <button className="linkbtn small-link track-out" onClick={addOut}>
+          Track what you spend, to see what&apos;s left ›
+        </button>
+      )}
     </section>
   );
 }
@@ -768,7 +779,7 @@ function SalesView({
                       <span className="sub">
                         {i === 0 ? 'So far · ' : ''}
                         {x.orders} order{x.orders === 1 ? '' : 's'}
-                        {x.moneyOut ? ` · ${naira(x.left)} left` : ''}
+                        {r.money.hasOut && x.moneyOut ? ` · ${naira(x.left)} left` : ''}
                       </span>
                     </span>
                     <span className="num">{naira(x.moneyIn)}</span>

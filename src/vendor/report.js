@@ -524,6 +524,8 @@ export function buildReport({ shop, data: raw, products, openOrders, period, now
       spentBefore,
       left: s.income - spent,
       leftBefore: s.prevIncome - spentBefore,
+      // the shop notes its own spending (not just the ShopDesk plan, which is added for it): show money out and left
+      hasOut: moneyOut.some((x) => x.kind !== 'shopdesk'),
       outByKind: OUT_KINDS.map(([k, label]) => ({ kind: k, label, amount: outByKind[k] || 0 })).filter(
         (x) => x.amount,
       ),

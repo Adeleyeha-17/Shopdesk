@@ -492,46 +492,65 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
   });
 
   // ---------- Daily (the period on screen) and Monthly ----------
+  // money out and "left" only appear for shops that note their spending (see report.js: hasOut)
+  const hasOut = m.hasOut;
   const dN = 4 + Math.max(1, r.cashBook.length);
   const many = r.cashBook.length > 45;
+  let runIn = 0;
   const dailySheet = dataSheet({
     name: 'Daily',
     table: 'DailyTable',
     title: `Day by day · ${period.fullMonth ? new Date(period.start).toLocaleDateString('en-NG', { month: 'long', year: 'numeric' }) : label[period.key] || 'Your dates'}`,
-    note: 'Money in (your sales, without delivery fees), money out, and what was left each day. The running total adds up from the first day.',
+    note: hasOut
+      ? 'Money in (your sales, without delivery fees), money out, and what was left each day. The running total adds up from the first day.'
+      : 'Money in each day (your sales, without delivery fees). The running total adds up from the first day.',
     columns: [
       { h: 'Date', w: 15, s: 'day' },
       { h: 'Orders', w: 9, s: 'int', total: 'sum' },
       { h: 'Money in', w: 13, s: 'money', total: 'sum' },
       { h: 'Delivery money', w: 13, s: 'money', total: 'sum' },
-      { h: 'Money out', w: 13, s: 'money', total: 'sum' },
-      { h: 'Left', w: 13, s: 'money', total: 'sum' },
+      ...(hasOut
+        ? [
+            { h: 'Money out', w: 13, s: 'money', total: 'sum' },
+            { h: 'Left', w: 13, s: 'money', total: 'sum' },
+          ]
+        : []),
       { h: 'Running total', w: 14, s: 'money' },
     ],
-    rows: r.cashBook.map((d, k) => [
-      X(d.day + 'T00:00:00'),
-      d.orders,
-      d.moneyIn,
-      d.delivery,
-      d.moneyOut,
-      { f: `C${5 + k}-E${5 + k}`, v: d.left },
-      { f: k ? `G${4 + k}+F${5 + k}` : `F5`, v: d.balance },
-    ]),
+    rows: r.cashBook.map((d, k) =>
+      hasOut
+        ? [
+            X(d.day + 'T00:00:00'),
+            d.orders,
+            d.moneyIn,
+            d.delivery,
+            d.moneyOut,
+            { f: `C${5 + k}-E${5 + k}`, v: d.left },
+            { f: k ? `G${4 + k}+F${5 + k}` : `F5`, v: d.balance },
+          ]
+        : [
+            X(d.day + 'T00:00:00'),
+            d.orders,
+            d.moneyIn,
+            d.delivery,
+            { f: k ? `E${4 + k}+C${5 + k}` : `C5`, v: (runIn += d.moneyIn) },
+          ],
+    ),
     charts: [
       {
-        at: [8, 3, 18, 24],
+        at: [hasOut ? 8 : 6, 3, hasOut ? 18 : 16, 24],
         kind: many ? 'line' : 'bar',
-        title: 'Money in and money out',
+        title: hasOut ? 'Money in and money out' : 'Money in each day',
         cats: `Daily!$A$5:$A$${dN}`,
         numCats: true,
         catFormat: 'd mmm',
         series: [
           { name: 'Money in', ref: `Daily!$C$5:$C$${dN}`, color: BLUE },
-          { name: 'Money out', ref: `Daily!$E$5:$E$${dN}`, color: RED },
+          ...(hasOut ? [{ name: 'Money out', ref: `Daily!$E$5:$E$${dN}`, color: RED }] : []),
         ],
       },
     ],
-    rules: [{ ref: `F5:F${dN}`, when: '$F5<0', style: 'bad' }],
+    rules: hasOut ? [{ ref: `F5:F${dN}`, when: '$F5<0', style: 'bad' }] : [],
   });
   const moN = 4 + Math.max(1, r.months.length);
   const monthlySheet = dataSheet({
@@ -543,31 +562,34 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
       { h: 'Month', w: 16, s: 'month' },
       { h: 'Orders', w: 9, s: 'int', total: 'sum' },
       { h: 'Money in', w: 14, s: 'money', total: 'sum' },
-      { h: 'Money out', w: 14, s: 'money', total: 'sum' },
-      { h: 'Left', w: 14, s: 'money', total: 'sum' },
+      ...(hasOut
+        ? [
+            { h: 'Money out', w: 14, s: 'money', total: 'sum' },
+            { h: 'Left', w: 14, s: 'money', total: 'sum' },
+          ]
+        : []),
       { h: 'Delivery money', w: 14, s: 'money', total: 'sum' },
     ],
-    rows: r.months.map((x, k) => [
-      X(x.start),
-      x.orders,
-      x.moneyIn,
-      x.moneyOut,
-      { f: `C${5 + k}-D${5 + k}`, v: x.left },
-      x.delivery,
-    ]),
+    rows: r.months.map((x, k) =>
+      hasOut
+        ? [X(x.start), x.orders, x.moneyIn, x.moneyOut, { f: `C${5 + k}-D${5 + k}`, v: x.left }, x.delivery]
+        : [X(x.start), x.orders, x.moneyIn, x.delivery],
+    ),
     charts: [
       {
-        at: [7, 3, 18, 24],
+        at: [hasOut ? 7 : 5, 3, hasOut ? 18 : 16, 24],
         kind: 'bar',
-        title: 'Money in, money out and what was left',
+        title: hasOut ? 'Money in, money out and what was left' : 'Money in each month',
         cats: `Monthly!$A$5:$A$${moN}`,
         numCats: true,
         catFormat: 'mmm yy',
-        series: [
-          { name: 'Money in', ref: `Monthly!$C$5:$C$${moN}`, color: BLUE },
-          { name: 'Money out', ref: `Monthly!$D$5:$D$${moN}`, color: RED },
-          { name: 'Left', ref: `Monthly!$E$5:$E$${moN}`, color: GREEN, kind: 'line' },
-        ],
+        series: hasOut
+          ? [
+              { name: 'Money in', ref: `Monthly!$C$5:$C$${moN}`, color: BLUE },
+              { name: 'Money out', ref: `Monthly!$D$5:$D$${moN}`, color: RED },
+              { name: 'Left', ref: `Monthly!$E$5:$E$${moN}`, color: GREEN, kind: 'line' },
+            ]
+          : [{ name: 'Money in', ref: `Monthly!$C$5:$C$${moN}`, color: BLUE }],
       },
     ],
     rules: [{ ref: `C5:C${moN}`, bar: '93C5FD' }],
@@ -690,14 +712,18 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
     ),
     kpi('   Paid', m.paidOnThese, null, 'B15-B17'),
     kpi('   Still owed', m.owedOnThese, null, `SUMIFS(${O('M')},${inP(O('B'))},${O('N')},"<>Cancelled")`),
-    kpi(
-      'Money out',
-      m.spent,
-      m.spentBefore,
-      `SUMIFS(${M('D')},${M('A')},">="&INT(PeriodStart),${M('A')},"<="&PeriodEnd)`,
-      `SUMIFS(${M('D')},${M('A')},">="&INT(PrevStart),${M('A')},"<="&PrevEnd)`,
-    ),
-    kpi('Left (money in − money out)', m.left, m.leftBefore, 'B10-B18', 'C10-C18'),
+    ...(hasOut
+      ? [
+          kpi(
+            'Money out',
+            m.spent,
+            m.spentBefore,
+            `SUMIFS(${M('D')},${M('A')},">="&INT(PeriodStart),${M('A')},"<="&PeriodEnd)`,
+            `SUMIFS(${M('D')},${M('A')},">="&INT(PrevStart),${M('A')},"<="&PrevEnd)`,
+          ),
+          kpi('Left (money in − money out)', m.left, m.leftBefore, 'B10-B18', 'C10-C18'),
+        ]
+      : []),
     kpi('Delivery money for riders (not yours)', m.delivery, null, `SUMIFS(${Pm('F')},${inP(Pm('A'))})`),
     kpi('Discounts given on sale items', m.discounts, null, `SUMIFS(${I('G')},${inP(I('I'))},${I('J')},1)`),
     kpi(
@@ -718,7 +744,8 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
       : { v: '', s: 'text' };
     return row;
   });
-  measures[9][1].s = 'moneyBig';
+  measures[hasOut ? 9 : 0][1].s = 'moneyBig';
+  const G = 12 + measures.length; // the goal's row; "in so far" is under it, then done, pace and needed
 
   const top = (sheet, keyCol, rankCol, cols, nLast, kk) =>
     cols.map((c) => ({
@@ -771,24 +798,26 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
       { f: `Sources!C${5 + k}`, v: x.sales, s: 'money' },
     ]);
   });
-  side.push([]);
-  side.push([
-    { v: 'Money out by kind', s: 'headL' },
-    { v: '', s: 'head' },
-    { v: 'Amount', s: 'head' },
-  ]);
-  OUT_KINDS.forEach(([kind, name]) => {
-    const amt = (m.outByKind.find((x) => x.kind === kind) || { amount: 0 }).amount;
+  if (hasOut) {
+    side.push([]);
     side.push([
-      name,
-      '',
-      {
-        f: `SUMIFS(${M('D')},${M('B')},"="&F${9 + side.length},${M('A')},">="&INT(PeriodStart),${M('A')},"<="&PeriodEnd)`,
-        v: amt,
-        s: 'money',
-      },
+      { v: 'Money out by kind', s: 'headL' },
+      { v: '', s: 'head' },
+      { v: 'Amount', s: 'head' },
     ]);
-  });
+    OUT_KINDS.forEach(([kind, name]) => {
+      const amt = (m.outByKind.find((x) => x.kind === kind) || { amount: 0 }).amount;
+      side.push([
+        name,
+        '',
+        {
+          f: `SUMIFS(${M('D')},${M('B')},"="&F${9 + side.length},${M('A')},">="&INT(PeriodStart),${M('A')},"<="&PeriodEnd)`,
+          v: amt,
+          s: 'money',
+        },
+      ]);
+    });
+  }
 
   const summaryRows = [
     [{ v: `${shop.name} · Sales report`, s: 'title' }],
@@ -866,12 +895,12 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
     ],
     [
       { v: 'Done', s: 'text' },
-      { f: 'IF(B25=0,0,MIN(1,B26/B25))', v: r.goal.share, s: 'pctB' },
+      { f: `IF(B${G}=0,0,MIN(1,B${G + 1}/B${G}))`, v: r.goal.share, s: 'pctB' },
     ],
     [
       { v: 'At this pace the month ends on', s: 'text' },
       {
-        f: 'ROUND(B26/DAY(TODAY())*DAY(EOMONTH(TODAY(),0)),0)',
+        f: `ROUND(B${G + 1}/DAY(TODAY())*DAY(EOMONTH(TODAY(),0)),0)`,
         v:
           r.goal.pace ??
           Math.round((r.goal.soFar / n.getDate()) * new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate()),
@@ -881,7 +910,7 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
     [
       { v: 'Needed each day to reach the goal', s: 'text' },
       {
-        f: 'IF(B26>=B25,0,CEILING((B25-B26)/(DAY(EOMONTH(TODAY(),0))-DAY(TODAY())+1),100))',
+        f: `IF(B${G + 1}>=B${G},0,CEILING((B${G}-B${G + 1})/(DAY(EOMONTH(TODAY(),0))-DAY(TODAY())+1),100))`,
         v: r.goal.perDayNeeded,
         s: 'moneyB',
       },
@@ -913,22 +942,22 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
       { ref: 'G5:G6', type: 'date' },
     ],
     rules: [
-      { ref: 'B27', bar: '86EFAC', max: 1 },
-      { ref: 'B19', when: '$B$19<0', style: 'bad' },
-      { ref: 'D10:D22', when: 'AND(ISNUMBER($D10),$D10>0)', style: 'good' },
-      { ref: 'D10:D22', when: 'AND(ISNUMBER($D10),$D10<0)', style: 'bad' },
+      { ref: `B${G + 2}`, bar: '86EFAC', max: 1 },
+      ...(hasOut ? [{ ref: 'B19', when: '$B$19<0', style: 'bad' }] : []),
+      { ref: `D10:D${9 + measures.length}`, when: 'AND(ISNUMBER($D10),$D10>0)', style: 'good' },
+      { ref: `D10:D${9 + measures.length}`, when: 'AND(ISNUMBER($D10),$D10<0)', style: 'bad' },
     ],
     charts: [
       {
-        at: [0, 31, 4, 50],
+        at: [0, G + 5, 4, G + 24],
         kind: 'bar',
-        title: 'Month by month: money in and money out',
+        title: hasOut ? 'Month by month: money in and money out' : 'Month by month: money in',
         cats: `Monthly!$A$5:$A$${moN}`,
         numCats: true,
         catFormat: 'mmm yy',
         series: [
           { name: 'Money in', ref: `Monthly!$C$5:$C$${moN}`, color: BLUE },
-          { name: 'Money out', ref: `Monthly!$D$5:$D$${moN}`, color: RED },
+          ...(hasOut ? [{ name: 'Money out', ref: `Monthly!$D$5:$D$${moN}`, color: RED }] : []),
         ],
       },
     ],
@@ -955,7 +984,7 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
       ordersSheet,
       itemsSheet,
       paymentsSheet,
-      outSheet,
+      ...(hasOut ? [outSheet] : []),
       heatSheet,
       lists,
     ],

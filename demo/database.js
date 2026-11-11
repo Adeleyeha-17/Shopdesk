@@ -640,9 +640,9 @@ export function monthEndAlert() {
   const orders = S.orders.filter(
     (o) => o.shop_id === s.id && o.status !== 'cancelled' && Date.parse(o.created_at) >= +first,
   ).length;
-  const out = S.money_out
-    .filter((m) => m.shop_id === s.id && m.spent_on >= iso(+first).slice(0, 10))
-    .reduce((a, m) => a + m.amount, 0);
+  const mine = S.money_out.filter((m) => m.shop_id === s.id && m.spent_on >= iso(+first).slice(0, 10));
+  // "left" only for shops that note their own spending
+  const out = mine.some((m) => m.kind !== 'shopdesk') ? mine.reduce((a, m) => a + m.amount, 0) : 0;
   const ym = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
   const month = n.toLocaleDateString('en-NG', { month: 'long' });
   const was = S.uid;

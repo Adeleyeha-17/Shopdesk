@@ -334,6 +334,21 @@ await step('the monthly reports list opens a month, and the month-end alert open
   await p.locator('.back-btn').click();
 });
 
+await step('a shop that notes no spending sees no money out or "left"; the first entry brings them', async () => {
+  await patch((S) => {
+    S.money_out = [];
+  }, '/');
+  await nav('Sales');
+  await p.locator('.filter:has-text("This month")').click();
+  await p.locator('.stmt').waitFor();
+  expect(!(await p.locator('.stmt').innerText()).includes('Left'), '"Left" shows with no money out');
+  await p.locator('.track-out').click();
+  await p.locator('#outAmount').fill('9000');
+  await p.locator('.sheet button:has-text("Add money out")').click();
+  await see('₦9,000 money out added');
+  await p.locator('.stmt-row.total:has-text("Left")').waitFor();
+});
+
 await step('money out can be added, and shows in the Full report', async () => {
   await p.locator('button:has-text("+ Add money out")').first().click();
   await p.locator('#outAmount').fill('12500');

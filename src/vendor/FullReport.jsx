@@ -235,6 +235,14 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
     }
   }
 
+  // day by day; without money out the running total is simply money in adding up
+  let runIn = 0;
+  const daily = r.cashBook.map((d) => ({
+    ...d,
+    key: d.day,
+    day: d.day + 'T12:00:00',
+    balance: m.hasOut ? d.balance : (runIn += d.moneyIn),
+  }));
   const summaryRows = [
     ['Sales (money in, without delivery fees)', s.income, s.prevIncome, 'money'],
     ['Orders', s.orders, s.prevOrders, 'int'],
@@ -244,8 +252,12 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
     ['Orders placed (value)', m.orderValue, null, 'money'],
     ['   Paid', m.paidOnThese, null, 'money'],
     ['   Still owed', m.owedOnThese, null, 'money'],
-    ['Money out', m.spent, m.spentBefore, 'money'],
-    ['Left (money in − money out)', m.left, m.leftBefore, 'money'],
+    ...(m.hasOut
+      ? [
+          ['Money out', m.spent, m.spentBefore, 'money'],
+          ['Left (money in − money out)', m.left, m.leftBefore, 'money'],
+        ]
+      : []),
     ['Delivery money for riders', m.delivery, null, 'money'],
     ['Discounts given', m.discounts, null, 'money'],
     ['Cancelled orders (value)', m.cancelledValue, null, 'money'],
@@ -303,11 +315,15 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
           { k: 'orders', label: 'Orders', t: 'int', sum: true },
           { k: 'moneyIn', label: 'Money in', t: 'money', sum: true },
           { k: 'delivery', label: 'Delivery money', t: 'money', sum: true },
-          { k: 'moneyOut', label: 'Money out', t: 'money', sum: true },
-          { k: 'left', label: 'Left', t: 'money', sum: true, cls: (x) => (x.left < 0 ? 'neg' : '') },
+          ...(m.hasOut
+            ? [
+                { k: 'moneyOut', label: 'Money out', t: 'money', sum: true },
+                { k: 'left', label: 'Left', t: 'money', sum: true, cls: (x) => (x.left < 0 ? 'neg' : '') },
+              ]
+            : []),
           { k: 'balance', label: 'Running total', t: 'money' },
         ]}
-        rows={r.cashBook.map((d) => ({ ...d, key: d.day, day: d.day + 'T12:00:00' }))}
+        rows={daily}
         sortBy={['day', -1]}
       />
     ),
@@ -317,8 +333,12 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
           { k: 'month', label: 'Month' },
           { k: 'orders', label: 'Orders', t: 'int', sum: true },
           { k: 'moneyIn', label: 'Money in', t: 'money', sum: true },
-          { k: 'moneyOut', label: 'Money out', t: 'money', sum: true },
-          { k: 'left', label: 'Left', t: 'money', sum: true, cls: (x) => (x.left < 0 ? 'neg' : '') },
+          ...(m.hasOut
+            ? [
+                { k: 'moneyOut', label: 'Money out', t: 'money', sum: true },
+                { k: 'left', label: 'Left', t: 'money', sum: true, cls: (x) => (x.left < 0 ? 'neg' : '') },
+              ]
+            : []),
           { k: 'delivery', label: 'Delivery money', t: 'money', sum: true },
         ]}
         rows={r.months.map((x) => ({ ...x, key: x.month }))}
@@ -585,7 +605,8 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
     ),
   };
 
-  const tabs = sheet === 'quiet' ? [...SHEETS, ['quiet', 'Regulars']] : SHEETS;
+  const shown = m.hasOut ? SHEETS : SHEETS.filter(([k]) => k !== 'out');
+  const tabs = sheet === 'quiet' ? [...shown, ['quiet', 'Regulars']] : shown;
   return (
     <div className="report" role="dialog" aria-modal="true" aria-label="Full report">
       <header className="report-top">

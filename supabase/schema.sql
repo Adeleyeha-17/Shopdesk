@@ -2300,7 +2300,9 @@ begin
       into v_in from public.payments p join public.orders o on o.id = p.order_id
       where p.shop_id = s.id and p.created_at >= v_start;
     select count(*) into v_orders from public.orders where shop_id = s.id and status <> 'cancelled' and created_at >= v_start;
-    select coalesce(sum(amount), 0) into v_out from public.money_out where shop_id = s.id and spent_on between v_first and v_today;
+    -- "left" only for shops that note their own spending (the ShopDesk plan alone isn't the whole picture)
+    select case when count(*) filter (where kind <> 'shopdesk') > 0 then coalesce(sum(amount), 0) else 0 end into v_out
+      from public.money_out where shop_id = s.id and spent_on between v_first and v_today;
     v_left := v_in - v_out;
     perform public.notify(s.owner_id, null, 'monthly_report', 'Your ' || to_char(v_today, 'FMMonth') || ' report is ready',
       public.naira(v_in::int) || ' in from ' || v_orders || ' order' || case when v_orders = 1 then '' else 's' end ||
