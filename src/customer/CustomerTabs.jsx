@@ -1,13 +1,13 @@
-// The bar at the bottom of the customer's pages, like the shop owner's: the shop they were last in, their orders
-// (with a red number when a shop has written), the cart (with how many things are in it) and their account.
+// The bar at the bottom of the customer's pages, like the shop owner's: their shops, their orders (with a red number
+// when a shop has written), the cart (with how many things are in it) and their account.
 // Hidden on checkout, so nothing pulls them away from paying. Tabs change at once, without sliding.
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { loadCart } from './cart.js';
-import { lastShop } from './lastShop.js';
+import { myShops } from './myShops.js';
 
 const ICON = {
-  shop: 'M4 9l1-5h14l1 5M4 9h16v11H4zM9 20v-6h6v6',
+  shops: 'M4 9l1-5h14l1 5M4 9h16v11H4zM9 20v-6h6v6',
   orders: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6',
   cart: 'M3 4h2.2l2.3 10.6a1.6 1.6 0 0 0 1.6 1.3h8.1a1.6 1.6 0 0 0 1.6-1.2L20.6 8H6',
   account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20c1.4-3.3 4.2-5 7.5-5s6.1 1.7 7.5 5',
@@ -42,10 +42,12 @@ function useEmail() {
   return email;
 }
 
-// active: 'shop', 'orders', 'cart' or 'account'. unread: new messages and updates on their orders.
+// active: 'shops', 'orders', 'cart' or 'account'. unread: new messages and updates on their orders.
 export function CustomerTabs({ active, unread = 0 }) {
-  const shop = lastShop();
-  const slug = shop && shop.slug;
+  // the Cart tab: the newest shop with something in its cart, or else the shop opened last
+  const shops = myShops();
+  const cartShop = shops.find((s) => countIn(s.slug) > 0) || shops[0];
+  const slug = cartShop && cartShop.slug;
   const inCart = useCartCount(slug);
   const email = useEmail();
   // the cart's number gives a little bump when something is added
@@ -57,7 +59,7 @@ export function CustomerTabs({ active, unread = 0 }) {
   }, [inCart]);
 
   const tabs = [
-    slug && ['shop', 'Shop', '/' + slug],
+    ['shops', 'Shops', '/shops'],
     ['orders', 'Orders', '/orders'],
     slug && ['cart', 'Cart', '/' + slug + '/cart'],
     ['account', 'Account', '/account'],

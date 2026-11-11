@@ -12,7 +12,7 @@ import { copyText, errText, telLink } from '../lib/helpers.js';
 import { kick } from '../lib/alerts.js';
 import { useInbox, InboxToast } from './inbox.jsx';
 import { CustomerTabs } from './CustomerTabs.jsx';
-import { rememberShop } from './lastShop.js';
+import { rememberShop } from './myShops.js';
 import { Page } from '../shared/Page.jsx';
 import { Skeleton } from '../shared/Skeleton.jsx';
 import { useBusy } from '../lib/busy.js';

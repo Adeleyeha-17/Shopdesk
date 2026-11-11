@@ -8,7 +8,7 @@ import { errText, navigate } from '../lib/helpers.js';
 import { kick, signOut } from '../lib/alerts.js';
 import { useInbox, InboxToast } from './inbox.jsx';
 import { CustomerTabs } from './CustomerTabs.jsx';
-import { rememberShop } from './lastShop.js';
+import { noteShop, rememberShop } from './myShops.js';
 import { Page } from '../shared/Page.jsx';
 import { LoadError } from '../shared/LoadError.jsx';
 import { SignIn } from '../shared/SignIn.jsx';
@@ -250,10 +250,23 @@ export function ShopPage({ slug, step = 'shop' }) {
     if (restored.current) saveCart(slug, cart);
   }, [cart, slug]);
   useBusy(state.loading || busy);
-  // the Shop and Cart tabs come back to this shop
+  // the Shops tab keeps this shop, with three of its product photos and a short line on what it sells
   useEffect(() => {
-    if (state.shop) rememberShop(slug, state.shop.name);
-  }, [state.shop, slug]);
+    if (!state.shop) return;
+    const ps = state.products;
+    const pics = [...ps.filter((p) => p.stock > 0), ...ps.filter((p) => !(p.stock > 0))]
+      .map((p) => p.photo_path)
+      .filter(Boolean);
+    rememberShop(slug, state.shop.name, {
+      photos: [...new Set(pics)].slice(0, 3),
+      blurb: ps.length ? (ps.length > 1 ? `${ps[0].name} and ${ps.length - 1} more` : ps[0].name) : '',
+    });
+  }, [state.shop, state.products, slug]);
+  // and what's in its cart comes to (shown on the Shops tab)
+  const subNow = useRef(0);
+  useEffect(() => {
+    if (ready) noteShop(slug, { cartTotal: subNow.current });
+  }, [cart, ready, slug]);
   const hint = useTypingHint(
     state.products.slice(0, 6).map((p) => p.name),
     'Search ' + (state.shop ? state.shop.name : 'this shop'),
@@ -263,7 +276,7 @@ export function ShopPage({ slug, step = 'shop' }) {
   const inbox = useInbox(uid, { title: state.shop ? state.shop.name : 'ShopDesk' });
   const closeSheet = useCallback(() => setPicking(null), []);
   // the bar at the bottom on the shop and the cart (not on checkout)
-  const tabs = checkout ? null : <CustomerTabs active={step} unread={inbox.count} />;
+  const tabs = checkout ? null : <CustomerTabs active={step === 'cart' ? 'cart' : 'shops'} unread={inbox.count} />;
 
   if (state.loading)
     return (
@@ -299,6 +312,7 @@ export function ShopPage({ slug, step = 'shop' }) {
     else if (cart[p.id] > 0) lines.push({ key: p.id, p, q: cart[p.id], price: payPrice(p), name: p.name });
   });
   const sub = lines.reduce((a, l) => a + l.q * l.price, 0);
+  subNow.current = sub;
   const sheet = picking && products.find((p) => p.id === picking);
   const words = find.trim().toLowerCase();
   const shown = words ? products.filter((p) => p.name.toLowerCase().includes(words)) : products;

@@ -16,10 +16,10 @@ import { SignIn } from '../shared/SignIn.jsx';
 import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { myTokens } from './savedOrders.js';
 import { CustomerTabs } from './CustomerTabs.jsx';
-import { lastShop, rememberShop } from './lastShop.js';
+import { lastShop, rememberShop } from './myShops.js';
 
-// The label on each order in the list: [colour, words].
-function orderLabel(o) {
+// The label on each order in the list: [colour, words]. (The Shops tab uses it too.)
+export function orderLabel(o) {
   // a problem the customer reported comes first while it's open
   if (o.problem === 'open') return ['warn', 'Problem · waiting for the shop'];
   if (o.problem === 'answered') return ['new', 'Problem · the shop answered'];

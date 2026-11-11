@@ -119,7 +119,7 @@ await step('adding a second product puts 2 on the Cart tab', async () => {
   await tab('Cart').locator('.badge:text-is("2")').waitFor().catch(async () => {
     throw new Error('the Cart tab shows ' + (await tab('Cart').innerText()).replace(/\s+/g, ' ') + ', not 2');
   });
-  expect((await tab('Shop').getAttribute('aria-current')) === 'page', 'the Shop tab is not marked as open');
+  expect((await tab('Shops').getAttribute('aria-current')) === 'page', 'the Shops tab is not marked as open');
 });
 
 await step('the Cart tab opens the cart page; checkout has no tabs and its back arrow returns to the cart', async () => {
@@ -130,6 +130,19 @@ await step('the Cart tab opens the cart page; checkout has no tabs and its back 
   await see('Place order');
   expect((await p.locator('nav.tabs').count()) === 0, 'the tab bar shows on checkout');
   await p.locator('.back-btn').click();
+  await see('Your cart');
+  await p.locator('button:has-text("Checkout")').click();
+  await see('Place order');
+});
+
+await step('the Shops tab keeps the shop, with what is in its cart at the top', async () => {
+  await p.locator('.back-btn').click();
+  await see('Your cart');
+  await tab('Shops').click();
+  await see('Pick up where you left off');
+  expect((await p.locator('.shoplist').innerText()).includes("Bimpe's Beauty Store"), 'the shop is not listed');
+  expect((await p.locator('.shop-state.cart').first().innerText()).includes('2 in your cart'), 'the cart line is missing');
+  await p.locator('.resume a:has-text("View cart")').click();
   await see('Your cart');
   await p.locator('button:has-text("Checkout")').click();
   await see('Place order');

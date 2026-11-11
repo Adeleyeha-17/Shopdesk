@@ -2,7 +2,7 @@
 import React from 'react';
 import { privacyEmail } from '../lib/database.js';
 import { Page } from './Page.jsx';
-import { lastShop } from '../customer/lastShop.js';
+import { lastShop } from '../customer/myShops.js';
 
 // Plain-language notice. Have it checked by a lawyer before a public launch (Nigeria Data Protection Act 2023).
 export function PrivacyPage() {

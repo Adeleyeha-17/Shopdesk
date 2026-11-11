@@ -41,6 +41,7 @@ export function transition(change, dir = 'none', after) {
 export function depth(path) {
   const p = String(path || '/').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
   if (p === '/' || p === '/admin') return 0;
+  if (p === '/shops') return 0.5;
   if (p === '/orders' || p === '/email-off' || /^\/[^/]+\/cart$/.test(p)) return 2;
   if (p === '/account' || /^\/[^/]+\/checkout$/.test(p)) return 3;
   if (p.startsWith('/o/')) return 4;

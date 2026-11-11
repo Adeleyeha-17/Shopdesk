@@ -2,6 +2,7 @@
 //   /              the vendor's app (sign in, set up your shop, then Sales / Orders / Stock / Shop)
 //   /admin         ShopDesk Admin (only your owner account)
 //   /privacy       privacy notice and shop rules
+//   /shops         a customer's shops (every shop they've opened or ordered from)
 //   /orders        a customer's own orders
 //   /account       a customer's saved details, email alerts and sign out
 //   /o/<link>      one order, as the customer sees it
@@ -19,6 +20,7 @@ import { AdminApp } from './admin/AdminApp.jsx';
 import { ShopPage } from './customer/ShopPage.jsx';
 import { OrderPage } from './customer/OrderPage.jsx';
 import { MyOrdersPage } from './customer/MyOrdersPage.jsx';
+import { ShopsPage } from './customer/ShopsPage.jsx';
 import { PrivacyPage } from './shared/PrivacyPage.jsx';
 import { EmailOffPage } from './shared/EmailOffPage.jsx';
 import { LoadingBar } from './shared/LoadingBar.jsx';
@@ -87,6 +89,7 @@ function Pages() {
   if (p === '/') return <VendorApp />;
   if (p === '/admin') return <AdminApp />;
   if (p === '/privacy') return <PrivacyPage />;
+  if (p === '/shops') return <ShopsPage />;
   if (p === '/orders' || p === '/account') return <MyOrdersPage view={p === '/account' ? 'account' : 'orders'} />;
   if (p === '/email-off') return <EmailOffPage />;
   const o = p.match(/^\/o\/([0-9a-f-]{36})$/i);
