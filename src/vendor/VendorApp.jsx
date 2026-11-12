@@ -22,6 +22,7 @@ import { SalesTab } from './SalesTab.jsx';
 import { OrdersTab } from './OrdersTab.jsx';
 import { StockTab } from './StockTab.jsx';
 import { ShopTab } from './ShopTab.jsx';
+import { TabIcon } from '../shared/TabIcon.jsx';
 
 export function VendorApp() {
   const [session, setSession] = useState(undefined);
@@ -107,10 +108,10 @@ function VendorSignIn() {
 }
 
 const TABS = [
-  ['sales', 'Sales', 'M4 20V10M10 20V4M16 20v-7M22 20H2'],
-  ['orders', 'Orders', 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6'],
-  ['stock', 'Stock', 'M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10'],
-  ['shop', 'Shop', 'M4 9l1-5h14l1 5M4 9h16v11H4zM9 20v-6h6v6'],
+  ['sales', 'Sales'],
+  ['orders', 'Orders'],
+  ['stock', 'Stock'],
+  ['shop', 'Shop'],
 ];
 
 // Opened from a phone alert? /?order=12#orders shows that order; /?chat=12#orders opens its chat.
@@ -293,11 +294,9 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
       </main>
       <nav className="tabs" aria-label="Sections">
         <div className="tabs-in" role="tablist">
-          {TABS.map(([k, label, d]) => (
+          {TABS.map(([k, label]) => (
             <button key={k} className="tab" role="tab" aria-selected={tab === k} onClick={() => pick(k)}>
-              <svg viewBox="0 0 24 24">
-                <path d={d} />
-              </svg>
+              <TabIcon name={k} on={tab === k} />
               {label}
               {k === 'orders' && unpaid > 0 && <span className="badge">{unpaid}</span>}
             </button>

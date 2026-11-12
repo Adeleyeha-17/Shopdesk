@@ -5,13 +5,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { loadCart } from './cart.js';
 import { myShops } from './myShops.js';
+import { TabIcon } from '../shared/TabIcon.jsx';
 
-const ICON = {
-  shops: 'M4 9l1-5h14l1 5M4 9h16v11H4zM9 20v-6h6v6',
-  orders: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6',
-  cart: 'M3 4h2.2l2.3 10.6a1.6 1.6 0 0 0 1.6 1.3h8.1a1.6 1.6 0 0 0 1.6-1.2L20.6 8H6',
-  account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20c1.4-3.3 4.2-5 7.5-5s6.1 1.7 7.5 5',
-};
 
 const countIn = (slug) => Object.values(slug ? loadCart(slug) : {}).reduce((a, q) => a + (q > 0 ? q : 0), 0);
 
@@ -82,15 +77,7 @@ export function CustomerTabs({ active, unread = 0, shopNews = 0 }) {
                 <b>{letter}</b>
               </span>
             ) : (
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d={ICON[k]} />
-                {k === 'cart' && (
-                  <>
-                    <circle cx="9.5" cy="19.6" r="1.2" />
-                    <circle cx="17" cy="19.6" r="1.2" />
-                  </>
-                )}
-              </svg>
+              <TabIcon name={k} on={active === k} />
             )}
             {label}
             {k === 'shops' && shopNews > 0 && (

@@ -109,8 +109,7 @@ article.card { border: 1px solid var(--line); border-radius: 14px; padding: 14px
   background: var(--bg); border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 8px 28px rgba(0, 0, 0, .12); }
 .tab { appearance: none; border: 0; background: none; color: var(--muted); font: 600 11px var(--body); padding: 6px 4px 5px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; position: relative; -webkit-tap-highlight-color: transparent; }
 .tab svg { width: 22px; height: 22px; padding: 4px 16px; border-radius: 999px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: background-color .2s ease, transform .14s ease; }
-.tab[aria-selected="true"] { color: var(--ink); }
-.tab[aria-selected="true"] svg { background: var(--soft); stroke-width: 2.1; }
+.tab[aria-selected="true"] { color: var(--ink); font-weight: 700; }
 .badge { position: absolute; top: 3px; right: calc(50% - 26px); background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 0 5px; line-height: 16px; }
 .step { appearance: none; width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--soft); color: var(--ink); font: 700 17px var(--body); cursor: pointer; }
 .step[disabled] { opacity: .35; }
@@ -518,11 +517,13 @@ a.brand { color: inherit; -webkit-tap-highlight-color: transparent; }
 .back-btn svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* the customer's tab bar uses the shop owner's (.tabs): links instead of buttons, and a letter for Account */
-.tab[aria-current="page"] { color: var(--ink); }
-.tab[aria-current="page"] svg { background: var(--soft); stroke-width: 2.1; }
+.tab[aria-current="page"] { color: var(--ink); font-weight: 700; }
+/* the tab you're on: a filled icon (src/shared/TabIcon.jsx); .cut and .cutline are drawn in the bar's colour */
+.tab svg .f { fill: currentColor; stroke: currentColor; stroke-width: 1.4; }
+.tab svg .cut { fill: var(--bg); stroke: none; }
+.tab svg .cutline { fill: none; stroke: var(--bg); stroke-width: 1.8; }
 .tab-letter { box-sizing: content-box; width: 22px; height: 22px; padding: 4px 16px; border-radius: 999px; display: grid; place-items: center; transition: background-color .2s ease; }
 .tab-letter b { width: 21px; height: 21px; box-sizing: border-box; border-radius: 50%; border: 1.8px solid currentColor; display: grid; place-items: center; font: 700 11px/1 var(--body); }
-.tab[aria-current="page"] .tab-letter { background: var(--soft); }
 .tab[aria-current="page"] .tab-letter b { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .badge.ink { background: var(--btn); color: var(--on-btn); }
 .badge.bump { animation: bump .36s cubic-bezier(.3, 1.6, .5, 1); }
