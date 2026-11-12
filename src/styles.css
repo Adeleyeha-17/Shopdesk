@@ -22,10 +22,7 @@
   --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0d0e10; --soft: #17181b; --line: #25272b; --ink: #f2f3f5; --muted: #9ea3ab; --hint: #80848b; --btn: #f2f3f5; --on-btn: #0d0e10;
-  --good: #34c46b; --bad: #ff6b6f; --wait: #f2b84b; --info: #6ea0ff; color-scheme: dark;
-  --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; } }
+/* dark: when the person picks Dark, or Same as phone on a phone set to dark (src/lib/theme.js sets data-theme) */
 :root[data-theme="dark"] {
   --bg: #0d0e10; --soft: #17181b; --line: #25272b; --ink: #f2f3f5; --muted: #9ea3ab; --hint: #80848b; --btn: #f2f3f5; --on-btn: #0d0e10;
   --good: #34c46b; --bad: #ff6b6f; --wait: #f2b84b; --info: #6ea0ff; color-scheme: dark;
@@ -846,3 +843,12 @@ table.rt { border-collapse: separate; border-spacing: 0; width: 100%; font-size:
 .rt-two { display: flex; flex-direction: column; gap: 1px; }
 .rt-two .sub { font-size: 11px; }
 body.report-open .toast { z-index: 35; } /* messages show above the Full report */
+
+/* ---------- appearance: Light, Dark or Same as phone ---------- */
+.seg.wide { display: flex; width: 100%; box-sizing: border-box; }
+.seg.wide button { flex: 1; padding: 9px 8px; font-size: 14px; }
+.theme-btn { appearance: none; flex: none; width: 38px; height: 38px; border: 0; border-radius: 50%; background: var(--soft); color: var(--ink);
+  display: grid; place-items: center; cursor: pointer; transition: background-color .18s ease; }
+.theme-btn:hover { background: var(--line); }
+.theme-btn:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.theme-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }

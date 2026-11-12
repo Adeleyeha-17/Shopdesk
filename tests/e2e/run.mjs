@@ -244,6 +244,30 @@ await step("the order page's back arrow goes to My orders; the Account tab shows
   await see('Past orders');
 });
 
+const theme = () => p.evaluate(() => document.documentElement.getAttribute('data-theme'));
+await step('the app opens in light; Account switches it to Dark, Same as phone and back to Light', async () => {
+  expect((await theme()) === 'light', 'did not open in light');
+  await tab('Account').click();
+  await see('Appearance');
+  await p.locator('.seg.wide button:has-text("Dark")').click();
+  expect((await theme()) === 'dark', 'Dark did not switch');
+  const bg = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(bg === 'rgb(13, 14, 16)', 'the page is not dark: ' + bg);
+  await p.reload();
+  await p.locator('.demo-bar').waitFor();
+  expect((await theme()) === 'dark', 'Dark was not kept after a reload');
+  await tab('Account').click();
+  await p.locator('.seg.wide button:has-text("Same as phone")').click();
+  expect((await theme()) === 'light', 'Same as phone should follow the (light) test phone');
+  await p.emulateMedia({ colorScheme: 'dark' });
+  await pause(200);
+  expect((await theme()) === 'dark', 'Same as phone did not follow the phone switching to dark');
+  await p.emulateMedia({ colorScheme: 'light' });
+  await p.locator('.seg.wide button:has-text("Light")').click();
+  expect((await theme()) === 'light', 'Light did not switch back');
+  await tab('Orders').click();
+});
+
 // ---------------- shop owner: products ----------------
 const NAME = 'Test serum';
 await step('the shop owner adds a product with two sizes', async () => {
@@ -359,6 +383,15 @@ await step('money out can be added, and shows in the Full report', async () => {
   await p.locator('.report-tabs .filter:has-text("Money out")').click();
   await see('Packaging');
   await p.locator('.back-btn').click();
+});
+
+await step('the Shop tab has Appearance too', async () => {
+  await nav('Shop');
+  await see('Appearance');
+  await p.locator('.seg.wide button:has-text("Dark")').click();
+  expect((await theme()) === 'dark', 'Dark did not switch on the Shop tab');
+  await p.locator('.seg.wide button:has-text("Light")').click();
+  expect((await theme()) === 'light', 'Light did not switch back on the Shop tab');
 });
 
 // ---------------- a new shop owner signs up ----------------

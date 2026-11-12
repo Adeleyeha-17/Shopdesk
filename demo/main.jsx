@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../src/styles.css';
 import './demo.css';
+import '../src/lib/theme.js';
 import { demo } from './runtime.js';
 import { signInAs, whoIsIn, resetDemo, VENDOR, CUSTOMER, monthEndAlert } from './database.js';
 import { App } from '../src/App.jsx';

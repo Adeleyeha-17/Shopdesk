@@ -3,6 +3,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import './lib/theme.js';
 import { App } from './App.jsx';
 import { ErrorBoundary } from './shared/ErrorBoundary.jsx';
 import { OfflineBar } from './shared/OfflineBar.jsx';

@@ -12,6 +12,7 @@ import { Skeleton } from '../shared/Skeleton.jsx';
 import { useBusy } from '../lib/busy.js';
 import { LoadError } from '../shared/LoadError.jsx';
 import { EmailSwitch } from '../shared/EmailSwitch.jsx';
+import { ThemePicker } from '../shared/ThemePicker.jsx';
 import { SignIn } from '../shared/SignIn.jsx';
 import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { myTokens } from './savedOrders.js';
@@ -325,6 +326,7 @@ function SignedInOrders({ email, userId, view }) {
             </div>
           )}
         </section>
+        <ThemePicker />
         <section className="card">
           <EmailSwitch />
         </section>

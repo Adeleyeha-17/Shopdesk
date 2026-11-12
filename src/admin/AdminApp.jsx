@@ -5,6 +5,7 @@ import { supabase } from '../lib/database.js';
 import { signOut } from '../lib/alerts.js';
 import { errText } from '../lib/helpers.js';
 import { SignIn } from '../shared/SignIn.jsx';
+import { ThemeButton } from '../shared/ThemePicker.jsx';
 import { LoadError } from '../shared/LoadError.jsx';
 import { ActionPopup } from './ActionPopup.jsx';
 import { OverviewPage } from './OverviewPage.jsx';
@@ -186,6 +187,7 @@ function AdminLayout({ out, email, userId }) {
         </div>
         <div className="admin-me">
           <span className="sub">{email}</span>
+          <ThemeButton />
           {out}
         </div>
       </header>

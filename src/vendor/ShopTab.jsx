@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { signOut } from '../lib/alerts.js';
 import { EmailSwitch } from '../shared/EmailSwitch.jsx';
+import { ThemePicker } from '../shared/ThemePicker.jsx';
 import { errText, copyText } from '../lib/helpers.js';
 import { ShopFields, checkShop, shopRow } from './shopForm.jsx';
 
@@ -123,6 +124,7 @@ export function ShopTab({ shop, reloadShop, say, email }) {
         </div>
         <p className="note">New rules apply to new orders.</p>
       </section>
+      <ThemePicker />
       <section className="card">
         <h2>Account</h2>
         <p className="note">Signed in as {email}.</p>
