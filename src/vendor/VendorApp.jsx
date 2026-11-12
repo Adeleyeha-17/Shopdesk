@@ -1,17 +1,16 @@
-// The vendor's app at "/". Signs the vendor in, sends new vendors to "Set up your shop",
-// then shows the four tabs at the bottom: Sales, Orders, Stock and Shop.
+// The app at "/". Someone new sees the first screen (Open my shop, or I'm a customer); a signed-in customer goes to
+// their shops; a new shop owner goes to "Set up your shop"; a shop owner sees the four tabs: Sales, Orders, Stock and Shop.
 // Everything updates by itself: a new order, money in or a message arrives the moment it happens (live alerts),
 // and the app opens straight on an order or its chat when a phone alert is tapped (/?order=12 or /?chat=12).
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { DAY } from '../lib/dates.js';
-import { errText, errInfo } from '../lib/helpers.js';
+import { errText, errInfo, navigate } from '../lib/helpers.js';
 import { problemState } from '../lib/problems.js';
 import { useBusy } from '../lib/busy.js';
 import { Skeleton } from '../shared/Skeleton.jsx';
 import { withOptions } from '../lib/products.js';
 import { kick, useCount, useLive, useUnread } from '../lib/alerts.js';
-import { SignIn } from '../shared/SignIn.jsx';
 import { LoadError } from '../shared/LoadError.jsx';
 import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { Toast, useToast } from '../shared/Toast.jsx';
@@ -23,6 +22,8 @@ import { OrdersTab } from './OrdersTab.jsx';
 import { StockTab } from './StockTab.jsx';
 import { ShopTab } from './ShopTab.jsx';
 import { TabIcon } from '../shared/TabIcon.jsx';
+import { Welcome, getStart, setStart } from '../shared/Welcome.jsx';
+import { CustomerSetup } from '../customer/CustomerSetup.jsx';
 
 export function VendorApp() {
   const [session, setSession] = useState(undefined);
@@ -60,7 +61,7 @@ export function VendorApp() {
         <Skeleton kind="page" />
       </VendorFrame>
     );
-  if (!session) return <VendorSignIn />;
+  if (!session) return <Welcome />;
   if (shop === undefined)
     return (
       <VendorFrame>
@@ -72,9 +73,7 @@ export function VendorApp() {
       </VendorFrame>
     );
   if (!shop)
-    return (
-      <SetUpShop userId={session.user.id} email={session.user.email} onDone={loadShop} isOwner={isOwner} />
-    );
+    return <NewAccount userId={session.user.id} email={session.user.email} onDone={loadShop} isOwner={isOwner} />;
   return (
     <VendorTabs
       shop={shop}
@@ -86,25 +85,51 @@ export function VendorApp() {
   );
 }
 
-function VendorSignIn() {
-  return (
-    <VendorFrame>
-      <SignIn
-        title="Sign in to your shop"
-        path="/"
-        footer={
-          <div className="signin-foot">
-            <p>
-              <strong>New here?</strong> The same code also opens your shop.
-            </p>
-            <p className="fine">
-              By signing in you agree to the <a href="/privacy">shop rules</a>.
-            </p>
-          </div>
-        }
+// Signed in without a shop: a customer goes to their shops; someone new sets up the account they chose on the
+// first screen (Open my shop, or I'm a customer), or picks one now if they came in with "Sign in".
+function NewAccount({ userId, email, onDone, isOwner }) {
+  const [acct, setAcct] = useState(null);
+  const [start, pick] = useState(getStart);
+  useEffect(() => {
+    supabase.rpc('my_account').then(({ data }) => setAcct(data || {}));
+  }, []);
+  const toShops = !isOwner && acct && acct.customer && start !== 'shop';
+  useEffect(() => {
+    if (toShops) {
+      setStart('');
+      navigate('/shops', { replace: true });
+    }
+  }, [toShops]);
+  if (isOwner || start === 'shop' || (acct && acct.customer && !toShops))
+    return (
+      <SetUpShop
+        userId={userId}
+        email={email}
+        onDone={() => {
+          setStart('');
+          onDone();
+        }}
+        isOwner={isOwner}
       />
-    </VendorFrame>
-  );
+    );
+  if (!acct || toShops)
+    return (
+      <VendorFrame>
+        <Skeleton kind="page" />
+      </VendorFrame>
+    );
+  if (start === 'customer')
+    return (
+      <CustomerSetup
+        userId={userId}
+        email={email}
+        onDone={() => {
+          setStart('');
+          navigate('/shops', { replace: true });
+        }}
+      />
+    );
+  return <Welcome signedIn email={email} onPick={pick} />;
 }
 
 const TABS = [

@@ -21,6 +21,7 @@ import { Skeleton } from '../shared/Skeleton.jsx';
 import { AreaPicker } from './AreaPicker.jsx';
 import { areaIn } from './areas.js';
 import { noteSource, sourceFor } from './source.js';
+import { PinIcon, Star } from './NearYou.jsx';
 
 // "₦8,000 ₦9,500": the price to pay, with the old one crossed out during a sale
 function Price({ x }) {
@@ -310,6 +311,9 @@ export function ShopPage({ slug, step = 'shop' }) {
         <div className="center">
           <h2>This shop isn't taking orders</h2>
           <p className="note">Check the link with the shop.</p>
+          <a className="btn ghost" href="/shops">
+            See shops near you
+          </a>
         </div>
       </Page>
     );
@@ -405,10 +409,30 @@ export function ShopPage({ slug, step = 'shop' }) {
 
   if (step === 'shop')
     return (
-      <Page {...top}>
-        <div>
+      <Page
+        {...top}
+        right={
+          <a className="near-pill" href="/shops">
+            <PinIcon />
+            Near you
+          </a>
+        }
+      >
+        <div className="shop-intro">
           <h2>{shop.name}</h2>
           <p className="note">Pick what you want, then pay in one transfer.</p>
+          {shop.ratings > 0 && (
+            <a className="rating-chip" href={'/' + slug + '/ratings'}>
+              <Star />
+              <b>{Number(shop.rating).toFixed(1)}</b>
+              <span>
+                · {shop.ratings} rating{shop.ratings === 1 ? '' : 's'}
+              </span>
+              <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 5l7 7-7 7" />
+              </svg>
+            </a>
+          )}
         </div>
         {cartNote && <p className="note cart-note">{cartNote}</p>}
         {products.length > 4 && (
@@ -641,17 +665,19 @@ export function ShopPage({ slug, step = 'shop' }) {
       </Page>
     );
 
-  // ---------- checkout: who it's for, how it gets to them, and the order ----------
+  // ---------- checkout: three cards (you, delivery, your order), with the total and Place order fixed at the bottom ----------
   const feeText = form.mode === 'pickup' ? 'None (pick-up)' : custPays ? 'The shop adds it' : 'Free';
+  const plusDelivery = form.mode === 'delivery' && custPays;
+  const canOrder = !!me && !isShop;
   return (
-    <Page {...top} back={'/' + slug + '/cart'}>
-      <div className="checkout-head">
-        <h2>Checkout</h2>
+    <Page {...top} back={'/' + slug + '/cart'} kind={canOrder ? 'co-page' : undefined}>
+      <div className="page-title">
+        <h1>Checkout</h1>
       </div>
       {me === null ? (
         <Skeleton kind="list" />
       ) : me === '' ? (
-        <section className="card">
+        <section className="card boxed">
           <SignIn compact title="Sign in to order" path={'/' + slug + '/checkout'} note="Your cart stays." />
           <p className="note" style={{ fontSize: 12 }}>
             <a href="/privacy">Privacy</a>
@@ -672,9 +698,9 @@ export function ShopPage({ slug, step = 'shop' }) {
         </section>
       ) : (
         <>
-          <section className="card" aria-label="Your details">
+          <section className="card boxed co-card" aria-label="Your details">
             <div className="row">
-              <h3 className="co-title">Your details</h3>
+              <h2 className="co-title">You</h2>
               {!detailsForm && (
                 <button className="linkbtn" onClick={() => setEditDetails(true)}>
                   Change
@@ -706,14 +732,20 @@ export function ShopPage({ slug, step = 'shop' }) {
                 </div>
               </>
             ) : (
-              <p className="co-line">
-                {form.name} · <span className="num">{form.phone}</span>
-              </p>
+              <div className="co-me">
+                <span className="co-av" aria-hidden="true">
+                  {(form.name.trim()[0] || '?').toUpperCase()}
+                </span>
+                <div>
+                  <strong>{form.name}</strong>
+                  <span className="num">{form.phone}</span>
+                </div>
+              </div>
             )}
           </section>
-          <section className="card" aria-label="Delivery">
-            <h3 className="co-title">Delivery</h3>
-            <div className="choices" role="radiogroup" aria-label="Delivery or pick-up">
+          <section className="card boxed co-card" aria-label="Delivery">
+            <h2 className="co-title">Delivery</h2>
+            <div className="choices tiles" role="radiogroup" aria-label="Delivery or pick-up">
               <button
                 className="choice"
                 role="radio"
@@ -765,16 +797,16 @@ export function ShopPage({ slug, step = 'shop' }) {
                 </div>
               ) : (
                 <div className="co-addr">
-                  <div className="row">
-                    <span className="sub">Deliver to</span>
-                    <button className="linkbtn" onClick={() => setEditAddr(true)}>
-                      Change
-                    </button>
+                  <span className="co-pin" aria-hidden="true">
+                    <PinIcon />
+                  </span>
+                  <div>
+                    <strong>{form.address}</strong>
+                    {form.area && <span className="sub">{form.area}</span>}
                   </div>
-                  <p className="co-line">
-                    {form.address}
-                    {form.area && <span className="area-tag">{form.area}</span>}
-                  </p>
+                  <button className="linkbtn" onClick={() => setEditAddr(true)}>
+                    Change
+                  </button>
                 </div>
               ))}
             {areaOpen && (
@@ -788,54 +820,78 @@ export function ShopPage({ slug, step = 'shop' }) {
               />
             )}
           </section>
-          <section className="card" aria-label="Order summary">
+          <section className="card boxed co-card" aria-label="Your order">
             <div className="row">
-              <h3 className="co-title">
-                Order summary · {count} item{count === 1 ? '' : 's'}
-              </h3>
+              <h2 className="co-title">
+                Your order · {count} item{count === 1 ? '' : 's'}
+              </h2>
               <button className="linkbtn" onClick={toCart}>
-                Edit cart
+                Edit
               </button>
             </div>
             {cartNote && <p className="note cart-note">{cartNote}</p>}
             <ul className="co-items">
               {lines.map((l) => (
                 <li key={l.key}>
-                  <span>
-                    <strong>{l.q} ×</strong> {l.name}
-                  </span>
+                  {l.p.photo_path ? <img src={photoUrl(l.p.photo_path)} alt="" /> : <span className="co-noimg" />}
+                  <div>
+                    <strong>{l.name}</strong>
+                    <span className="sub num">
+                      {l.q} × {naira(l.price)}
+                    </span>
+                  </div>
                   <span className="num">{naira(l.price * l.q)}</span>
                 </li>
               ))}
             </ul>
-            <div className="row">
-              <span className="sub">Items</span>
-              <span className="num">{naira(sub)}</span>
+            <div className="co-sums">
+              <div className="row">
+                <span className="sub">Items</span>
+                <span className="num">{naira(sub)}</span>
+              </div>
+              <div className="row">
+                <span className="sub">Delivery</span>
+                <span>{feeText}</span>
+              </div>
+              <div className="row co-total">
+                <span>Total</span>
+                <span className="num">
+                  {naira(sub)}
+                  {plusDelivery ? ' + delivery' : ''}
+                </span>
+              </div>
             </div>
-            <div className="row">
-              <span className="sub">Delivery</span>
-              <span className="sub">{feeText}</span>
-            </div>
-            <div className="row co-total">
-              <span>Total</span>
-              <span className="num">
-                {naira(sub)}
-                {form.mode === 'delivery' && custPays ? ' + delivery' : ''}
+            <div className="co-note">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2 2.6 5 3.2 5 1.4 5 3.3-2.2 3.3-5 3.3-5-1.2-5-3.3" />
+              </svg>
+              <span>
+                {shop.allow_part_payment
+                  ? 'You can pay in parts. The shop shows what’s left after each payment.'
+                  : 'Pay in one transfer. It’s packed once it lands.'}
               </span>
             </div>
-            <p className="note">
-              {shop.allow_part_payment
-                ? 'You can pay in parts.'
-                : 'Pay in one transfer. It’s packed once it lands.'}
-            </p>
-            {msg && <p className="err">{msg}</p>}
-            <button className="btn" onClick={place} disabled={busy || !sub}>
-              {busy ? 'Placing your order…' : 'Place order'}
-            </button>
-            <p className="note" style={{ fontSize: 12 }}>
-              Signed in as {me}. <a href="/privacy">Privacy</a>
-            </p>
           </section>
+          <p className="fine-center">
+            Signed in as {me} · <a href="/privacy">Privacy</a>
+          </p>
+          <div className="bottom-bar co-bar">
+            {msg && (
+              <p className="err" role="alert">
+                {msg}
+              </p>
+            )}
+            <div className="co-bar-row">
+              <div className="co-bar-total">
+                <span>Total</span>
+                <strong className="num">{naira(sub)}</strong>
+                {plusDelivery && <span>+ delivery</span>}
+              </div>
+              <button className="btn" onClick={place} disabled={busy || !sub}>
+                {busy ? 'Placing your order…' : 'Place order'}
+              </button>
+            </div>
+          </div>
         </>
       )}
       <InboxToast inbox={inbox} />

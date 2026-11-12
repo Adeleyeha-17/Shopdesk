@@ -226,8 +226,19 @@ await step('the customer sees the rider and confirms delivery', async () => {
   await tab('Orders').click();
   await p.locator(`a:has-text("${code}")`).click();
   await see('Kola Ade');
+  await pause(500); // the page finishes sliding in; a tap during the slide is lost
   await p.locator('button:has-text("I got everything")').click();
-  await see('Delivered');
+  await p.locator('h2:text-is("Delivered")').waitFor();
+});
+
+await step('once delivered, the customer is asked to rate the shop', async () => {
+  await p.locator('.rate-sheet').waitFor();
+  await p.locator('.rate-sheet .star-pick button').nth(4).click();
+  await p.locator('#rateText').fill('Neat packing and fast delivery.');
+  await p.locator('.rate-sheet button:has-text("Post rating")').click();
+  await p.locator('.rate-sheet').waitFor({ state: 'detached' });
+  await see('You rated');
+  expect((await p.locator('.rate-card').innerText()).includes('Neat packing'), 'the comment is not shown');
 });
 
 await step("the order page's back arrow goes to My orders; the Account tab shows who is signed in", async () => {
@@ -399,6 +410,8 @@ await step('a new shop owner can sign up, type a link name with a dash, and send
   await patch((S) => {
     S.uid = null;
   }, '/');
+  await see('Welcome to ShopDesk');
+  await p.locator('.w-choice:has-text("Open my shop")').click();
   await p.locator('#email').fill('newshop@example.com');
   await p.locator('button:has-text("Email me a code")').click();
   await p.locator('#code').pressSequentially('123456');
@@ -415,6 +428,41 @@ await step('a new shop owner can sign up, type a link name with a dash, and send
   await p.locator('label.agree').click();
   await p.locator('button:has-text("Send my shop for approval")').click();
   await see('Waiting for approval');
+});
+
+await step("someone new on the main page picks I'm a customer, sets up their account, then sees shops near them", async () => {
+  await patch((S) => {
+    S.uid = null;
+  }, '/');
+  await p.locator('.w-choice:has-text("I\'m a customer")').click();
+  await p.locator('#email').fill('newcustomer@example.com');
+  await p.locator('button:has-text("Email me a code")').click();
+  await p.locator('#code').pressSequentially('123456');
+  await p.locator('#suName').fill('Chidi Okeke');
+  await p.locator('#suPhone').fill('08031234567');
+  await p.locator('.pick-area').click();
+  await p.locator('.area-sheet input[type=search]').fill('yab');
+  await p.locator('.area-row:has-text("Yaba")').click();
+  await p.locator('.area-sheet').waitFor({ state: 'detached' });
+  await p.locator('.bottom-bar button:has-text("Continue")').click();
+  await see('Shops near you');
+  await see('In Yaba');
+  expect((await p.locator('.near-group').first().innerText()).includes('Kemi Wigs'), 'a shop in Yaba is not first');
+});
+
+await step('a shop page shows its rating and opens its ratings page, and has a Near you button', async () => {
+  await p.goto(url);
+  await p.locator('.demo-bar').waitFor();
+  await as('Customer');
+  await see('Pick what you want');
+  expect((await p.locator('.rating-chip').innerText()).includes('6 ratings'), 'the rating is not on the shop page');
+  await p.locator('.rating-chip').click();
+  await see('What customers say');
+  await see('Neat packing and fast delivery.');
+  expect((await p.locator('.rate-big').innerText()).includes('6 ratings'), 'the ratings page does not count the new rating');
+  await p.locator('.back-btn').click();
+  await p.locator('.near-pill').click();
+  await see('Shops near you');
 });
 
 await step('no errors in the page', async () => {

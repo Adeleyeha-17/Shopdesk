@@ -1,6 +1,7 @@
 // /shops: the Shops tab. Every shop the customer has opened on this phone, plus every shop they've ordered from on
 // their account (so the list follows them to a new phone), newest first. No more digging through WhatsApp for a link.
 // At the top, the shop with something waiting in its cart. Edit takes a shop off the list.
+// Below (or the whole page, for someone with no shops yet): Shops near you.
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -14,6 +15,7 @@ import { useInbox, InboxToast } from './inbox.jsx';
 import { loadCart } from './cart.js';
 import { orderLabel } from './MyOrdersPage.jsx';
 import { forgetShop, hiddenShops, myShops } from './myShops.js';
+import { NearYou } from './NearYou.jsx';
 
 const inCart = (slug) => Object.values(loadCart(slug)).reduce((a, q) => a + (q > 0 ? q : 0), 0);
 const isLive = (o) =>
@@ -145,21 +147,11 @@ export function ShopsPage() {
   }
 
   const tabs = <CustomerTabs active="shops" unread={inbox.count} shopNews={inbox.shopCount} />;
+  // no shops of their own yet: the whole page is Shops near you
   if (!shops.length && orders !== null)
     return (
-      <Page title="Your shops" tabs={tabs}>
-        <div className="center empty">
-          <span className="empty-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M4 9l1-5h14l1 5M4 9h16v11H4zM9 20v-6h6v6" />
-            </svg>
-          </span>
-          <h2>No shops yet</h2>
-          <p className="note" style={{ maxWidth: 300 }}>
-            When a shop sends you its ShopDesk link on WhatsApp or Instagram, open it once. The shop stays
-            here, so you never have to dig for the link again.
-          </p>
-        </div>
+      <Page tabs={tabs}>
+        <NearYou heading="h1" uid={uid} />
         <InboxToast inbox={inbox} />
       </Page>
     );
@@ -269,6 +261,7 @@ export function ShopsPage() {
         {words && !shown.length && <p className="note">No shop matches “{find.trim()}”.</p>}
       </div>
       <p className="shops-foot">Open a shop&apos;s link once and it stays here.</p>
+      {!words && !editing && orders !== null && <NearYou skip={shops.map((s) => s.slug)} uid={uid} />}
       <Toast toast={toast} onClose={closeToast} low />
       <InboxToast inbox={inbox} />
     </Page>

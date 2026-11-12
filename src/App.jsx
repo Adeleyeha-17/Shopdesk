@@ -17,6 +17,7 @@ import { keepLinksInApp } from './lib/helpers.js';
 import { currentPath, direction, keepSpot, nowShowing, spotOf, startHistory, takeSlide, transition } from './lib/motion.js';
 import { VendorApp } from './vendor/VendorApp.jsx';
 import { AdminApp } from './admin/AdminApp.jsx';
+import { RatingsPage } from './customer/RatingsPage.jsx';
 import { ShopPage } from './customer/ShopPage.jsx';
 import { OrderPage } from './customer/OrderPage.jsx';
 import { MyOrdersPage } from './customer/MyOrdersPage.jsx';
@@ -94,6 +95,8 @@ function Pages() {
   if (p === '/email-off') return <EmailOffPage />;
   const o = p.match(/^\/o\/([0-9a-f-]{36})$/i);
   if (o) return <OrderPage token={o[1]} />;
+  const r = p.match(/^\/([a-z0-9-]{3,30})\/ratings$/i);
+  if (r) return <RatingsPage slug={r[1].toLowerCase()} />;
   const s = p.match(/^\/([a-z0-9-]{3,30})(?:\/(cart|checkout))?$/i);
   if (s) return <ShopPage slug={s[1].toLowerCase()} step={s[2] ? s[2].toLowerCase() : 'shop'} />;
   return (

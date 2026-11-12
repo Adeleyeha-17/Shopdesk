@@ -1,0 +1,32 @@
+R1 a shop waiting for approval is not in Shops near you (expect f):
+f
+R2 once open, anyone sees it with what it sells, where it is, a photo and no rating yet:
+Star Bags|Bags and purses|Yaba, Lagos|x/tote.jpg|0|none
+R3 rating before delivery (expect error):
+psql:ratings.sql:25: ERROR:  You can rate the shop once your order is delivered.
+CONTEXT:  PL/pgSQL function rate_shop(uuid,integer,text) line N at RAISE
+R4 someone else rates with that order (expect error):
+psql:ratings.sql:29: ERROR:  Only the customer who placed this order can rate the shop.
+CONTEXT:  PL/pgSQL function rate_shop(uuid,integer,text) line N at RAISE
+R5 six stars (expect error), then 4 stars with a comment:
+psql:ratings.sql:32: ERROR:  Pick 1 to 5 stars.
+CONTEXT:  PL/pgSQL function rate_shop(uuid,integer,text) line N at RAISE
+{"stars": 4, "rating": 4.0, "ratings": 1}|Neat bag, came on time
+R6 what they gave, seen from their order:
+{"stars": 4, "comment": "Neat bag, came on time"}
+R7 changing it keeps one rating (expect 5, 1 rating):
+5.0
+1 rating
+R8 the shop owner was told:
+Rating changed: 5 stars|Funmi A.: Even better the second time|/starbags/ratings
+R9 nobody reads or writes the ratings table directly (expect permission denied twice):
+psql:ratings.sql:43: ERROR:  permission denied for table shop_ratings
+psql:ratings.sql:44: ERROR:  permission denied for table shop_ratings
+R10 the ratings page: average, stars, first name and initial, what they bought:
+5.0|1|1|Funmi A.|5|Even better the second time|Tote bag
+R11 the shop page shows the rating too:
+5.0|1
+R12 a rating ShopDesk hides stops counting:
+none|0
+R13 names are shortened:
+Funmi A.|tobi K.|Ngozi|A customer

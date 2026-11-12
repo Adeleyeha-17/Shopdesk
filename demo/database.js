@@ -762,6 +762,48 @@ const KIND_TEXT = {
   other: 'Something else',
 };
 const nowIso = () => new Date().toISOString();
+
+// ---------- ratings and Shops near you (update 014) ----------
+// A few sample ratings for the demo shop, and a few sample shops elsewhere (their pages aren't in the demo).
+const RATING_SEED = [
+  ['Amaka O.', 5, 'The body butter is so rich, a little goes a long way. Came the same evening.', 2, 'Whipped body butter'],
+  ['Tobi K.', 5, 'Second time ordering. Packaging was neat and she replied fast.', 6, 'Coconut oil, 500ml'],
+  ['Ngozi E.', 4, 'Lovely lip balms. The rider came a bit late but they kept me posted.', 13, 'Lip balm set'],
+  ['Seyi B.', 5, '', 20, 'Glow serum, 30ml'],
+  ['Kunle A.', 4, 'Good products, and the delivery fee was fair.', 27, 'Black soap, 500g'],
+];
+const OTHER_SHOPS = [
+  { name: 'Kemi Wigs', slug: 'kemi-wigs', sells: 'Wigs, frontals and closures', location: 'Yaba, Lagos', rating: null, ratings: 0 },
+  { name: "Tola's Kitchen", slug: 'tolas-kitchen', sells: 'Food and drinks', location: 'Surulere, Lagos', rating: 4.9, ratings: 41 },
+  { name: 'Ada Fabrics', slug: 'ada-fabrics-lekki', sells: 'Ankara and lace', location: 'Lekki Phase 1, Lagos', rating: 4.6, ratings: 12 },
+  { name: 'Gadget Hub Ikeja', slug: 'gadget-hub-ikeja', sells: 'Phones and accessories', location: 'Ikeja, Lagos', rating: 4.7, ratings: 18 },
+];
+function ratingsOf(shopId) {
+  if (!S.ratings) {
+    const s0 = S.shops[0];
+    S.ratings = RATING_SEED.map(([who, stars, comment, days, bought], i) => ({
+      shop_id: s0.id,
+      customer_id: 'sample-' + i,
+      who,
+      stars,
+      comment,
+      bought,
+      at: new Date(Date.now() - days * 86400000).toISOString(),
+    }));
+  }
+  return S.ratings.filter((r) => r.shop_id === shopId);
+}
+function ratingOf(shopId) {
+  const l = ratingsOf(shopId);
+  return {
+    rating: l.length ? Math.round((l.reduce((a, r) => a + r.stars, 0) / l.length) * 10) / 10 : null,
+    ratings: l.length,
+  };
+}
+const shortName = (n) => {
+  const w = String(n || '').trim().split(/\s+/).filter(Boolean);
+  return w.length ? w[0] + (w[1] ? ' ' + w[1][0].toUpperCase() + '.' : '') : 'A customer';
+};
 // A product with sizes takes its price (the lowest) and stock (all added up) from them.
 const optionsOf = (p) =>
   S.product_options.filter((o) => o.product_id === p.id).sort((a, b) => a.sort_order - b.sort_order);
@@ -1242,6 +1284,55 @@ const RPC = {
   },
 
   // ----- customers -----
+  shops_near: () => [
+    ...S.shops
+      .filter((s) => shopOpen(s) && S.products.some((p) => p.shop_id === s.id && p.active && !p.hidden_by_admin))
+      .map((s) => ({
+        name: s.name,
+        slug: s.slug,
+        sells: s.sells,
+        location: s.location,
+        photo_path: (S.products.find((p) => p.shop_id === s.id && p.active && !p.hidden_by_admin) || {}).photo_path || null,
+        ...ratingOf(s.id),
+      })),
+    ...OTHER_SHOPS.map((x) => ({ ...x, photo_path: null })),
+  ],
+  shop_reviews: ({ p_slug }) => {
+    const s = S.shops.find((x) => x.slug === String(p_slug).toLowerCase() && x.status === 'active');
+    if (!s) return null;
+    const l = ratingsOf(s.id).sort((a, b) => b.at.localeCompare(a.at));
+    const stars = {};
+    [1, 2, 3, 4, 5].forEach((k) => (stars[k] = l.filter((r) => r.stars === k).length));
+    return {
+      name: s.name,
+      slug: s.slug,
+      ...ratingOf(s.id),
+      stars,
+      reviews: l.map((r) => ({ who: r.who, stars: r.stars, comment: r.comment, at: r.at, bought: r.bought })),
+    };
+  },
+  my_shop_rating: ({ p_token }) => {
+    const o = S.orders.find((x) => x.public_token === p_token && x.customer_id === uid());
+    if (!o) return null;
+    const r = ratingsOf(o.shop_id).find((x) => x.customer_id === uid());
+    return r ? { stars: r.stars, comment: r.comment, at: r.at } : null;
+  },
+  rate_shop: ({ p_token, p_stars, p_comment = '' }) => {
+    if (!uid()) fail('Sign in to rate this shop.');
+    const o = S.orders.find((x) => x.public_token === p_token && x.customer_id === uid());
+    if (!o) fail('Only the customer who placed this order can rate the shop.');
+    if (o.status !== 'delivered') fail('You can rate the shop once your order is delivered.');
+    if (!(p_stars >= 1 && p_stars <= 5)) fail('Pick 1 to 5 stars.');
+    const comment = String(p_comment || '').trim().slice(0, 400);
+    ratingsOf(o.shop_id);
+    const bought = S.order_items.filter((i) => i.order_id === o.id).map((i) => i.name).join(', ');
+    const row = { shop_id: o.shop_id, customer_id: uid(), who: shortName(o.customer_name), stars: p_stars, comment, bought, at: nowIso() };
+    const i = S.ratings.findIndex((x) => x.shop_id === o.shop_id && x.customer_id === uid());
+    if (i >= 0) S.ratings[i] = row;
+    else S.ratings.push(row);
+    save();
+    return { ...ratingOf(o.shop_id), stars: p_stars, comment };
+  },
   get_storefront: ({ p_slug }) => {
     const s = S.shops.find((x) => x.slug === String(p_slug).toLowerCase());
     if (!shopOpen(s)) return null;
@@ -1254,6 +1345,7 @@ const RPC = {
         account_name: s.account_name,
         allow_part_payment: s.allow_part_payment,
         delivery_paid_by: s.delivery_paid_by,
+        ...ratingOf(s.id),
       },
       products: S.products
         .filter((p) => p.shop_id === s.id && p.active && !p.hidden_by_admin)
@@ -2133,7 +2225,11 @@ const auth = {
     const em = String(email).toLowerCase();
     let u = S.users.find((x) => x.email === em);
     if (!u) {
-      u = { id: uuid(), email: em };
+      // a new account always gets a new id (uuid() repeats itself after a reload, since the sample data is seeded)
+      let id = uuid();
+      while (S.users.some((x) => x.id === id) || S.shops.some((x) => x.owner_id === id))
+        id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uuid();
+      u = { id, email: em };
       S.users.push(u);
     }
     demo.setHint('');

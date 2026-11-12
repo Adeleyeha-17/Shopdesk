@@ -853,3 +853,187 @@ body.report-open .toast { z-index: 35; } /* messages show above the Full report 
 .theme-btn:hover { background: var(--line); }
 .theme-btn:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .theme-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- new: first screen, account set-up, Shops near you, ratings, checkout ----------
+   Spacing steps: 4 8 12 16 24 32 48. Screen edge 16, between sections 24, inside a card 16, label to field 8, taps 48+. */
+.page-title { display: flex; flex-direction: column; gap: 8px; }
+h1.signin-title { font-size: 26px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+.page-title h1 { font-size: 28px; line-height: 1.15; font-weight: 800; letter-spacing: -.02em; }
+.page-title p { margin: 0; font-size: 15px; line-height: 1.45; color: var(--muted); }
+.card.boxed.co-card, .card.boxed.rate-card, .card.boxed.rate-sum, .setup-page .card.boxed { border-radius: 18px; padding: 16px; gap: 16px; }
+.fine-center { margin: 0; text-align: center; font-size: 13px; color: var(--muted); }
+.fine-center a { color: var(--ink); font-weight: 600; text-decoration: none; }
+.field textarea { font: 400 16px/1.45 var(--body); padding: 12px 14px; border-radius: 12px; border: 0; background: var(--soft); color: var(--ink); resize: vertical; min-height: 88px; }
+.field textarea:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+.field-hint { font-size: 13px; font-weight: 400; color: var(--muted); }
+/* a bar fixed to the bottom of the screen: Continue, or the total and Place order */
+.bottom-bar { position: fixed; z-index: 6; left: 50%; bottom: 0; transform: translateX(-50%); width: min(480px, 100%); box-sizing: border-box;
+  padding: 12px max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: var(--bg); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.bottom-bar .btn { min-height: 52px; border-radius: 14px; font-size: 16px; }
+.setup-page main, .co-page main { padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)); }
+
+/* the first screen */
+.welcome main.w { padding-top: 0; gap: 0; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; }
+.w-hero { position: relative; height: 360px; margin: 0 -16px; display: grid; place-items: center; overflow: hidden; }
+.w-glow { position: absolute; width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--info) 14%, var(--soft)), var(--bg)); }
+.w-ring { position: absolute; width: 236px; height: 236px; border-radius: 50%; border: 1px dashed var(--line); }
+.w-logo { position: relative; width: 76px; height: 76px; border-radius: 22px; background: var(--ink); display: grid; place-items: center; box-shadow: 0 14px 34px rgb(0 0 0 / .18); }
+.w-logo svg { width: 76px; height: 76px; }
+.w-logo path { fill: none; stroke: var(--bg); stroke-width: 6.6; stroke-linecap: round; }
+.w-chip { position: absolute; display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; box-shadow: 0 10px 28px rgb(0 0 0 / .08); font-size: 13px; font-weight: 600; white-space: nowrap; }
+:root[data-theme="dark"] .w-chip { box-shadow: 0 10px 28px rgb(0 0 0 / .45); }
+.w-chip.c1 > span:last-child { display: flex; flex-direction: column; gap: 1px; }
+.w-chip small { font-size: 12px; font-weight: 500; color: var(--muted); }
+.w-chip .w-icon { width: 18px; height: 18px; }
+.w-chip-ic { width: 36px; height: 36px; border-radius: 10px; background: var(--soft); display: grid; place-items: center; }
+.w-chip.c1 { top: 56px; left: 22px; transform: rotate(-4deg); padding-left: 8px; }
+.w-chip.c2 { top: 92px; right: 26px; transform: rotate(5deg); }
+.w-chip.c3 { bottom: 64px; right: 28px; transform: rotate(-3deg); }
+.w-chip.c4 { bottom: 52px; left: 30px; transform: rotate(3deg); }
+.w-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+.w-stars { display: inline-flex; gap: 1px; color: var(--wait); }
+.w-stars svg { width: 12px; height: 12px; fill: currentColor; }
+.w h1 { font-size: 30px; line-height: 1.12; font-weight: 800; letter-spacing: -.025em; }
+.w-sub { margin: 8px 0 0; font-size: 16px; color: var(--muted); }
+.w-choices { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+.w-choice { appearance: none; border: 0; font: inherit; text-align: left; cursor: pointer; width: 100%; display: grid; grid-template-columns: 48px minmax(0, 1fr) 20px; align-items: center; gap: 16px;
+  padding: 16px; border-radius: 20px; background: var(--soft); color: var(--ink); }
+.w-choice.main { background: var(--ink); color: var(--bg); }
+.w-ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--bg); color: var(--ink); }
+.w-choice.main .w-ic { background: color-mix(in srgb, var(--bg) 14%, var(--ink)); color: var(--bg); }
+.w-icon { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.w-choice > .w-icon { width: 20px; height: 20px; opacity: .6; }
+.w-t { display: flex; flex-direction: column; gap: 3px; }
+.w-t b { font-size: 17px; font-weight: 700; }
+.w-t small { font-size: 14px; line-height: 1.35; opacity: .72; }
+.w-in { margin: auto 0 0; padding-top: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+.w-in .linkbtn { font-size: 14px; font-weight: 700; }
+
+/* account set-up: the area button */
+.pick-area { appearance: none; border: 0; font: 400 16px var(--body); width: 100%; min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--soft); color: var(--ink); cursor: pointer; text-align: left; }
+.pick-area.empty span { color: var(--hint); }
+.pick-area span { flex: 1; }
+.pick-area svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.pick-area svg:last-child { width: 18px; height: 18px; opacity: .6; }
+
+/* stars */
+.stars { display: inline-flex; gap: 2px; color: var(--wait); }
+.stars svg { width: var(--star, 14px); height: var(--star, 14px); fill: currentColor; }
+.stars svg.off { fill: var(--line); }
+svg.star { width: 14px; height: 14px; fill: var(--wait); flex: none; }
+
+/* Shops near you */
+.near { display: flex; flex-direction: column; gap: 16px; }
+.near-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.near-head h1 { font-size: 28px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+.near-head h2 { font-size: 20px; font-weight: 800; letter-spacing: -.015em; }
+.area-chip, .near-pill { appearance: none; border: 0; font: 700 14px var(--body); display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px 0 10px; border-radius: 999px;
+  background: var(--soft); color: var(--ink); cursor: pointer; white-space: nowrap; text-decoration: none; flex: none; max-width: 60%; }
+.area-chip span { overflow: hidden; text-overflow: ellipsis; }
+.area-chip svg, .near-pill svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.area-chip svg.down { width: 16px; height: 16px; opacity: .6; }
+.near-pill { height: 36px; font-size: 13px; padding: 0 12px 0 10px; }
+.near-pill svg { width: 17px; height: 17px; }
+.near-group { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.eyebrow-title { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.near-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.near-shop { display: grid; grid-template-columns: 68px minmax(0, 1fr) 18px; align-items: center; gap: 16px; padding: 12px; border-radius: 18px; background: var(--soft); color: var(--ink); text-decoration: none; }
+.near-shop.ghost { height: 92px; box-sizing: border-box; opacity: .6; }
+.near-pic { width: 68px; height: 68px; border-radius: 14px; overflow: hidden; background: var(--bg); display: grid; place-items: center; font-size: 26px; font-weight: 800; }
+.near-pic img { width: 100%; height: 100%; object-fit: cover; }
+.near-pic.letter { background: color-mix(in srgb, var(--chart-2) 18%, var(--bg)); color: var(--chart-2); }
+.near-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.near-info strong { font-size: 16px; font-weight: 700; }
+.near-sells { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.near-meta { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; margin-top: 2px; min-width: 0; }
+.near-meta .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dotsep { color: var(--muted); }
+.near-new { font-size: 12px; font-weight: 700; color: var(--info); background: color-mix(in srgb, var(--info) 12%, var(--bg)); padding: 2px 8px; border-radius: 999px; }
+.near-shop .chev { width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.shops-foot + .near { margin-top: 8px; padding-top: 24px; border-top: 1px solid var(--line); }
+
+/* the shop page: its rating */
+.shop-intro { display: flex; flex-direction: column; align-items: flex-start; }
+.shop-intro .note { margin-top: 4px; }
+.rating-chip { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 7px 10px 7px 10px; border-radius: 999px; background: var(--soft); font-size: 14px; color: var(--ink); text-decoration: none; }
+.rating-chip svg.star { width: 15px; height: 15px; }
+.rating-chip b { font-weight: 800; }
+.rating-chip span { color: var(--muted); }
+.rating-chip .chev { width: 14px; height: 14px; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ratings page */
+.rate-sum { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 24px !important; }
+.rate-big { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.rate-big b { font-size: 52px; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+.rate-big .stars { --star: 16px; }
+.rate-bars { display: flex; flex-direction: column; gap: 6px; }
+.rate-bar { display: grid; grid-template-columns: 12px minmax(0, 1fr) 24px; gap: 8px; align-items: center; font-size: 12px; font-weight: 600; color: var(--muted); }
+.rate-bar i { height: 6px; border-radius: 99px; background: var(--soft); overflow: hidden; }
+.rate-bar i::after { content: ""; display: block; height: 100%; width: var(--w); background: var(--wait); border-radius: 99px; }
+.rate-bar span:last-child { text-align: right; }
+.reviews { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.review { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; border-top: 1px solid var(--line); }
+.review:first-child { border-top: 0; padding-top: 4px; }
+.review-who { display: flex; align-items: center; gap: 12px; }
+.review-av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; font-weight: 700; background: var(--soft); flex: none; }
+.review-who > div { display: flex; flex-direction: column; gap: 2px; }
+.review-who strong { font-size: 14px; }
+.review-when { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.review p { margin: 0; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.review-bought { font-size: 12px; color: var(--muted); }
+
+/* rating a shop after delivery */
+.rate-card strong { font-size: 16px; }
+.rate-card .sub { margin-top: -12px; }
+.rate-quote { margin: 0; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.rate-card .linkbtn { align-self: flex-start; font-size: 14px; }
+.star-pick { display: flex; gap: 6px; }
+.star-pick button { appearance: none; border: 0; background: none; padding: 4px; cursor: pointer; color: var(--line); border-radius: 10px; }
+.star-pick button svg { width: 32px; height: 32px; fill: currentColor; display: block; }
+.star-pick button.on { color: var(--wait); }
+.star-pick.big { gap: 10px; justify-content: center; }
+.star-pick.big button svg { width: 40px; height: 40px; }
+.overlay.bottom .modal.rate-sheet { gap: 16px; }
+.rate-sheet-head { display: flex; flex-direction: column; gap: 4px; }
+.rate-sheet-head h2 { font-size: 20px; font-weight: 800; letter-spacing: -.01em; }
+.rate-stars { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0; }
+.rate-word { font-size: 15px; font-weight: 700; }
+.rate-sheet .note.small { margin-top: -8px; font-size: 13px; }
+.rate-sheet .btn { min-height: 52px; border-radius: 14px; font-size: 16px; }
+.rate-later { align-self: center; color: var(--muted); font-weight: 600; font-size: 14px; padding: 8px; }
+
+/* checkout */
+.co-card .co-title { font-size: 16px; font-weight: 700; margin: 0; }
+.co-me { display: flex; align-items: center; gap: 12px; }
+.co-av { width: 44px; height: 44px; border-radius: 50%; background: var(--soft); display: grid; place-items: center; font-weight: 700; font-size: 16px; flex: none; }
+.co-me > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.co-me strong { font-size: 16px; }
+.co-me span { font-size: 14px; color: var(--muted); }
+.choices.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border: 0; border-radius: 0; overflow: visible; }
+.choices.tiles .choice { border: 2px solid transparent; border-radius: 14px; background: var(--soft); padding: 12px; gap: 4px 8px; align-content: start; }
+.choices.tiles .choice[aria-checked="true"] { background: var(--bg); border-color: var(--ink); }
+.choices.tiles .choice i { grid-row: 1; width: 18px; height: 18px; }
+.choices.tiles .choice[aria-checked="true"] i { border-width: 5px; }
+.choices.tiles .choice span { grid-column: 1 / span 2; line-height: 1.35; }
+.co-card .co-addr { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding-top: 16px; border-top: 1px solid var(--line); }
+.co-pin { width: 40px; height: 40px; border-radius: 12px; background: var(--soft); display: grid; place-items: center; }
+.co-pin svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.co-addr > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.co-addr strong { font-size: 15px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.co-card .co-items { gap: 12px; }
+.co-card .co-items li { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.co-items img, .co-noimg { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; background: var(--soft); display: block; }
+.co-items li > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.co-items li strong { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.co-items li > .num { font-size: 15px; font-weight: 700; }
+.co-sums { display: flex; flex-direction: column; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 15px; }
+.co-sums .sub { font-size: 15px; }
+.co-card .co-total { font-size: 17px; font-weight: 800; padding-top: 4px; border-top: 0; }
+.co-note { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--good) 10%, var(--bg)); font-size: 14px; line-height: 1.4; }
+.co-note svg { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--good); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.co-bar-row { display: flex; align-items: center; gap: 16px; }
+.co-bar-total { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.co-bar-total span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.co-bar-total strong { font-size: 19px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; }
+.co-bar-row .btn { flex: 1; }

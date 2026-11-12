@@ -23,6 +23,7 @@ import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { Chat } from '../shared/Chat.jsx';
 import { myTokens } from './savedOrders.js';
 import { ReportProblemForm, CustomerProblem } from './ProblemBox.jsx';
+import { RateShop } from './RateShop.jsx';
 
 // Why an order was cancelled, in the customer's words.
 const CANCELLED = {
@@ -283,6 +284,7 @@ export function OrderPage({ token }) {
           )}
         </section>
       )}
+      {o.mine && o.status === 'delivered' && <RateShop token={token} shopName={o.shop.name} slug={o.shop.slug} />}
       {!canReceive && o.can_report && !complaining && !o.report_block && (
         <section className="card">
           <p className="note">Something wrong? Report it until {atText(o.report_until)}.</p>
