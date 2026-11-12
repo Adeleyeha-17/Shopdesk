@@ -42,6 +42,17 @@ demo.monthEndAlert = monthEndAlert;
 
 function switchTo(kind) {
   demo.setHint('');
+  if (kind === 'new') {
+    // someone new on shopdesk.com.ng: signed out, on the first screen
+    try {
+      localStorage.removeItem('shopdesk-start');
+    } catch (e) {
+      /* private browsing */
+    }
+    signInAs(null);
+    go('/');
+    return;
+  }
   signInAs(kind === 'vendor' ? VENDOR : CUSTOMER);
   if (kind === 'vendor') demo.setHash('sales');
   go(kind === 'vendor' ? '/' : '/bimpes-beauty');
@@ -63,6 +74,9 @@ function DemoBar({ onReset }) {
             <button type="button" aria-pressed={who === 'customer'} onClick={() => switchTo('customer')}>
               Customer
             </button>
+            <button type="button" aria-pressed={who === 'none'} onClick={() => switchTo('new')}>
+              New
+            </button>
           </div>
           <button type="button" className="demo-reset" onClick={onReset}>
             Reset
@@ -72,7 +86,9 @@ function DemoBar({ onReset }) {
           {demo.hint ||
             (who === 'customer'
               ? "You're Funmi, a customer of Bimpe's Beauty Store. Order something, then switch to Shop owner to see it arrive."
-              : 'A sample shop with made-up customers and orders. Tap anything: nothing is real and nothing is sent.')}
+              : who === 'none'
+                ? "You're someone new on ShopDesk. Pick how you want to use it: any email and any 6 digits sign you in."
+                : 'A sample shop with made-up customers and orders. Tap anything: nothing is real and nothing is sent.')}
         </p>
       </div>
     </div>

@@ -889,8 +889,8 @@ h1.signin-title { font-size: 26px; font-weight: 800; letter-spacing: -.02em; lin
 .w-chip-ic { width: 36px; height: 36px; border-radius: 10px; background: var(--soft); display: grid; place-items: center; }
 .w-chip.c1 { top: 56px; left: 22px; transform: rotate(-4deg); padding-left: 8px; }
 .w-chip.c2 { top: 92px; right: 26px; transform: rotate(5deg); }
-.w-chip.c3 { bottom: 64px; right: 28px; transform: rotate(-3deg); }
-.w-chip.c4 { bottom: 52px; left: 30px; transform: rotate(3deg); }
+.w-chip.c3 { bottom: 84px; right: 16px; transform: rotate(-3deg); }
+.w-chip.c4 { bottom: 36px; left: 20px; transform: rotate(3deg); }
 .w-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
 .w-stars { display: inline-flex; gap: 1px; color: var(--wait); }
 .w-stars svg { width: 12px; height: 12px; fill: currentColor; }
