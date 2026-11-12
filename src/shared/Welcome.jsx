@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { SignIn } from './SignIn.jsx';
 import { VendorFrame } from '../vendor/VendorFrame.jsx';
+import { useInviter } from '../lib/invite.js';
 
 const KEY = 'shopdesk-start';
 export function getStart() {
@@ -73,6 +74,7 @@ export function Choices({ onPick }) {
 // signedIn: they signed in with "Sign in" and are new, so they only need to say which they are (onPick).
 export function Welcome({ signedIn = false, email = '', onPick }) {
   const [step, setStep] = useState('choose'); // choose, shop, customer, signin
+  const inviter = useInviter();
   const pick = (k) => {
     setStart(k);
     if (onPick) onPick(k);
@@ -155,6 +157,12 @@ export function Welcome({ signedIn = false, email = '', onPick }) {
             Near you
           </div>
         </div>
+        {inviter && (
+          <div className="banner notice w-invited">
+            <strong>{inviter} invited you</strong>
+            <span>Open your shop on ShopDesk below.</span>
+          </div>
+        )}
         <h1>{signedIn ? 'One more thing' : 'Welcome to ShopDesk'}</h1>
         <p className="w-sub">
           {signedIn ? `How do you want to use ShopDesk${email ? ' with ' + email : ''}?` : 'How do you want to use it?'}

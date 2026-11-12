@@ -16,6 +16,7 @@ import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { Toast, useToast } from '../shared/Toast.jsx';
 import { VendorFrame } from './VendorFrame.jsx';
 import { SetUpShop } from './SetUpShop.jsx';
+import { GetStarted } from './GetStarted.jsx';
 import { StatusBanner, PlanBanner, ShopDeskNotices, RefundBanner } from './Banners.jsx';
 import { SalesTab } from './SalesTab.jsx';
 import { OrdersTab } from './OrdersTab.jsx';
@@ -277,13 +278,16 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
             <i aria-hidden="true" />
             ShopDesk
           </div>
-          <div className="shop">
-            {isOwner && (
-              <a className="linkbtn" href="/admin" style={{ marginRight: 10 }}>
-                Admin
-              </a>
-            )}
-            {shop.name}
+          <div className="top-right">
+            <GetStarted shop={shop} data={data} setTab={pick} say={say} />
+            <div className="shop">
+              {isOwner && (
+                <a className="linkbtn" href="/admin" style={{ marginRight: 10 }}>
+                  Admin
+                </a>
+              )}
+              {shop.name}
+            </div>
           </div>
         </div>
       </header>

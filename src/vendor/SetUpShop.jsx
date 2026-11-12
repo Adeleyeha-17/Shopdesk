@@ -2,6 +2,7 @@
 // An email that has already been used to shop can't open a shop (one email, one role).
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
+import { claimInvite, useInviter } from '../lib/invite.js';
 import { signOut } from '../lib/alerts.js';
 import { errText } from '../lib/helpers.js';
 import { VendorFrame } from './VendorFrame.jsx';
@@ -23,6 +24,7 @@ export function SetUpShop({ userId, email, onDone, isOwner }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [isCustomer, setIsCustomer] = useState(null);
+  const inviter = useInviter();
   // One email, one role: an email that has shopped on ShopDesk can't open a shop.
   useEffect(() => {
     supabase.rpc('my_account').then(({ data }) => setIsCustomer(!!(data && data.customer)));
@@ -74,6 +76,7 @@ export function SetUpShop({ userId, email, onDone, isOwner }) {
     }
     setBusy(true);
     const { error } = await supabase.from('shops').insert({ owner_id: userId, ...shopRow(v) });
+    if (!error) await claimInvite();
     setBusy(false);
     if (error)
       setErr(
@@ -92,6 +95,12 @@ export function SetUpShop({ userId, email, onDone, isOwner }) {
       }
     >
       {ownerCard}
+      {inviter && (
+        <div className="banner notice">
+          <strong>{inviter} invited you</strong>
+          <span>Set up your shop below.</span>
+        </div>
+      )}
       <div>
         <h2>Set up your shop</h2>
         <p className="note">ShopDesk checks every new shop, usually within a day. Add products meanwhile.</p>

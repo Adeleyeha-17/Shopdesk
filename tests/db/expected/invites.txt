@@ -1,0 +1,34 @@
+I1 a new shop claims an unknown link, its own link, then the inviter link (expect f f t), then again (expect f):
+f|f|t
+f
+I2 the shop owner cannot set who invited them (expect permission denied):
+psql:invites.sql:19: ERROR:  permission denied for table shops
+I3 with invites off the Shop tab shows nothing (expect empty):
+
+I4 only Admin sees invites or switches them on (expect Not allowed twice):
+psql:invites.sql:24: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_invites() line N at RAISE
+psql:invites.sql:25: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_save_settings(jsonb) line N at RAISE
+
+I5 the Shop tab of the inviter: on, its link, the reward, and the shop waiting for approval:
+true|inviterwigs|1|2|0|Invited Bags|pending
+I6 approved and paid: the invited shop gets 1 paid + 2 free months, the inviter 1 free month (expect 3 months, t):
+t
+3 months|t
+I7 both were told:
+A free month from your invite | Your plan now runs to (a date).
+You've earned 1 free month | Invited Bags paid for their first month. Your plan now runs to (a date).
+I8 a second payment gives no second reward (expect t):
+t
+t
+I9 Admin sees the invite, paid and rewarded:
+Invited Bags|Inviter Wigs|active|true|t
+I10 with invites switched off, the payment of an invited shop gives nothing (expect t, f, t):
+
+t
+t
+f
+t
+I11 an approved shop cannot claim an invite later (expect f):
+f

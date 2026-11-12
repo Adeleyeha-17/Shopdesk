@@ -1,4 +1,5 @@
-// The Shop tab: the shop's order link, its details, its rules (payment and delivery) and sign out.
+// The Shop tab: the shop's order link, Invite a shop (once ShopDesk switches invites on), its details,
+// its rules (payment and delivery) and sign out.
 import React, { useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { signOut } from '../lib/alerts.js';
@@ -6,6 +7,8 @@ import { EmailSwitch } from '../shared/EmailSwitch.jsx';
 import { ThemePicker } from '../shared/ThemePicker.jsx';
 import { errText, copyText } from '../lib/helpers.js';
 import { ShopFields, checkShop, shopRow } from './shopForm.jsx';
+import { InviteCard } from './InviteCard.jsx';
+import { markShared } from './GetStarted.jsx';
 
 export function ShopTab({ shop, reloadShop, say, email }) {
   const [v, setV] = useState({ ...shop, slugTouched: true });
@@ -60,13 +63,14 @@ export function ShopTab({ shop, reloadShop, say, email }) {
         <div className="btns">
           <button
             className="btn small"
-            onClick={() =>
+            onClick={() => {
               copyText(
                 `Order from ${shop.name} here: ${link}?s=wa\nPick what you want and I see your order straight away.`,
                 say,
                 'WhatsApp message copied',
-              )
-            }
+              );
+              markShared(shop.id);
+            }}
           >
             Copy WhatsApp message
           </button>
@@ -75,12 +79,14 @@ export function ShopTab({ shop, reloadShop, say, email }) {
             href={'/' + shop.slug}
             target="_blank"
             rel="noopener"
+            onClick={() => markShared(shop.id)}
             style={{ textDecoration: 'none' }}
           >
             Open my order page
           </a>
         </div>
       </section>
+      <InviteCard shop={shop} say={say} />
       <section className="card">
         <h2>Your shop</h2>
         <ShopFields v={v} set={setV} />

@@ -1037,3 +1037,48 @@ svg.star { width: 14px; height: 14px; fill: var(--wait); flex: none; }
 .co-bar-total span { font-size: 12px; font-weight: 600; color: var(--muted); }
 .co-bar-total strong { font-size: 19px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; }
 .co-bar-row .btn { flex: 1; }
+
+/* ---------- invites (Shop tab) and Get started (top bar) ---------- */
+.top-right { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.top-right .shop { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-card { gap: 16px; }
+.inv-head { display: flex; gap: 12px; align-items: flex-start; }
+.inv-head h2 { margin: 0 0 4px; }
+.inv-ic { width: 40px; height: 40px; border-radius: 12px; background: var(--soft); display: grid; place-items: center; flex: none; }
+.inv-ic svg { width: 21px; height: 21px; fill: none; stroke: var(--good); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.inv-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.inv-stats div { background: var(--soft); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+.inv-stats b { font-size: 20px; font-weight: 800; letter-spacing: -.01em; }
+.inv-stats span { font-size: 12px; color: var(--muted); }
+.inv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.inv-list li { padding: 12px 0; border-top: 1px solid var(--line); }
+.inv-list li > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inv-list strong { font-size: 14px; }
+.inv-list .sub { font-size: 12px; }
+.inv-state { font-size: 13px; font-weight: 700; color: var(--muted); }
+.w-invited { margin-bottom: 16px; }
+.gs-btn { appearance: none; border: 0; flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--good) 12%, var(--bg)); color: var(--ink); font: 700 13px var(--body); cursor: pointer; white-space: nowrap; }
+.gs-ring { width: 20px; height: 20px; transform: rotate(-90deg); flex: none; }
+.gs-ring circle { fill: none; stroke-width: 3; }
+.gs-ring-bg { stroke: color-mix(in srgb, var(--good) 22%, var(--bg)); }
+.gs-ring-on { stroke: var(--good); stroke-linecap: round; }
+.overlay.bottom .modal.gs-sheet { gap: 16px; }
+.gs-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.gs-head h2 { font-size: 20px; font-weight: 800; letter-spacing: -.01em; }
+.gs-count { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.gs-bar { height: 6px; border-radius: 99px; background: var(--soft); overflow: hidden; margin-top: -4px; }
+.gs-bar i { display: block; height: 100%; border-radius: 99px; background: var(--good); transition: width .3s var(--ease); }
+.gs-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.gs-steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; }
+.gs-steps li.now { background: var(--soft); border-radius: 14px; padding: 12px; margin: 2px -6px; }
+.gs-steps li > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gs-steps strong { font-size: 15px; }
+.gs-steps li > div span { font-size: 13px; line-height: 1.35; color: var(--muted); }
+.gs-steps li.done strong, .gs-steps li.later strong { color: var(--muted); font-weight: 600; }
+.gs-dot { width: 28px; height: 28px; box-sizing: border-box; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; border: 1.5px solid var(--line); color: var(--muted); }
+.gs-dot svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.gs-steps li.done .gs-dot { background: var(--good); border-color: var(--good); color: var(--bg); }
+.gs-steps li.now .gs-dot { border-color: var(--ink); color: var(--ink); background: var(--bg); }
+.gs-foot { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.gs-foot .linkbtn { color: var(--muted); font-weight: 500; font-size: 13px; }

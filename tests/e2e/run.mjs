@@ -396,6 +396,12 @@ await step('money out can be added, and shows in the Full report', async () => {
   await p.locator('.back-btn').click();
 });
 
+await step('the Shop tab has Invite a shop with its invite link', async () => {
+  await nav('Shop');
+  await see('Invite a shop');
+  expect((await p.locator('.inv-card .mono').innerText()).includes('?invite=bimpes-beauty'), 'the invite link is wrong');
+});
+
 await step('the Shop tab has Appearance too', async () => {
   await nav('Shop');
   await see('Appearance');
@@ -410,7 +416,10 @@ await step('a new shop owner can sign up, type a link name with a dash, and send
   await patch((S) => {
     S.uid = null;
   }, '/');
+  await p.goto(url + '?invite=bimpes-beauty');
+  await p.locator('.demo-bar').waitFor();
   await see('Welcome to ShopDesk');
+  await see("Bimpe's Beauty Store invited you");
   await p.locator('.w-choice:has-text("Open my shop")').click();
   await p.locator('#email').fill('newshop@example.com');
   await p.locator('button:has-text("Email me a code")').click();
@@ -428,6 +437,22 @@ await step('a new shop owner can sign up, type a link name with a dash, and send
   await p.locator('label.agree').click();
   await p.locator('button:has-text("Send my shop for approval")').click();
   await see('Waiting for approval');
+  await pause(600); // the demo saves its state a moment later
+  const invitedBy = await p.evaluate((key) => {
+    const S = JSON.parse(localStorage.getItem(key));
+    const mine = S.shops.find((x) => x.slug === 'ada-fabrics');
+    const by = mine && mine.invited_by;
+    return by ? S.shops.find((x) => x.id === by).slug : 'slugs: ' + S.shops.map((x) => x.slug + '/' + (x.invited_by || '-')).join(' ');
+  }, KEY);
+  expect(invitedBy === 'bimpes-beauty', 'the new shop did not record who invited it: ' + invitedBy);
+});
+
+await step('a new shop has Get started at the top: 0 of 4 done, and Add products opens Stock', async () => {
+  await p.locator('.gs-btn').click();
+  await see('Get your shop going');
+  expect((await p.locator('.gs-count').innerText()).includes('0 of 4'), 'the count is wrong');
+  await p.locator('.gs-steps li.now button:has-text("Add products")').click();
+  await see('No products yet');
 });
 
 await step("someone new on the main page picks I'm a customer, sets up their account, then sees shops near them", async () => {
