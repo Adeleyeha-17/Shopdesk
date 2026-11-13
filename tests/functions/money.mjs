@@ -35,6 +35,8 @@ async function fakeFetch(url, init = {}) {
     if (u.pathname.endsWith('/fetch_rates')) return reply({ request_token: 'RT' + calls.length, couriers: [
       { courier_id: 'gig', courier_name: 'GIG Logistics', service_code: 'gig_std', rate_card_amount: 3120, total: 3000, delivery_eta: 'Within 2 days', delivery_eta_time: '2030-01-03T12:00:00Z' },
       { courier_id: 'kwik', courier_name: 'Kwik', service_code: 'kwik_bike', rate_card_amount: 2010, total: 1900, delivery_eta: 'Same day', delivery_eta_time: 'soon' },
+      { courier_id: 'gig', courier_name: 'GIG Logistics', service_code: 'gig_terminal', rate_card_amount: 1500, total: 1400, delivery_eta: 'Collect at GIG centre in 2 days' },
+      { courier_id: 'abc', courier_name: 'ABC Cargo', service_code: 'abc_dropoff', service_type: 'dropoff', rate_card_amount: 1200, total: 1100, delivery_eta: '3 days' },
     ], fastest_courier: { courier_id: 'kwik', service_code: 'kwik_bike' } });
     if (u.pathname.endsWith('/shipping/labels')) {
       if (labelFails-- > 0) return reply(null, 400, { message: 'request token expired' });
@@ -91,6 +93,7 @@ await sql.begin(async (tx) => { await tx`select set_config('request.jwt.claim.su
 let r = await post({ action: 'quote', order: ord.id }, 'cust');
 check('a customer cannot get courier prices', /not found/i.test(r.error || ''), r);
 r = await post({ action: 'quote', order: ord.id }, 'shop');
+check('only door-to-door couriers are offered (no centre pickup, no drop-off at the courier)', !r.list?.some((q) => q.service_code === 'gig_terminal' || q.courier_id === 'abc'), r.list);
 check('the shop gets prices, cheapest first, margin added, rounded', r.list?.length === 2 && r.list[0].courier_id === 'kwik' && r.list[0].price === 2250 && r.list[1].price === 3350 && r.list[0].cheapest && r.list[0].fastest, r);
 check('what ShopDesk pays and the booking token stay on the server', !('cost' in r.list[0]) && !('token' in r.list[0]), r.list?.[0]);
 check('a bad eta is dropped', r.list?.[0].eta === null && r.list?.[1].eta === '2030-01-03T12:00:00.000Z', r.list);

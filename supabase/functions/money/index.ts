@@ -174,7 +174,7 @@ export async function fetchQuotes(sql, api, info) {
     throw say('No courier can take this order right now. Try again later or use your own rider.');
   }
   const list = (d?.couriers || [])
-    .filter((c) => c.courier_id && c.service_code && Number(c.rate_card_amount || c.total) > 0)
+    .filter((c) => c.courier_id && c.service_code && Number(c.rate_card_amount || c.total) > 0 && doorToDoor(c))
     .map((c) => ({
       courier_id: String(c.courier_id),
       service_code: String(c.service_code),
@@ -193,6 +193,15 @@ export async function fetchQuotes(sql, api, info) {
   if (fastest) for (const q of list) q.fastest = q.courier_id === String(fastest.courier_id) && q.service_code === String(fastest.service_code);
   list[0].cheapest = true;
   return list;
+}
+
+// Door to door only: the courier collects from the shop and brings it to the customer's door. Services where the shop has to
+// drop the parcel at the courier's office, or the customer has to collect it from a centre, are left out.
+const NOT_DOOR = /drop[\s_-]?off|terminal|\bhub\b|cent(er|re)|station|collection point|pick[\s_-]?up point|walk[\s_-]?in|self[\s_-]?(pick|collect)|office pick/i;
+export function doorToDoor(c) {
+  if (/drop/i.test(String(c.service_type || ''))) return false;
+  const words = [c.courier_name, c.service_code, c.service_type, c.delivery_eta, c.pickup_eta, c.info, c.description].filter(Boolean).join(' ');
+  return !NOT_DOOR.test(words);
 }
 
 async function createLabel(api, q) {
