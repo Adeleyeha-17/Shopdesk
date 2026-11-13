@@ -88,7 +88,7 @@ export function MoneyPage({ say, go }) {
           title="Customers can pay online"
           sub={
             st.online_pay_on
-              ? 'On: order pages show "Pay online" for shops banking with OPay, Moniepoint, Kuda or PalmPay.'
+              ? 'On: order pages show "Pay online" for every shop that picked its bank by name.'
               : 'Off: customers pay shops by transfer only.'
           }
           click={() =>

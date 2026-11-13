@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const copy = path.join(os.tmpdir(), 'shopdesk-money-' + process.pid + '.mjs');
 fs.writeFileSync(copy, fs.readFileSync(path.join(here, '../../supabase/functions/money/index.ts'), 'utf8')
   .replace("'npm:postgres@3.4.5'", JSON.stringify(import.meta.resolve('postgres'))));
-const { handle } = await import(pathToFileURL(copy).href);
+const { handle, bankCode } = await import(pathToFileURL(copy).href);
 fs.unlinkSync(copy);
 
 const sql = postgres({ database: process.env.TEST_DB || 'shopdesk_test', max: 3, onnotice: () => {} });
@@ -45,7 +45,9 @@ async function fakeFetch(url, init = {}) {
     if (u.pathname.endsWith('/wallet/balance')) return reply({ balance: 25000.5, currency: 'NGN' });
   }
   if (u.host === 'api.paystack.co') {
-    if (u.pathname === '/bank') return new Response(JSON.stringify({ status: true, data: [{ name: 'Kuda Bank', code: '50211' }, { name: 'OPay Digital Services Limited (OPay)', slug: 'paycom', code: '999992' }] }));
+    if (u.pathname === '/bank') return new Response(JSON.stringify({ status: true, data: [{ name: 'Kuda Bank', code: '50211' }, { name: 'OPay Digital Services Limited (OPay)', slug: 'paycom', code: '999992' },
+      { name: 'Access Bank (Diamond)', code: '063' }, { name: 'Access Bank', code: '044' }, { name: 'Guaranty Trust Bank', code: '058' },
+      { name: 'First Bank of Nigeria', code: '011' }, { name: 'United Bank For Africa', code: '033' }] }));
     if (u.pathname === '/subaccount') return new Response(JSON.stringify({ status: true, data: { subaccount_code: 'ACCT_shop1' } }));
     if (u.pathname === '/transaction/initialize') return new Response(JSON.stringify({ status: true, data: { authorization_url: 'https://checkout.paystack.com/abc' } }));
     if (u.pathname.startsWith('/transaction/verify/')) return new Response(JSON.stringify({ status: true, data: { status: 'success', amount: paidKobo, currency: 'NGN' } }));
@@ -145,6 +147,10 @@ const ssig = crypto.createHmac('sha512', ENV.SHIPBUBBLE_API_KEY).update(sev).dig
 h = await post(sev, null, 'shipbubble', { 'x-ship-signature': ssig });
 [o] = await sql`select status, received_by from orders where id = ${ord.id}`;
 check('the delivered webhook marks the order delivered', h.ok && o.status === 'delivered' && o.received_by === 'shop', o);
+
+const banks = { paystack: (path) => fakeFetch('https://api.paystack.co' + path).then((x) => x.json()).then((j) => j.data) };
+const codes = await Promise.all(['Access Bank', 'GTBank', 'UBA', 'First Bank', 'Other bank'].map((b) => bankCode(banks, b)));
+check('banks named in the shop form match Paystack (the shortest name wins), and Other bank has none', codes.join() === '044,058,033,011,', codes);
 
 r = await post({ action: 'status' }, 'shop');
 check('only Admin sees the keys status', r.error === 'Not allowed.', r);

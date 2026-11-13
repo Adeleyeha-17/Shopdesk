@@ -3,7 +3,44 @@
 import React from 'react';
 import { slugify } from '../lib/helpers.js';
 
-export const BANKS = ['OPay', 'Moniepoint', 'Kuda', 'PalmPay', 'Other bank'];
+// Where customers pay. Named banks can take online payments (Paystack pays the shop's account); "Other bank" can't.
+// The money server function matches these names to Paystack's bank list (supabase/functions/money), so keep the two in step.
+export const POPULAR_BANKS = ['OPay', 'Moniepoint', 'Kuda', 'PalmPay'];
+export const OTHER_BANKS = [
+  'Access Bank',
+  'Carbon',
+  'Citibank',
+  'Ecobank',
+  'FairMoney',
+  'FCMB',
+  'Fidelity Bank',
+  'First Bank',
+  'Globus Bank',
+  'GTBank',
+  'Jaiz Bank',
+  'Keystone Bank',
+  'Lotus Bank',
+  'Optimus Bank',
+  'Paga',
+  'Parallex Bank',
+  'Polaris Bank',
+  'PremiumTrust Bank',
+  'Providus Bank',
+  'Signature Bank',
+  'Stanbic IBTC',
+  'Standard Chartered',
+  'Sterling Bank',
+  'SunTrust Bank',
+  'TAJ Bank',
+  'Titan Trust Bank',
+  'UBA',
+  'Union Bank',
+  'Unity Bank',
+  'VFD',
+  'Wema Bank',
+  'Zenith Bank',
+];
+export const BANKS = [...POPULAR_BANKS, ...OTHER_BANKS, 'Other bank'];
 
 // While the link name is being typed, a dash at the end stays, so "rose-perfumes" can be typed letter by letter.
 // It is tidied (no dash at either end) for the preview, the check and the save.
@@ -25,9 +62,7 @@ export function ShopFields({ v, set }) {
         <input
           id="sName"
           value={v.name}
-          onChange={(e) =>
-            set({ ...v, name: e.target.value, slug: v.slugTouched ? v.slug : slugify(e.target.value) })
-          }
+          onChange={(e) => set({ ...v, name: e.target.value, slug: v.slugTouched ? v.slug : slugify(e.target.value) })}
           placeholder="e.g. Rose's Perfumes"
         />
       </div>
@@ -46,9 +81,17 @@ export function ShopFields({ v, set }) {
       <div className="field">
         <label htmlFor="sBank">Where customers pay</label>
         <select id="sBank" value={v.bank} onChange={f('bank')}>
-          {BANKS.map((b) => (
-            <option key={b}>{b}</option>
-          ))}
+          <optgroup label="Most used">
+            {POPULAR_BANKS.map((b) => (
+              <option key={b}>{b}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Banks">
+            {OTHER_BANKS.map((b) => (
+              <option key={b}>{b}</option>
+            ))}
+          </optgroup>
+          <option>Other bank</option>
         </select>
       </div>
       <div className="field">
@@ -61,13 +104,7 @@ export function ShopFields({ v, set }) {
       </div>
       <div className="field">
         <label htmlFor="sWa">Your WhatsApp (for ShopDesk)</label>
-        <input
-          id="sWa"
-          inputMode="tel"
-          value={v.whatsapp}
-          onChange={f('whatsapp')}
-          placeholder="e.g. 0803 000 0000"
-        />
+        <input id="sWa" inputMode="tel" value={v.whatsapp} onChange={f('whatsapp')} placeholder="e.g. 0803 000 0000" />
       </div>
       <div className="field">
         <label htmlFor="sSells">What do you sell?</label>

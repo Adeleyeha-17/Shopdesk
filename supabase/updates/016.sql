@@ -104,8 +104,8 @@ begin
   if char_length(trim(v.address)) < 5 then raise exception 'This order has no delivery address.'; end if;
   select * into s from public.shops where id = v.shop_id;
   if char_length(trim(s.pickup_address)) < 5 then raise exception 'Add your pickup address on the Shop tab first.'; end if;
-  if s.bank not in ('OPay', 'Moniepoint', 'Kuda', 'PalmPay') or s.account_number !~ '^[0-9]{10}$' then
-    raise exception 'ShopDesk Delivery is paid online, so your account under Your shop has to be OPay, Moniepoint, Kuda or PalmPay.'; end if;
+  if s.bank = 'Other bank' or s.account_number !~ '^[0-9]{10}$' then
+    raise exception 'ShopDesk Delivery is paid online, so pick your bank by name under Your shop.'; end if;
   return jsonb_build_object(
     'order', jsonb_build_object('id', v.id, 'name', v.customer_name, 'phone', v.customer_phone, 'address', v.address, 'area', v.area,
       'lat', v.delivery_lat, 'lng', v.delivery_lng, 'email', (select email from auth.users where id = v.customer_id)),
@@ -361,7 +361,7 @@ $$;
 create or replace function public.order_money(p_token uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
-    'online', st.online_pay_on and s.status = 'active' and s.bank in ('OPay', 'Moniepoint', 'Kuda', 'PalmPay') and s.account_number <> ''
+    'online', st.online_pay_on and s.status = 'active' and s.bank <> 'Other bank' and s.account_number ~ '^[0-9]{10}$'
       and o.status in ('awaiting', 'part') and not (o.mode = 'delivery' and o.delivery_paid_by = 'customer' and o.delivery_fee is null),
     'fee', case when st.paystack_fee_by = 'customer' then public.online_fee(st.online_service_fee +
       o.items_total + case when o.delivery_paid_by = 'customer' then coalesce(o.delivery_fee, 0) else 0 end - o.amount_paid) else 0 end,

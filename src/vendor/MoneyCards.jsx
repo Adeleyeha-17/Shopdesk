@@ -5,8 +5,6 @@ import { supabase } from '../lib/database.js';
 import { useMoneySwitches } from '../lib/moneyApi.js';
 import { errText } from '../lib/helpers.js';
 
-const ONLINE_BANKS = ['OPay', 'Moniepoint', 'Kuda', 'PalmPay'];
-
 export function MoneyCards({ shop, reloadShop, say }) {
   const sw = useMoneySwitches();
   const [addr, setAddr] = useState(shop.pickup_address || '');
@@ -26,7 +24,7 @@ export function MoneyCards({ shop, reloadShop, say }) {
       reloadShop();
     }
   }
-  const online = ONLINE_BANKS.includes(shop.bank) && /^\d{10}$/.test(shop.account_number || '');
+  const online = shop.bank !== 'Other bank' && /^\d{10}$/.test(shop.account_number || '');
   return (
     <>
       {sw.delivery && (
@@ -39,8 +37,7 @@ export function MoneyCards({ shop, reloadShop, say }) {
           </p>
           {!online && (
             <p className="err">
-              Customers pay delivery orders online, so your account under Your shop has to be OPay, Moniepoint, Kuda or
-              PalmPay.
+              Customers pay delivery orders online, so pick your bank by name under Your shop, not Other bank.
             </p>
           )}
           <div className="field">
@@ -77,8 +74,8 @@ export function MoneyCards({ shop, reloadShop, say }) {
             </p>
           ) : (
             <p className="note">
-              Customers can pay you online when the account under Your shop is OPay, Moniepoint, Kuda or PalmPay. Until
-              then, they pay by transfer.
+              Customers can pay you online once you pick your bank by name under Your shop, not Other bank. Until then,
+              they pay by transfer.
             </p>
           )}
         </section>

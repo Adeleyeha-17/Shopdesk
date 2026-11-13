@@ -256,16 +256,29 @@ export function shipmentUpdate(s) {
 
 // ---------- Pay online ----------
 
-const BANKS = { OPay: /opay/i, Moniepoint: /moniepoint/i, Kuda: /kuda/i, PalmPay: /palmpay/i };
+// The banks a shop can pick (src/vendor/shopForm.jsx), matched to the names in Paystack's bank list.
+const BANKS = {
+  OPay: /opay|paycom/i, Moniepoint: /moniepoint/i, Kuda: /kuda/i, PalmPay: /palmpay/i,
+  'Access Bank': /^access bank/i, Carbon: /carbon/i, Citibank: /citi ?bank/i, Ecobank: /ecobank/i, FairMoney: /fairmoney/i,
+  FCMB: /first city monument|fcmb/i, 'Fidelity Bank': /^fidelity/i, 'First Bank': /^first bank/i, 'Globus Bank': /globus/i,
+  GTBank: /guaranty trust|gtbank/i, 'Jaiz Bank': /jaiz/i, 'Keystone Bank': /keystone/i, 'Lotus Bank': /lotus/i,
+  'Optimus Bank': /optimus/i, Paga: /^paga/i, 'Parallex Bank': /parallex/i, 'Polaris Bank': /polaris/i,
+  'PremiumTrust Bank': /premium ?trust/i, 'Providus Bank': /providus/i, 'Signature Bank': /signature/i,
+  'Stanbic IBTC': /stanbic/i, 'Standard Chartered': /standard chartered/i, 'Sterling Bank': /^sterling/i,
+  'SunTrust Bank': /suntrust/i, 'TAJ Bank': /^taj/i, 'Titan Trust Bank': /titan/i, UBA: /united bank for africa|^uba\b/i,
+  'Union Bank': /^union bank/i, 'Unity Bank': /^unity/i, VFD: /vfd/i, 'Wema Bank': /wema/i, 'Zenith Bank': /zenith/i,
+};
 let bankList = null;
-async function bankCode(api, bank) {
+// The shortest matching name wins, so "Access Bank" is picked over "Access Bank (Diamond)".
+export async function bankCode(api, bank) {
   const re = BANKS[bank];
   if (!re) return null;
   if (!bankList) bankList = (await api.paystack('/bank?country=nigeria&perPage=200')) || [];
-  return bankList.find((b) => re.test(b.name || '') || re.test(b.slug || ''))?.code || null;
+  const hits = bankList.filter((b) => b.active !== false && (re.test(b.name || '') || re.test(b.slug || '')));
+  hits.sort((a, b) => String(a.name).length - String(b.name).length);
+  return hits[0]?.code || null;
 }
 
-// The shop's Paystack subaccount, made (or moved) to the bank account the shop gave us.
 export async function ensureSubaccount(sql, api, shop) {
   const want = shop.bank + ':' + shop.account_number;
   if (shop.subaccount && shop.subaccount_for === want) return shop.subaccount;

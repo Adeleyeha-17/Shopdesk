@@ -1605,7 +1605,7 @@ const RPC = {
     const sh = shipmentOf(o);
     return {
       online:
-        ['OPay', 'Moniepoint', 'Kuda', 'PalmPay'].includes(s.bank) &&
+        s.bank !== 'Other bank' &&
         ['awaiting', 'part'].includes(o.status) &&
         !(o.mode === 'delivery' && o.delivery_paid_by === 'customer' && o.delivery_fee == null),
       online_only: o.delivery_by === 'shopdesk',
@@ -1622,8 +1622,7 @@ const RPC = {
     if (o.mode !== 'delivery') fail('This order is a pick-up.');
     if (o.status !== 'awaiting' || o.amount_paid > 0) fail('The fee is locked once paid.');
     if (!(myShop().pickup_address || '').trim()) fail('Add your pickup address on the Shop tab first.');
-    if (!['OPay', 'Moniepoint', 'Kuda', 'PalmPay'].includes(myShop().bank))
-      fail('ShopDesk Delivery is paid online, so your account under Your shop has to be OPay, Moniepoint, Kuda or PalmPay.');
+    if (myShop().bank === 'Other bank') fail('ShopDesk Delivery is paid online, so pick your bank by name under Your shop.');
     const base = 1400 + (o.id % 7) * 250;
     const list = COURIERS.map((c, i) => ({
       courier_id: c.id,

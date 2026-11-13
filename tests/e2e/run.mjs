@@ -126,7 +126,7 @@ await step('with ShopDesk Delivery on, a new delivery order needs a courier: the
   await card2().locator('.courier-choice:has-text("Dellyman")').click();
   await card2().locator('button:has-text("Confirm with Dellyman")').click();
   await see('confirmed with Dellyman');
-  expect((await card2().innerText()).includes('pays'), 'the card does not say the customer pays online');
+  await card2().getByText(/pays ₦[\d,]+ online/).waitFor();
   expect((await card2().locator('button:has-text("Money in")').count()) === 0, 'Money in still shows');
 });
 
