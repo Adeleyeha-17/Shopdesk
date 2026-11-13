@@ -1104,3 +1104,4 @@ svg.star { width: 14px; height: 14px; fill: var(--wait); flex: none; }
 .or { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
 .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .panel > .switch-row + .switch-row { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+.slip > .courier:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }

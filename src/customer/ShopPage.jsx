@@ -22,6 +22,7 @@ import { AreaPicker } from './AreaPicker.jsx';
 import { areaIn } from './areas.js';
 import { noteSource, sourceFor } from './source.js';
 import { PinIcon, Star } from './NearYou.jsx';
+import { useMoneySwitches } from '../lib/moneyApi.js';
 
 // "₦8,000 ₦9,500": the price to pay, with the old one crossed out during a sale
 function Price({ x }) {
@@ -167,6 +168,7 @@ function useTypingHint(names, plain, on) {
 export function ShopPage({ slug, step = 'shop' }) {
   const checkout = step === 'checkout';
   const cartPage = step === 'cart';
+  const sw = useMoneySwitches(); // ShopDesk Delivery on: deliveries go with a courier and are paid online
   const [state, setState] = useState({ loading: true, shop: null, products: [], error: null });
   const [cart, setCart] = useState({}); // product id, or "product id:size id", -> how many (see cart.js)
   const [cartNote, setCartNote] = useState(''); // what changed in a saved cart since last time
@@ -420,7 +422,9 @@ export function ShopPage({ slug, step = 'shop' }) {
       >
         <div className="shop-intro">
           <h2>{shop.name}</h2>
-          <p className="note">Pick what you want, then pay in one transfer.</p>
+          <p className="note">
+            {sw.delivery ? 'Pick what you want, then check out.' : 'Pick what you want, then pay in one transfer.'}
+          </p>
           {shop.ratings > 0 && (
             <a className="rating-chip" href={'/' + slug + '/ratings'}>
               <Star />
@@ -666,7 +670,8 @@ export function ShopPage({ slug, step = 'shop' }) {
     );
 
   // ---------- checkout: three cards (you, delivery, your order), with the total and Place order fixed at the bottom ----------
-  const feeText = form.mode === 'pickup' ? 'None (pick-up)' : custPays ? 'The shop adds it' : 'Free';
+  const feeText =
+    form.mode === 'pickup' ? 'None (pick-up)' : custPays ? (sw.delivery ? 'Courier price, added next' : 'The shop adds it') : 'Free';
   const plusDelivery = form.mode === 'delivery' && custPays;
   const canOrder = !!me && !isShop;
   return (
@@ -866,9 +871,11 @@ export function ShopPage({ slug, step = 'shop' }) {
                 <path d="M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2 2.6 5 3.2 5 1.4 5 3.3-2.2 3.3-5 3.3-5-1.2-5-3.3" />
               </svg>
               <span>
-                {shop.allow_part_payment
-                  ? 'You can pay in parts. The shop shows what’s left after each payment.'
-                  : 'Pay in one transfer. It’s packed once it lands.'}
+                {sw.delivery && form.mode === 'delivery'
+                  ? 'ShopDesk Delivery brings it to you. Pay online once the shop picks your courier, then follow it to your door.'
+                  : shop.allow_part_payment
+                    ? 'You can pay in parts. The shop shows what’s left after each payment.'
+                    : 'Pay in one transfer. It’s packed once it lands.'}
               </span>
             </div>
           </section>

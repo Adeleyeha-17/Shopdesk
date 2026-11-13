@@ -33,9 +33,16 @@ export function MoneyCards({ shop, reloadShop, say }) {
         <section className="card">
           <h2>ShopDesk Delivery</h2>
           <p className="note">
-            Get courier prices on new orders and pick one. ShopDesk books the courier and pays them, and you and your
-            customer follow the delivery on the order.
+            Every delivery order goes with ShopDesk Delivery: pick a courier on the new order, and ShopDesk books and
+            pays them. Your customer pays online, and you both follow the delivery on the order. Pick-up orders can
+            still be paid to you by transfer.
           </p>
+          {!online && (
+            <p className="err">
+              Customers pay delivery orders online, so your account under Your shop has to be OPay, Moniepoint, Kuda or
+              PalmPay.
+            </p>
+          )}
           <div className="field">
             <label htmlFor="pickup">Pickup address</label>
             <input
@@ -53,10 +60,6 @@ export function MoneyCards({ shop, reloadShop, say }) {
               Save pickup address
             </button>
           )}
-          <p className="note">
-            When the customer pays online, the delivery fee comes to ShopDesk with their payment. When they pay you by
-            transfer, the delivery goes on your delivery bill.
-          </p>
         </section>
       )}
       {sw.online && (

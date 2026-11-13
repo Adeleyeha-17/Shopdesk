@@ -32,7 +32,7 @@ import {
   DAY,
 } from '../lib/dates.js';
 import { copyText, telLink, errText, orderCode, ngMobile } from '../lib/helpers.js';
-import { payMessage } from './orderText.js';
+import { payMessage, payOnlineMessage } from './orderText.js';
 import { hasPin, mapLink } from '../lib/products.js';
 import { useMoneySwitches } from '../lib/moneyApi.js';
 import { CourierPrices, CourierBook, CourierTrack } from './Courier.jsx';
@@ -52,8 +52,9 @@ const saysPaidToday = (o) =>
 
 // The label at the top right of an order: [colour, words]. Colours: warn = needs you, owe = not paid,
 // paid = money in, new = on its way, done = finished.
-function statusChip(o, due, pickup) {
+function statusChip(o, due, pickup, pickCourier) {
   if (o.status === 'awaiting') {
+    if (pickCourier) return ['warn', 'New · pick a courier'];
     if (needsFee(o)) return ['warn', 'New · set delivery fee'];
     if (!o.confirmed_at) return ['warn', 'New · confirm it'];
     if (o.customer_says_paid) return ['warn', 'Says paid · no money yet'];
@@ -82,7 +83,10 @@ function statusChip(o, due, pickup) {
 function whereText(o) {
   if (o.mode === 'pickup') return 'Pick-up';
   let delivery;
-  if (o.delivery_paid_by !== 'customer') delivery = 'free delivery';
+  const q = o.delivery_by === 'shopdesk' && o.delivery_quote;
+  if (q && o.delivery_paid_by !== 'customer') delivery = `free delivery · ${q.name} ${naira(q.price)}, from the payment`;
+  else if (q) delivery = `${q.name} ${naira(o.delivery_fee)}`;
+  else if (o.delivery_paid_by !== 'customer') delivery = 'free delivery';
   else if (o.delivery_fee == null) delivery = 'fee not set';
   else delivery = `delivery ${naira(o.delivery_fee)}`;
   return `Delivery to ${o.address} · ${delivery}`;
@@ -196,10 +200,18 @@ export function OrderCard({
   const due = owes(o);
   const waitFee = needsFee(o); // only when the customer pays delivery and the fee isn't set yet
   const pickup = o.mode === 'pickup';
-  const chip = statusChip(o, due, pickup);
-  const where = whereText(o);
-  // booked with ShopDesk Delivery, or set up for it (the customer is paying the courier's price)
+  // booked with ShopDesk Delivery, or set up for it: the customer pays online, and the shop books the courier once paid
   const courier = !pickup && o.delivery_by === 'shopdesk';
+  // ShopDesk Delivery is on: a new delivery order needs a courier picked before anything else
+  const pickCourier =
+    sw.delivery &&
+    !pickup &&
+    !courier &&
+    o.status === 'awaiting' &&
+    o.amount_paid === 0 &&
+    (needsFee(o) || !o.confirmed_at);
+  const chip = statusChip(o, due, pickup, pickCourier);
+  const where = whereText(o);
   const openRider = () => {
     const f = firstSlot(pickup ? 1 : 2);
     setRider({
@@ -262,10 +274,14 @@ export function OrderCard({
           {o.amount_paid > 0 && due > 0 ? ` · paid ${naira(o.amount_paid)}` : ''}
         </span>
       </div>
-      {o.status === 'awaiting' && needsFee(o) && (
+      {pickCourier && (
         <div className="slip">
-          {sw.delivery && <CourierPrices o={o} shop={shop} code={code} run={run} say={say} goShop={goShop} />}
-          <span className="label">{sw.delivery ? 'Or your own rider' : 'Delivery fee'}</span>
+          <CourierPrices o={o} shop={shop} code={code} run={run} say={say} goShop={goShop} />
+        </div>
+      )}
+      {o.status === 'awaiting' && needsFee(o) && !pickCourier && (
+        <div className="slip">
+          <span className="label">Delivery fee</span>
           <span className="sub">
             Ask your rider the price to {o.address}.
             <MapPin o={o} />
@@ -298,7 +314,7 @@ export function OrderCard({
           </div>
         </div>
       )}
-      {o.status === 'awaiting' && !needsFee(o) && !o.confirmed_at && (
+      {o.status === 'awaiting' && !needsFee(o) && !o.confirmed_at && !pickCourier && (
         <div className="btns">
           <button
             className="btn small"
@@ -308,7 +324,25 @@ export function OrderCard({
           </button>
         </div>
       )}
-      {due > 0 && !waitFee && (
+      {due > 0 && courier && (
+        <>
+          <div className="slip">
+            <span className="label">
+              {o.customer_name.split(' ')[0]} pays {naira(due)} online
+            </span>
+            <span className="sub">It shows as paid here the moment they do. Then pack it and book the courier.</span>
+          </div>
+          <div className="btns">
+            <button
+              className="btn small ghost"
+              onClick={() => copyText(payOnlineMessage(shop, o), say, 'Copied. Paste it to the customer.')}
+            >
+              Copy pay link
+            </button>
+          </div>
+        </>
+      )}
+      {due > 0 && !waitFee && !courier && !pickCourier && (
         <>
           <div className="slip">
             <span className="label">

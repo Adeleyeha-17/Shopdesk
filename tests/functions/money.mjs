@@ -128,8 +128,8 @@ labelFails = 1;
 r = await post({ action: 'book', order: ord.id }, 'shop');
 const labels = calls.filter((c) => c.url.endsWith('/shipping/labels'));
 check('an expired booking token is fetched again and the same courier booked', r.courier === 'Kwik' && labels.length === 2 && labels[1].body.courier_id === 'kwik' && labels[1].body.request_token !== labels[0].body.request_token, { r, labels });
-[o] = await sql`select o.status, o.rider_name, o.rider_phone, sh.sb_order, sh.paid_online, sh.cost, sh.price from orders o join shipments sh on sh.order_id = o.id where o.id = ${ord.id}`;
-check('the order goes out with the courier', o.status === 'out' && o.rider_name === 'Kwik' && o.sb_order === 'SB-777' && o.paid_online && o.cost === 1900 && o.price === 2250, o);
+[o] = await sql`select o.status, o.rider_name, o.rider_phone, sh.sb_order, sh.cost, sh.price from orders o join shipments sh on sh.order_id = o.id where o.id = ${ord.id}`;
+check('the order goes out with the courier', o.status === 'out' && o.rider_name === 'Kwik' && o.sb_order === 'SB-777' && o.cost === 1900 && o.price === 2250, o);
 
 await sql`update shipments set updated_at = now() - interval '5 minutes' where order_id = ${ord.id}`;
 r = await post({ action: 'track', token: tok }, null);

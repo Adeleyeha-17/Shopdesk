@@ -1,6 +1,6 @@
 // Admin > Payments & delivery: switch Pay online (Paystack) and ShopDesk Delivery (Shipbubble) on or off, see whether
-// the keys are test or live and what is in the courier wallet, set the delivery margin, and see every delivery, with
-// the delivery bills of shops whose customers paid them by transfer.
+// the keys are test or live and what is in the courier wallet, set the delivery margin and ShopDesk's fee, and see every
+// delivery. ShopDesk Delivery orders are always paid online, so ShopDesk has the delivery money before it books a courier.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { money, shipStatus } from '../lib/moneyApi.js';
@@ -60,14 +60,6 @@ export function MoneyPage({ say, go }) {
     say(done);
     load();
   }
-  async function billPaid(r) {
-    const { error } = await supabase.rpc('admin_delivery_paid', { p_shop: r.shop_id });
-    if (error) setErr(errText(error));
-    else {
-      say(`${r.shop}'s delivery bill is marked paid.`);
-      load();
-    }
-  }
   const head = (
     <div className="page-head">
       <h1>Payments &amp; delivery</h1>
@@ -83,8 +75,6 @@ export function MoneyPage({ say, go }) {
     );
   const st = d.settings;
   const ships = d.shipments || [];
-  const owed = d.owed || [];
-  const owedTotal = owed.reduce((n, r) => n + Number(r.owed), 0);
   const kept = ships.reduce((n, s) => n + (s.price - s.cost), 0);
   const pk = keys && keys.paystack;
   const ck = keys && keys.courier;
@@ -111,8 +101,8 @@ export function MoneyPage({ say, go }) {
           title="ShopDesk Delivery"
           sub={
             st.delivery_on
-              ? 'On: shops can get courier prices, book couriers and follow deliveries.'
-              : 'Off: shops use their own riders only.'
+              ? 'On: every new delivery order goes with a courier the shop picks, and the customer pays it online.'
+              : 'Off: shops deliver with their own riders, and customers pay them by transfer.'
           }
           click={() =>
             save(
@@ -235,54 +225,11 @@ export function MoneyPage({ say, go }) {
           <span className="sub">last {ships.length} deliveries</span>
         </div>
         <div className="tile">
-          <span className="label">Shops owe for delivery</span>
-          <span className="big num">{naira(owedTotal)}</span>
+          <span className="label">Deliveries</span>
+          <span className="big num">{ships.length}</span>
+          <span className="sub">{ships.filter((s) => /complet|deliver/.test(s.status)).length} delivered</span>
         </div>
       </div>
-      <section className="panel flush">
-        <div className="panel-head pad">
-          <h3>Delivery bills</h3>
-          <span className="sub">
-            Deliveries whose customers paid the shop by transfer, so the shop has the delivery fee.
-          </span>
-        </div>
-        {owed.length === 0 ? (
-          <p className="note" style={{ padding: '0 20px 20px' }}>
-            No shop owes anything for delivery.
-          </p>
-        ) : (
-          <div className="table-wrap">
-            <table className="t">
-              <thead>
-                <tr>
-                  <th>Shop</th>
-                  <th className="r">Deliveries</th>
-                  <th className="r">Owes</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {owed.map((r) => (
-                  <tr key={r.shop_id}>
-                    <td className="name">
-                      <button className="linkbtn" onClick={() => go('shop/' + r.shop_id)}>
-                        {r.shop}
-                      </button>
-                    </td>
-                    <td className="r num">{r.deliveries}</td>
-                    <td className="r num">{naira(r.owed)}</td>
-                    <td className="r">
-                      <button className="btn small ghost" onClick={() => billPaid(r)}>
-                        Mark paid
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
       <section className="panel flush">
         <div className="panel-head pad">
           <h3>Deliveries</h3>
@@ -300,7 +247,6 @@ export function MoneyPage({ say, go }) {
                   <th>Shop</th>
                   <th>Courier</th>
                   <th>Where it is</th>
-                  <th>Paid</th>
                   <th className="r">Customer paid</th>
                   <th className="r">Courier cost</th>
                   <th>Booked</th>
@@ -330,7 +276,6 @@ export function MoneyPage({ say, go }) {
                         {shipStatus(s.status)}
                       </span>
                     </td>
-                    <td className="sub">{s.paid_online ? 'Online' : s.billed_at ? 'Bill paid' : 'On bill'}</td>
                     <td className="r num">{naira(s.price)}</td>
                     <td className="r num">{naira(s.cost)}</td>
                     <td>{dayOf(s.created_at)}</td>

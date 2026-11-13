@@ -6,6 +6,15 @@ export function itemsText(o) {
   return (o.order_items || []).map((i) => i.qty + ' × ' + i.name).join(', ');
 }
 
+// ShopDesk Delivery orders are paid online, on the order page.
+export function payOnlineMessage(shop, o) {
+  return (
+    `Hi ${o.customer_name.split(' ')[0]}, thank you for your order ${orderCode(shop, o)} (${itemsText(o)}).\n` +
+    `Total ${naira(toPay(o))}${o.delivery_paid_by === 'customer' ? ' with delivery' : ', with free delivery'}. ` +
+    `Pay online here, and follow your delivery to your door: ${window.location.origin}/o/${o.public_token}`
+  );
+}
+
 export function payMessage(shop, o) {
   const fee = o.delivery_paid_by === 'customer' && o.delivery_fee ? o.delivery_fee : 0;
   return (

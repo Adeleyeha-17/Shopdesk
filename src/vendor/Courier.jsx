@@ -1,6 +1,8 @@
-// ShopDesk Delivery on a shop's order (only when Admin has switched it on):
-//   new order  -> Get courier prices, pick one; its price becomes the delivery fee and the order is confirmed
-//   paid       -> once every item is packed, book the courier (ShopDesk pays them), or use your own rider instead
+// ShopDesk Delivery on a shop's order (only when Admin has switched it on; then every delivery order goes with it and is
+// paid online):
+//   new order  -> Get courier prices, pick one; the order is confirmed and the customer pays online (the price is added
+//                 to their total, or comes out of the payment when the shop covers delivery)
+//   paid       -> once every item is packed, book the courier (ShopDesk pays them)
 //   on its way -> the courier, the rider, where it is, and the courier's tracking page
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
@@ -19,6 +21,7 @@ export function CourierPrices({ o, shop, code, run, say, goShop }) {
   const [list, setList] = useState(() => saved(o));
   const [pick, setPick] = useState(null);
   const [busy, setBusy] = useState(false);
+  const covers = o.delivery_paid_by !== 'customer'; // the shop covers delivery: the price comes out of the payment
   if (!hasPickup(shop))
     return (
       <div className="courier">
@@ -47,7 +50,7 @@ export function CourierPrices({ o, shop, code, run, say, goShop }) {
     await run(
       () => money('pick', { order: o.id, courier_id: pick.courier_id, service_code: pick.service_code }),
       null,
-      `${code} confirmed with ${pick.name}. The customer sees the total.`,
+      `${code} confirmed with ${pick.name}. The customer can pay online now.`,
     );
     setBusy(false);
   }
@@ -56,7 +59,11 @@ export function CourierPrices({ o, shop, code, run, say, goShop }) {
       <span className="label">ShopDesk Delivery</span>
       {!list ? (
         <>
-          <span className="sub">We book the courier and pay them. The customer pays the price you pick.</span>
+          <span className="sub">
+            {covers
+              ? 'We book the courier and pay them. You cover delivery, so the price comes out of the payment.'
+              : 'We book the courier and pay them. The customer pays the price you pick, online.'}
+          </span>
           <div className="btns">
             <button className={'btn small' + (busy ? ' busy' : '')} onClick={get} disabled={busy}>
               {busy ? 'Getting prices…' : 'Get courier prices'}
@@ -125,13 +132,6 @@ export function CourierBook({ o, code, run, allPacked }) {
       <div className="btns">
         <button className={'btn small' + (busy ? ' busy' : '')} onClick={book} disabled={!allPacked || busy}>
           {busy ? 'Booking…' : 'Book ' + name}
-        </button>
-        <button
-          className="linkbtn"
-          disabled={busy}
-          onClick={() => run('money_own_rider', { p_order: o.id }, `Use your own rider for ${code}.`)}
-        >
-          Use my own rider
         </button>
       </div>
     </div>

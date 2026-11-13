@@ -58,7 +58,7 @@ reset role; update order_items set packed = true where order_id = :oid;
 set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
 select (money_book_info(:oid))->'quote'->>'courier_id';
 select money_save_shipment(:oid, '{"sb_order":"SB-TEST1","courier":"Dellyman","courier_phone":"08000000000","status":"pending","tracking_url":"https://example.com/t/1","cost":1800,"eta":"2030-01-02T12:00:00Z"}');
-reset role; select o.status, o.rider_name, sh.paid_online, sh.price, sh.cost from orders o join shipments sh on sh.order_id = o.id where o.id = :oid;
+reset role; select o.status, o.rider_name, sh.price, sh.cost from orders o join shipments sh on sh.order_id = o.id where o.id = :oid;
 \echo M9 booking twice is refused:
 set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
 select money_book_info(:oid);
@@ -70,43 +70,52 @@ select o.status, o.received_by, sh.status from orders o join shipments sh on sh.
 select money_ship_update('SB-NOPE', '{"status":"completed"}')->>'found';
 \echo M11 the order page shows the delivery:
 set role anon; select m->'shipment'->>'courier', m->'shipment'->>'status', m->'shipment'->>'tracking_url', m->>'online' from order_money(:'tok') m;
-\echo M12 a second order paid to the shop by transfer: the delivery goes on the delivery bill of the shop, until Admin marks it paid:
+\echo M12 a ShopDesk Delivery order is paid online only: no typed fee, no Money in, no own rider, no I have sent the money (expect five errors):
 reset role; set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
 select place_order('moneybags', '{"name":"Ada Obi","phone":"08035556666","mode":"delivery","address":"12 Adeola Odeku Street, Victoria Island","area":"Victoria Island"}',
   jsonb_build_array(jsonb_build_object('product_id', :'bag', 'qty', 1)))->>'token' as tok2 \gset
 reset role; select id as oid2 from orders where public_token = :'tok2' \gset
 set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
 select money_save_quotes(:oid2, '[{"courier_id":"gig","service_code":"gig-std","name":"GIG","cost":3000,"price":3400,"eta":null,"token":"tok2"}]');
-select money_pick_quote(:oid2, 'gig', 'gig-std')->>'price';
-set role authenticated; select confirm_payment(:oid2) is not null;
+set role authenticated; select set_delivery_fee(:oid2, 1500);
+reset role; select money_pick_quote(:oid2, 'gig', 'gig-std')->>'price';
+set role authenticated; select set_delivery_fee(:oid2, 1500);
+select confirm_payment(:oid2);
+set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002'; select customer_says_paid(:'tok2');
+reset role; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
+select money_start_payment(:'tok2', 'SDTEST-0004')->>'fee';
+select money_paid('SDTEST-0004', 1375700)->>'credited';
 reset role; update order_items set packed = true where order_id = :oid2;
-set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
+set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
+select hand_to_rider(:oid2, 'Musa', '08031234567', now() + interval '1 day');
+reset role; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
 select money_save_shipment(:oid2, '{"sb_order":"SB-TEST2","courier":"GIG","status":"pending","cost":3000}');
 set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000009';
-select x->>'shop', x->>'owed', x->>'deliveries' from jsonb_array_elements(admin_money()->'owed') x where x->>'shop' = 'Money Bags';
-select admin_money()->'online'->>'delivery';
-select admin_delivery_paid((select id from shops where slug = 'moneybags'));
-select count(*) from jsonb_array_elements(admin_money()->'owed') x where x->>'shop' = 'Money Bags';
+select admin_money()->'online'->>'delivery', admin_money() ? 'owed';
 \echo M13 a cancelled courier puts the order back to paid so the shop can book again:
 select money_ship_update('SB-TEST2', '{"status":"cancelled"}')->>'status';
 select o.status, (select count(*) from shipments where order_id = :oid2) from orders o where o.id = :oid2;
-\echo M15 typing a fee means the shop rider takes it; once the customer paid ShopDesk for delivery, the shop cannot switch to its own rider:
-reset role; set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
+\echo M15 a shop that covers delivery picks a courier first; the customer pays only the items online, and the courier price comes out of the shop share and shows in its money out:
+reset role; set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
+update shops set delivery_paid_by = 'vendor';
+set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
 select place_order('moneybags', '{"name":"Ada Obi","phone":"08035556666","mode":"delivery","address":"12 Adeola Odeku Street, Victoria Island","area":"Victoria Island"}',
   jsonb_build_array(jsonb_build_object('product_id', :'bag', 'qty', 1)))->>'token' as tok3 \gset
 reset role; select id as oid3 from orders where public_token = :'tok3' \gset
-set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
-select money_save_quotes(:oid3, '[{"courier_id":"gig","service_code":"gig-std","name":"GIG","cost":3000,"price":3400,"eta":null,"token":"tok3"}]');
+set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
+select confirm_order(:oid3);
+reset role; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
+select money_save_quotes(:oid3, '[{"courier_id":"gig","service_code":"gig-std","name":"GIG","cost":3000,"price":3400,"eta":null,"token":"tok3"},{"courier_id":"van","service_code":"van","name":"Big van","cost":11000,"price":12000,"eta":null,"token":"tok3"}]');
+select money_pick_quote(:oid3, 'van', 'van');
 select money_pick_quote(:oid3, 'gig', 'gig-std')->>'price';
-set role authenticated; select set_delivery_fee(:oid3, 1500);
-reset role; select delivery_fee, delivery_by, coalesce(delivery_quote->>'name', 'none') from orders where id = :oid3;
-set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
-select money_pick_quote(:oid3, 'gig', 'gig-std')->>'price';
+select delivery_fee is null, delivery_by, confirmed_at is not null from orders where id = :oid3;
 set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
-select money_start_payment(:'tok3', 'SDTEST-0003')->>'delivery_part';
-select money_paid('SDTEST-0003', 1375700)->>'credited';
-set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
-select money_own_rider(:oid3);
+select r->>'amount', r->>'delivery_part', r->>'fee' from money_start_payment(:'tok3', 'SDTEST-0003') r;
+select money_paid('SDTEST-0003', 1030500)->>'credited';
+select amount, kind, note like 'ShopDesk Delivery for %' from money_out where shop_id = (select id from shops where slug = 'moneybags');
+\echo M16 ShopDesk Delivery is paid online, so Pay online cannot be switched off while it is on (expect an error):
+set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000009';
+select admin_save_settings('{"online_pay_on": false}');
 \echo M14 nobody calls the payment steps from the app directly (expect permission denied):
 set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
 select money_paid('SDTEST-0002', 2269100);

@@ -958,6 +958,7 @@ const SHIP_STEPS = [
 const SERVICE = 50;
 const onlineFee = (b) =>
   b <= 0 ? 0 : Math.ceil(b / 0.985) < 2500 ? Math.ceil(b / 0.985) - b : Math.min(Math.ceil((b + 100) / 0.985) - b, 2000);
+const deliveryOn = () => !S.money_off;
 const shipmentOf = (o) => (S.shipments || []).find((x) => x.order_id === o.id) || null;
 const shipView = (sh) => ({
   courier: sh.courier,
@@ -1028,6 +1029,8 @@ const RPC = {
     if (o.mode !== 'delivery') fail('This order is a pick-up.');
     if (!['awaiting', 'part'].includes(o.status)) fail('The fee is locked once paid.');
     if (p_fee == null || p_fee < 0 || p_fee > 1000000) fail('Enter a delivery fee in naira.');
+    if (deliveryOn() && (o.delivery_fee == null || o.delivery_by === 'shopdesk'))
+      fail('Pick a courier: deliveries go with ShopDesk Delivery.');
     o.delivery_fee = p_fee;
     o.delivery_by = 'shop';
     o.delivery_quote = null;
@@ -1040,6 +1043,7 @@ const RPC = {
     if (!['awaiting', 'part'].includes(o.status)) fail('This order is already paid or closed.');
     if (o.mode === 'delivery' && o.delivery_paid_by === 'customer' && o.delivery_fee == null)
       fail('Set the delivery fee first.');
+    if (o.delivery_by === 'shopdesk') fail('The customer pays this order online. It shows as paid the moment they do.');
     const left = toPay(o) - o.amount_paid;
     const amt = p_amount == null ? left : p_amount;
     if (amt <= 0 || amt > left) fail(`Enter an amount up to ${naira(left)}.`);
@@ -1246,6 +1250,7 @@ const RPC = {
   hand_to_rider: ({ p_order, p_rider_name, p_rider_phone, p_deliver_by }) => {
     const o = ownedOrder(p_order);
     if (o.mode !== 'delivery') fail('This is a pick-up order.');
+    if (o.delivery_by === 'shopdesk') fail('Book the courier for this order.');
     if (!['paid', 'out'].includes(o.status)) fail('Only paid orders can go out.');
     if (o.status === 'paid' && unpacked(o)) fail('Tick every item as packed first.');
     if (String(p_rider_name || '').trim().length < 2) fail("Enter the rider's name.");
@@ -1340,6 +1345,7 @@ const RPC = {
     if (o.status === 'cancelled') fail('This order was cancelled.');
     if (o.mode === 'delivery' && o.delivery_paid_by === 'customer' && o.delivery_fee == null)
       fail('Set the delivery fee first.');
+    if (o.mode === 'delivery' && o.delivery_by !== 'shopdesk' && !o.confirmed_at && deliveryOn()) fail('Pick a courier first.');
     o.confirmed_at = o.confirmed_at || nowIso();
     return null;
   },
@@ -1591,7 +1597,7 @@ const RPC = {
     };
   },
   // ---------- Pay online and ShopDesk Delivery (switched on in the demo; the real ones are off until Admin turns them on) ----------
-  money_switches: () => ({ online: true, delivery: true, fee_by: 'customer' }),
+  money_switches: () => (S.money_off ? { online: false, delivery: false, fee_by: 'customer' } : { online: true, delivery: true, fee_by: 'customer' }),
   order_money: ({ p_token }) => {
     const o = S.orders.find((x) => x.public_token === p_token);
     if (!o) return null;
@@ -1602,6 +1608,8 @@ const RPC = {
         ['OPay', 'Moniepoint', 'Kuda', 'PalmPay'].includes(s.bank) &&
         ['awaiting', 'part'].includes(o.status) &&
         !(o.mode === 'delivery' && o.delivery_paid_by === 'customer' && o.delivery_fee == null),
+      online_only: o.delivery_by === 'shopdesk',
+      wait: deliveryOn() && o.mode === 'delivery' && o.delivery_by !== 'shopdesk' && !o.confirmed_at && o.status === 'awaiting',
       fee: onlineFee(toPay(o) - o.amount_paid + SERVICE),
       service: SERVICE,
       delivery_by: o.delivery_by || 'shop',
@@ -1614,6 +1622,8 @@ const RPC = {
     if (o.mode !== 'delivery') fail('This order is a pick-up.');
     if (o.status !== 'awaiting' || o.amount_paid > 0) fail('The fee is locked once paid.');
     if (!(myShop().pickup_address || '').trim()) fail('Add your pickup address on the Shop tab first.');
+    if (!['OPay', 'Moniepoint', 'Kuda', 'PalmPay'].includes(myShop().bank))
+      fail('ShopDesk Delivery is paid online, so your account under Your shop has to be OPay, Moniepoint, Kuda or PalmPay.');
     const base = 1400 + (o.id % 7) * 250;
     const list = COURIERS.map((c, i) => ({
       courier_id: c.id,
@@ -1638,16 +1648,16 @@ const RPC = {
       (x) => x.courier_id === p_courier && x.service_code === p_service,
     );
     if (!q) fail('Get the courier prices again.');
-    Object.assign(o, { delivery_fee: q.price, delivery_by: 'shopdesk', delivery_quote: q, confirmed_at: o.confirmed_at || nowIso() });
+    const covers = o.delivery_paid_by !== 'customer';
+    if (covers && o.items_total <= q.price)
+      fail('Delivery costs more than this order. Cancel it, or set Customer pays delivery for new orders.');
+    Object.assign(o, {
+      delivery_fee: covers ? o.delivery_fee : q.price,
+      delivery_by: 'shopdesk',
+      delivery_quote: q,
+      confirmed_at: o.confirmed_at || nowIso(),
+    });
     return { name: q.name, price: q.price, eta: q.eta, eta_text: q.eta_text };
-  },
-  money_own_rider: ({ p_order }) => {
-    const o = ownedOrder(p_order);
-    if (shipmentOf(o)) fail('This order is already booked with a courier.');
-    if ((S.online || []).some((p) => p.order_id === o.id && p.paid && p.delivery_part > 0))
-      fail('The customer paid ShopDesk for this delivery, so it goes with ShopDesk Delivery.');
-    o.delivery_by = 'shop';
-    return null;
   },
   hand_to_courier: ({ p_order }) => {
     const o = ownedOrder(p_order);
@@ -1669,7 +1679,6 @@ const RPC = {
       steps: [{ status: 'Booked with ' + q.name, at: nowIso() }],
       cost: q.cost,
       price: q.price,
-      paid_online: (S.online || []).some((p) => p.order_id === o.id && p.paid && p.delivery_part > 0),
       created_at: nowIso(),
       updated_at: nowIso(),
     });
@@ -1713,7 +1722,12 @@ const RPC = {
       amount: due,
       fee: onlineFee(due + SERVICE),
       service: SERVICE,
-      delivery_part: o.delivery_by === 'shopdesk' && o.amount_paid === 0 ? o.delivery_fee || 0 : 0,
+      delivery_part:
+        o.delivery_by === 'shopdesk' && o.amount_paid === 0
+          ? o.delivery_paid_by === 'customer'
+            ? o.delivery_fee || 0
+            : o.delivery_quote.price
+          : 0,
       paid: false,
     });
     return { url: ref, amount: due, shop: shopOf(o).name };
@@ -1732,6 +1746,17 @@ const RPC = {
       o.confirmed_at = o.confirmed_at || nowIso();
       o.status = amt >= due ? 'paid' : 'part';
       if (amt >= due) o.paid_at = nowIso();
+      // the shop covers delivery: the courier price comes out of the payment and shows in its money out
+      if (p.delivery_part > 0 && o.delivery_paid_by !== 'customer')
+        S.money_out.push({
+          id: Math.max(0, ...S.money_out.map((m) => m.id)) + 1,
+          shop_id: o.shop_id,
+          amount: p.delivery_part,
+          kind: 'transport',
+          note: 'ShopDesk Delivery for ' + codeOf(o),
+          spent_on: nowIso().slice(0, 10),
+          created_at: nowIso(),
+        });
     }
     return { paid: true };
   },
@@ -1892,6 +1917,7 @@ const RPC = {
   },
   customer_says_paid: ({ p_token }) => {
     const o = customerOrder(p_token);
+    if (o.delivery_by === 'shopdesk') fail('Pay this order online on this page.');
     if (!['awaiting', 'part'].includes(o.status)) fail('This order is already paid or closed.');
     o.customer_says_paid = true;
     o.customer_says_paid_at = o.customer_says_paid_at || nowIso();

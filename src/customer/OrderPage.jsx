@@ -176,6 +176,7 @@ export function OrderPage({ token }) {
   }, [token, status, o && o.amount_paid, o && o.delivery_fee, setSh]);
   // the courier's latest, when the delivery is on its way
   const shipping = !!sh && status === 'out';
+  const onlineOnly = !!pay && pay.online_only; // a ShopDesk Delivery order: paid online, never by transfer to the shop
   useEffect(() => {
     if (shipping) refreshShip();
   }, [shipping, refreshShip]);
@@ -379,10 +380,21 @@ export function OrderPage({ token }) {
       {err && <p className="err">{err}</p>}
 
       {unpaid &&
-        (feeWait ? (
-          <p className="note">The shop is setting your delivery fee. This page updates by itself.</p>
+        (feeWait || (pay && pay.wait) ? (
+          <p className="note">
+            {pay && pay.wait
+              ? 'The shop is picking your courier, then you pay online. This page updates by itself.'
+              : 'The shop is setting your delivery fee. This page updates by itself.'}
+          </p>
         ) : (
           <section className="card">
+            {onlineOnly && !(pay.online && canAct) && (
+              <p className="note">
+                {canAct
+                  ? "Paying online isn't available for this order right now. Message the shop."
+                  : 'This order is paid online by the person who placed it.'}
+              </p>
+            )}
             {pay && pay.online && canAct && (
               <div className="pay-online">
                 <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
@@ -390,13 +402,19 @@ export function OrderPage({ token }) {
                 </button>
                 <span className="sub">
                   {onlineFees(pay)}Card, bank transfer or USSD with Paystack.
-                  Your order is marked paid at once.
+                  {onlineOnly
+                    ? ' It comes with ShopDesk Delivery, so it’s paid online.'
+                    : ' Your order is marked paid at once.'}
                 </span>
-                <div className="or">
-                  <span>{pay.fee > 0 || pay.service > 0 ? 'or transfer to the shop, no fee' : 'or pay the shop by transfer'}</span>
-                </div>
+                {!onlineOnly && (
+                  <div className="or">
+                    <span>{pay.fee > 0 || pay.service > 0 ? 'or transfer to the shop, no fee' : 'or pay the shop by transfer'}</span>
+                  </div>
+                )}
               </div>
             )}
+            {!onlineOnly && (
+              <>
             <p className="note">
               Pay <strong>{naira(left)}</strong> in one transfer to:
             </p>
@@ -449,20 +467,23 @@ export function OrderPage({ token }) {
                 {copied}
               </p>
             )}
+              </>
+            )}
             {o.pay_by && (
               <p className="note">
                 Pay by <strong>{atText(o.pay_by)}</strong> or it's cancelled.
               </p>
             )}
-            {o.customer_says_paid ? (
-              <p className="ok">The shop is told. They confirm when it lands.</p>
-            ) : (
-              canAct && (
-                <button className="btn ghost" onClick={() => act('customer_says_paid', '')} disabled={busy}>
-                  I've sent the money
-                </button>
-              )
-            )}
+            {!onlineOnly &&
+              (o.customer_says_paid ? (
+                <p className="ok">The shop is told. They confirm when it lands.</p>
+              ) : (
+                canAct && (
+                  <button className="btn ghost" onClick={() => act('customer_says_paid', '')} disabled={busy}>
+                    I've sent the money
+                  </button>
+                )
+              ))}
           </section>
         ))}
       {o.can_cancel &&
