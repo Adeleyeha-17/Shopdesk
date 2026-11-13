@@ -603,8 +603,22 @@ function seed() {
   msg(out, 'customer', "Thank you! I'm home all evening.", Date.parse(out.out_at) + 6 * MIN);
   msg(says, 'customer', "I've sent the money. Please check and send it today 🙏", ago(1.4));
   notifications[notifications.length - 1].read_at = null;
+  // the ShopDesk chat: ShopDesk said hello when the shop opened
+  const shop_messages = [
+    {
+      id: 1,
+      shop_id: shop.id,
+      sender: 'shopdesk',
+      body: 'Welcome to ShopDesk! Questions, problems or ideas? Write to us here any time.',
+      photo: null,
+      read_at: iso(ago(20)),
+      created_at: iso(ago(21)),
+    },
+  ];
   return {
-    v: 12,
+    v: 13,
+    shop_messages,
+    feature_wants: [],
     day: t0,
     uid: VENDOR.id,
     path: '/',
@@ -667,7 +681,7 @@ try {
   S = null;
 }
 // A fresh sample each day, so "today" always has orders in it.
-if (!S || S.v !== 12 || S.day !== startOfDay(Date.now())) S = seed();
+if (!S || S.v !== 13 || S.day !== startOfDay(Date.now())) S = seed();
 demo.go(S.path || '/');
 let saveTimer = null;
 function save() {
@@ -720,6 +734,7 @@ export function resetDemo() {
 
 // ---------- rules the real database keeps ----------
 const myShop = () => S.shops.find((s) => s.owner_id === uid()) || null;
+const deskJson = (m) => ({ id: m.id, sender: m.sender, body: m.body, photo: m.photo, created_at: m.created_at });
 const hasShop = (u) => S.shops.some((s) => s.owner_id === u);
 const hasShopped = (u) =>
   S.orders.some((o) => o.customer_id === u) || S.customers.some((c) => c.user_id === u);
@@ -1714,6 +1729,38 @@ const RPC = {
     }
     return { sharing: false, link: !!o.rider_token };
   },
+  // the ShopDesk chat (in the demo nobody from ShopDesk answers)
+  shopdesk_thread: () => {
+    const s = myShop();
+    if (!s) fail('Set up your shop first.');
+    S.shop_messages.forEach((m) => m.shop_id === s.id && m.sender === 'shopdesk' && !m.read_at && (m.read_at = nowIso()));
+    S.notifications.forEach((n) => n.user_id === uid() && n.kind === 'shopdesk' && !n.read_at && (n.read_at = nowIso()));
+    return S.shop_messages.filter((m) => m.shop_id === s.id).map(deskJson);
+  },
+  shopdesk_unread: () => {
+    const s = myShop();
+    return s ? S.shop_messages.filter((m) => m.shop_id === s.id && m.sender === 'shopdesk' && !m.read_at).length : 0;
+  },
+  shopdesk_send: ({ p_body, p_photo = null }) => {
+    const s = myShop();
+    if (!s) fail('Set up your shop first.');
+    const body = String(p_body || '').trim().slice(0, 2000);
+    if (!body && !p_photo) fail('Write a message.');
+    const m = { id: Math.max(0, ...S.shop_messages.map((x) => x.id)) + 1, shop_id: s.id, sender: 'shop', body, photo: p_photo, read_at: null, created_at: nowIso() };
+    S.shop_messages.push(m);
+    return deskJson(m);
+  },
+  // "I want this" on features that are coming
+  want_feature: ({ p_feature }) => {
+    const s = myShop();
+    if (!['pay_online', 'delivery'].includes(p_feature)) fail('Unknown feature.');
+    if (!S.feature_wants.some((w) => w.shop_id === s.id && w.feature === p_feature)) S.feature_wants.push({ shop_id: s.id, feature: p_feature });
+    return null;
+  },
+  my_feature_wants: () => {
+    const s = myShop();
+    return s ? S.feature_wants.filter((w) => w.shop_id === s.id).map((w) => w.feature).sort() : [];
+  },
   // visitors: in the demo the shop's numbers are made up from the date
   note_visit: () => false,
   my_visits: () => {
@@ -2183,7 +2230,7 @@ const RPC = {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const WRITES =
-  /^(set_|confirm|mark_|advance|cancel|add_|hand_|place|customer_|claim|report|touch|pack_|answer_|problem_|send_|refund_|save_|delete_|rider_link|rider_ping)/;
+  /^(set_|confirm|mark_|advance|cancel|add_|hand_|place|customer_|claim|report|touch|pack_|answer_|problem_|send_|refund_|save_|delete_|rider_link|rider_ping|shopdesk_send|shopdesk_thread|want_feature)/;
 async function rpc(name, args = {}) {
   await wait(90);
   const fn = RPC[name];

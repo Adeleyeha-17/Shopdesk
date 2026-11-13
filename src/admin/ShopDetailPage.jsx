@@ -5,7 +5,7 @@ import { naira } from '../lib/money.js';
 import { dayOf } from '../lib/dates.js';
 import { photoUrl } from '../lib/photos.js';
 import { payPrice } from '../lib/products.js';
-import { errText, waLink } from '../lib/helpers.js';
+import { errText } from '../lib/helpers.js';
 import { STATUS, recent, short, k } from './adminHelpers.js';
 import { BarChart } from './BarChart.jsx';
 
@@ -51,16 +51,9 @@ export function ShopDetailPage({ id, d, setModal }) {
           </span>
         </div>
         <div className="btns end">
-          {s.whatsapp && (
-            <a
-              className="btn small ghost"
-              href={waLink(s.whatsapp, `Hi ${s.name}, this is ShopDesk. `)}
-              target="_blank"
-              rel="noopener"
-            >
-              WhatsApp
-            </a>
-          )}
+          <button className="btn small ghost" onClick={() => setModal({ kind: 'message', shop: s })}>
+            Message
+          </button>
           <a className="btn small ghost" href={'/' + s.slug} target="_blank" rel="noopener">
             Order page
           </a>

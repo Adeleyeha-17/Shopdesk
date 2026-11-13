@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { atText } from '../lib/dates.js';
-import { errText, waLink } from '../lib/helpers.js';
+import { errText } from '../lib/helpers.js';
 import { naira, toInt } from '../lib/money.js';
 import { kick } from '../lib/alerts.js';
 import { kindText, replyText } from '../lib/problems.js';
@@ -158,7 +158,7 @@ function Owed({ p, load, say }) {
   );
 }
 
-function ProblemCard({ p, load, say }) {
+function ProblemCard({ p, load, say, setModal }) {
   const [tone, label] = STATE[p.status] || ['', p.status];
   const o = p.order;
   const open = !['sorted', 'decided'].includes(p.status);
@@ -215,16 +215,13 @@ function ProblemCard({ p, load, say }) {
           ) : (
             <p className="note">No answer yet.</p>
           )}
-          {p.shop.whatsapp && (
-            <a
-              className="btn small ghost"
-              href={waLink(p.shop.whatsapp, `Hi ${p.shop.name}, this is ShopDesk about order ${o.code}: `)}
-              target="_blank"
-              rel="noopener"
-            >
-              Message the shop
-            </a>
-          )}
+          <button
+            className="btn small ghost"
+            style={{ alignSelf: 'flex-start' }}
+            onClick={() => setModal({ kind: 'message', shop: p.shop, text: `About order ${o.code}: ` })}
+          >
+            Message the shop
+          </button>
         </div>
       </div>
       <AdminOrder o={o} canChat={['with_shopdesk', 'decided'].includes(p.status)} />
@@ -242,7 +239,7 @@ function ProblemCard({ p, load, say }) {
   );
 }
 
-export function ProblemsPage({ d, load, say }) {
+export function ProblemsPage({ d, load, say, setModal }) {
   const [show, setShow] = useState('you');
   const all = d.problems || [];
   const groups = {
@@ -270,7 +267,7 @@ export function ProblemsPage({ d, load, say }) {
         ))}
       </div>
       {groups[show].length ? (
-        groups[show].map((p) => <ProblemCard key={p.id} p={p} load={load} say={say} />)
+        groups[show].map((p) => <ProblemCard key={p.id} p={p} load={load} say={say} setModal={setModal} />)
       ) : (
         <section className="panel">
           <p className="note">{show === 'you' ? 'Nothing is waiting for you.' : 'None here.'}</p>

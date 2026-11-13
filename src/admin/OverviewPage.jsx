@@ -1,12 +1,11 @@
 // Overview: the headline numbers, what needs you, and growth charts.
 import React from 'react';
 import { naira } from '../lib/money.js';
-import { waLink } from '../lib/helpers.js';
 import { short, k } from './adminHelpers.js';
 import { BarChart } from './BarChart.jsx';
 
 // ---------- Overview ----------
-export function OverviewPage({ d, go }) {
+export function OverviewPage({ d, go, setModal }) {
   const { o, growth, attention } = d;
   const open = o.shops.filter((s) => s.open).length;
   const weeks = growth.weeks.map((w) => ({ x: w.week, ...w }));
@@ -122,19 +121,18 @@ export function OverviewPage({ d, go }) {
                       · approved {s.approved_at ? short(s.approved_at) : '—'} · {s.products} products
                     </span>
                   </span>
-                  {s.whatsapp && (
-                    <a
-                      className="btn small ghost"
-                      href={waLink(
-                        s.whatsapp,
-                        `Hi ${s.name}, this is ShopDesk. We noticed you haven't had an order yet. Can we help you share your link? ${window.location.origin}/${s.slug}`,
-                      )}
-                      target="_blank"
-                      rel="noopener"
-                    >
-                      Follow up
-                    </a>
-                  )}
+                  <button
+                    className="btn small ghost"
+                    onClick={() =>
+                      setModal({
+                        kind: 'message',
+                        shop: { id: s.id, name: s.name, status: 'active' },
+                        text: `Hi ${s.name}, we noticed you haven't had an order yet. Can we help you share your link? ${window.location.origin}/${s.slug}`,
+                      })
+                    }
+                  >
+                    Follow up
+                  </button>
                 </div>
               ))}
             </div>

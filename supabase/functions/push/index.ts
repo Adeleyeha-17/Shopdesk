@@ -226,6 +226,9 @@ function kindOf(k, who) {
     refund_missing: ['Refund', C.bad, 'A refund didn’t arrive', 'Open the order'],
     nudge: ['ShopDesk', C.info, null, 'Open ShopDesk'], // the heading is the nudge's own title
     visit: ['Visitors', C.good, null, 'Open ShopDesk'], // "Someone is looking at your shop"
+    shopdesk: ['ShopDesk', C.info, 'ShopDesk sent you a message', 'Open the message'],
+    admin_message: ['Message', C.info, 'A shop wrote to ShopDesk', 'Open Messages'],
+    feature: ['New', C.good, null, 'Open ShopDesk'], // "Pay online is here"
   };
   if (K[k]) return K[k];
   if (String(k).startsWith('admin') || k === 'report') return ['ShopDesk', C.info, 'Something needs you in Admin', 'Open Admin'];

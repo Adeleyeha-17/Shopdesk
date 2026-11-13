@@ -9,9 +9,10 @@ import { ThemePicker } from '../shared/ThemePicker.jsx';
 import { errText, copyText } from '../lib/helpers.js';
 import { ShopFields, checkShop, shopRow } from './shopForm.jsx';
 import { MoneyCards } from './MoneyCards.jsx';
+import { ShopDeskCard } from './ShopDeskChat.jsx';
 import { markShared } from './GetStarted.jsx';
 
-export function ShopTab({ shop, reloadShop, say, email }) {
+export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread }) {
   const [v, setV] = useState({ ...shop, slugTouched: true });
   const [err, setErr] = useState('');
   const link = `${window.location.origin}/${shop.slug}`;
@@ -87,6 +88,7 @@ export function ShopTab({ shop, reloadShop, say, email }) {
           </a>
         </div>
       </section>
+      <ShopDeskCard unread={deskUnread} open={openDesk} />
       <MoneyCards shop={shop} reloadShop={reloadShop} say={say} />
       <section className="card">
         <h2>Your shop</h2>

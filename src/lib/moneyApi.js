@@ -18,7 +18,7 @@ export function useMoneySwitches() {
   const [s, setS] = useState(OFF);
   useEffect(() => {
     let on = true;
-    moneySwitches().then((x) => on && setS(x));
+    moneySwitches().then((x) => on && setS({ ...x, loaded: true }));
     return () => {
       on = false;
     };

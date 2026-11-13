@@ -1,0 +1,55 @@
+S1 ShopDesk asks a waiting shop for photos; the shop hears it as ShopDesk (expect the message, then the alert):
+shopdesk|Please send 3 photos of your fabrics.
+shopdesk|ShopDesk|Please send 3 photos of your fabrics.|/?shopdesk=1#shop
+S2 the shop has 1 unread, opens the chat (no names, no admin), then has 0 and the alert is read (expect 1, the chat, 0, t):
+1
+t|1
+0
+t
+S3 the shop replies with a photo in its own folder; a photo from another folder is refused; Admin hears (expect the reply, the error, the admin alert):
+shop|Here they are|true
+psql:shopdesk_chat.sql:32: ERROR:  That photo can't be sent. Try again.
+CONTEXT:  PL/pgSQL function shopdesk_send(text,text) line N at RAISE
+admin_message|Chat Fabrics|Here they are|/admin#messages
+S4 who may add and see photos in a shop folder: the shop and admins only (expect t, t, f, t, f):
+t
+t
+f
+t
+f
+S5 the admin list shows the shop with 1 unread from it; opening the chat reads them (expect Chat Fabrics|shop|1, then 2 messages, then 0):
+Chat Fabrics|shop|1
+2
+0
+S6 nobody else reads the chat: another shop sees only its own (empty), a shop cannot use the admin, nobody reads the table (expect 0, Not allowed x2, permission denied):
+0
+psql:shopdesk_chat.sql:53: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_shop_threads() line N at RAISE
+psql:shopdesk_chat.sql:54: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_shop_send(uuid,text,text) line N at RAISE
+psql:shopdesk_chat.sql:55: ERROR:  permission denied for table shop_messages
+S7 approving tells the shop in its chat; suspending and reopening too, without your private reason (expect 3 messages):
+
+
+
+Good news: Chat Fabrics is approved and open for orders. Your link: shopdesk.com.ng/chatfabrics
+Share it on your WhatsApp status, in your chats and in your Instagram bio.
+Your shop page is closed for now. Reply here and we'll sort it out together.
+Your shop is open again. Customers can order from you now.
+S8 not approving says why; setting the same status twice sends nothing new (expect the message, then still 1):
+
+We can't open Other Bags yet: Add a photo for every product first.
+Fix it in the Shop tab, then reply here and we'll check again.
+
+1
+F1 shops tap I want this (twice counts once); Admin sees how many (expect pay_online for the shop, then 2|1):
+
+
+
+
+psql:shopdesk_chat.sql:78: ERROR:  Unknown feature.
+CONTEXT:  PL/pgSQL function want_feature(text) line N at RAISE
+pay_online
+2|1
+F2 switching Pay online on tells the shops that asked, and only them (expect 2 alerts with the shop tab link):
+2|Pay online is here|/#shop

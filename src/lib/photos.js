@@ -54,6 +54,15 @@ export async function uploadOrderPhoto(orderId, kind, file) {
   return path;
 }
 
+// A photo in a shop's ShopDesk chat (order-photos/shop-<shop id>/m-...): only the shop and ShopDesk see it.
+export async function uploadShopPhoto(shopId, file) {
+  const blob = await shrinkPhoto(file);
+  const path = `shop-${shopId}/m-${newId()}.jpg`;
+  const { error } = await supabase.storage.from('order-photos').upload(path, blob, { contentType: 'image/jpeg' });
+  if (error) throw error;
+  return path;
+}
+
 // Short-lived links to view order photos (they stop working after an hour).
 export async function orderPhotoLinks(paths) {
   const list = [...new Set((paths || []).filter(Boolean))];

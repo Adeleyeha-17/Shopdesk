@@ -1,10 +1,9 @@
 // Needs attention: warning signs across all shops (unconfirmed payments, late deliveries, bank changes, reports...).
 import React from 'react';
-import { waLink } from '../lib/helpers.js';
 import { short } from './adminHelpers.js';
 
 // ---------- Needs attention ----------
-export function AttentionPage({ d }) {
+export function AttentionPage({ d, setModal }) {
   const groups = [
     [1, 'Act now', 'Money or trust is at risk.'],
     [2, 'Keep an eye on', 'Not urgent, but worth a message.'],
@@ -68,21 +67,21 @@ export function AttentionPage({ d }) {
                           <a className="btn small ghost" href={'#shop/' + a.shop_id}>
                             Open shop
                           </a>
-                          {a.whatsapp && (
-                            <a
-                              className="btn small ghost"
-                              href={waLink(
-                                a.whatsapp,
-                                a.kind === 'quiet'
-                                  ? `Hi ${a.shop}, this is ShopDesk. We haven't seen you on ShopDesk in a while. Is anything stopping you? We're happy to help you set up or get your first orders.`
-                                  : `Hi ${a.shop}, this is ShopDesk. `,
-                              )}
-                              target="_blank"
-                              rel="noopener"
-                            >
-                              WhatsApp
-                            </a>
-                          )}
+                          <button
+                            className="btn small ghost"
+                            onClick={() =>
+                              setModal({
+                                kind: 'message',
+                                shop: { id: a.shop_id, name: a.shop, status: 'active' },
+                                text:
+                                  a.kind === 'quiet'
+                                    ? `Hi ${a.shop}, we haven't seen you on ShopDesk in a while. Is anything stopping you? We're happy to help you set up or get your first orders.`
+                                    : '',
+                              })
+                            }
+                          >
+                            Message
+                          </button>
                         </div>
                       </td>
                     </tr>

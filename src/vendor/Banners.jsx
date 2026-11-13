@@ -7,16 +7,21 @@ import { atText } from '../lib/dates.js';
 import { RefundSent, refundLine } from './RefundSent.jsx';
 import { orderCode } from '../lib/helpers.js';
 
-export function StatusBanner({ shop, reloadShop }) {
+export function StatusBanner({ shop, reloadShop, openDesk }) {
   if (shop.status === 'active') return null;
   if (shop.status === 'pending')
     return (
       <div className="banner">
         <strong>Waiting for approval</strong>
         <span>ShopDesk is checking your shop. Add your products meanwhile.</span>
-        <button className="linkbtn" onClick={reloadShop}>
-          Check again
-        </button>
+        <div className="btns">
+          <button className="linkbtn" onClick={reloadShop}>
+            Check again
+          </button>
+          <button className="linkbtn" onClick={openDesk}>
+            Message ShopDesk
+          </button>
+        </div>
       </div>
     );
   if (shop.status === 'rejected')
@@ -24,19 +29,28 @@ export function StatusBanner({ shop, reloadShop }) {
       <div className="banner bad">
         <strong>Not approved</strong>
         <span>{shop.review_note || 'ShopDesk will tell you why.'} Fix it in the Shop tab, then message ShopDesk.</span>
+        <button className="linkbtn" onClick={openDesk}>
+          Message ShopDesk
+        </button>
       </div>
     );
   if (shop.status === 'banned')
     return (
       <div className="banner bad">
         <strong>Shop closed by ShopDesk</strong>
-        <span>Contact ShopDesk if this is a mistake.</span>
+        <span>Message ShopDesk if this is a mistake.</span>
+        <button className="linkbtn" onClick={openDesk}>
+          Message ShopDesk
+        </button>
       </div>
     );
   return (
     <div className="banner bad">
       <strong>Shop suspended</strong>
-      <span>Your page is closed for now. Contact ShopDesk.</span>
+      <span>Your page is closed for now. Message ShopDesk.</span>
+      <button className="linkbtn" onClick={openDesk}>
+        Message ShopDesk
+      </button>
     </div>
   );
 }

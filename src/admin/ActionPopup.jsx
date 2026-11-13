@@ -1,10 +1,11 @@
 // One pop-up for every admin action: approve, don't approve, suspend, close for good, reactivate, delete a shop,
-// support view, close a report, hide/show a product, and the WhatsApp message to send afterwards.
+// support view, close a report, hide/show a product. Approving, not approving, suspending, closing and reopening also
+// tell the shop in its ShopDesk chat (the database sends that message).
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { dayOf } from '../lib/dates.js';
-import { errText, waLink } from '../lib/helpers.js';
+import { errText } from '../lib/helpers.js';
 
 // ---------- One pop-up for every action ----------
 export function ActionPopup({ m, close, after }) {
@@ -24,28 +25,28 @@ export function ActionPopup({ m, close, after }) {
   const T = {
     approve: [
       `Approve ${s && s.name}`,
-      'Their order page opens straight away and their free trial starts. A note is optional; it goes in the audit log.',
+      'Their order page opens straight away, and their ShopDesk chat tells them. A note is optional; it goes in the audit log.',
       'Approve and open shop',
     ],
     reject: [
       `Don't approve ${s && s.name}`,
-      'Write why. The vendor sees this in their app, so keep it clear and polite.',
+      'Write why. They get it in their ShopDesk chat, so keep it clear and polite.',
       "Don't approve",
     ],
     status: {
       active: [
         `Reactivate ${s && s.name}`,
-        'Their order page opens again. Write the reason for the audit log.',
+        'Their order page opens again, and their ShopDesk chat tells them. Write the reason for the audit log.',
         'Reactivate',
       ],
       suspended: [
         `Suspend ${s && s.name}`,
-        'Their order page closes at once, until you reactivate it. Write the reason for the audit log.',
+        'Their order page closes at once, until you reactivate it. Their ShopDesk chat tells them; your reason stays in the audit log.',
         'Suspend shop',
       ],
       banned: [
         `Close ${s && s.name} for good`,
-        "Their order page closes for good. They can't reopen it, open another shop with this email, or shop with it. Their orders and history stay, and you can still reactivate it if you change your mind. Write the reason for the audit log.",
+        "Their order page closes for good. They can't reopen it, open another shop with this email, or shop with it. Their orders and history stay, and you can still reactivate it if you change your mind. Their ShopDesk chat tells them; your reason stays in the audit log.",
         'Close for good',
       ],
     }[m.status],
@@ -70,7 +71,6 @@ export function ActionPopup({ m, close, after }) {
       'It goes back on the order page if the vendor has it switched on.',
       'Show again',
     ],
-    notify: [`Tell ${s && s.name} on WhatsApp`, '', ''],
   }[m.kind];
   async function run() {
     setBusy(true);
@@ -114,28 +114,9 @@ export function ActionPopup({ m, close, after }) {
       after(null, m);
       return;
     }
-    if (m.kind === 'approve')
-      after(
-        `${s.name} is open.`,
-        s.whatsapp
-          ? {
-              kind: 'notify',
-              shop: s,
-              text: `Hi, good news from ShopDesk: ${s.name} is approved and open for orders. Your link: ${window.location.origin}/${s.slug}\nShare it on your WhatsApp status, in your chats and in your Instagram bio.`,
-            }
-          : null,
-      );
-    else if (m.kind === 'reject')
-      after(
-        `${s.name} was not approved.`,
-        s.whatsapp
-          ? {
-              kind: 'notify',
-              shop: s,
-              text: `Hi, this is ShopDesk. Thanks for applying with ${s.name}. We can't open your shop yet: ${n}\nReply here once that's sorted and we'll check again.`,
-            }
-          : null,
-      );
+    if (m.kind === 'approve') after(`${s.name} is open. Their ShopDesk chat told them.`);
+    else if (m.kind === 'reject') after(`${s.name} was not approved. Their ShopDesk chat told them why.`);
+    else if (m.kind === 'status') after(`Done. Their ShopDesk chat told them.`);
     else after("Done. It's in the audit log.");
   }
   return (
@@ -155,22 +136,7 @@ export function ActionPopup({ m, close, after }) {
             Close
           </button>
         </div>
-        {m.kind === 'notify' ? (
-          <>
-            <div className="wa">{m.text}</div>
-            <div className="btns">
-              <a
-                className="btn small"
-                href={waLink(s.whatsapp, m.text)}
-                target="_blank"
-                rel="noopener"
-                onClick={() => setTimeout(close, 300)}
-              >
-                Open WhatsApp
-              </a>
-            </div>
-          </>
-        ) : rows ? (
+        {rows ? (
           <div className="table-wrap">
             <table className="t">
               <thead>
@@ -213,7 +179,7 @@ export function ActionPopup({ m, close, after }) {
                   {m.kind === 'approve'
                     ? 'Note (optional)'
                     : m.kind === 'reject' || m.kind === 'hide'
-                        ? 'Reason (the vendor sees this)'
+                        ? 'Reason (the shop sees this)'
                         : 'Reason'}
                 </label>
                 <textarea

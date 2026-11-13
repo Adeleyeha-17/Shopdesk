@@ -18,6 +18,7 @@ import { VendorFrame } from './VendorFrame.jsx';
 import { SetUpShop } from './SetUpShop.jsx';
 import { GetStarted } from './GetStarted.jsx';
 import { StatusBanner, ShopDeskNotices, RefundBanner } from './Banners.jsx';
+import { ShopDeskSheet, ShopDeskBanner, shopDeskFromUrl } from './ShopDeskChat.jsx';
 import { SalesTab } from './SalesTab.jsx';
 import { OrdersTab } from './OrdersTab.jsx';
 import { StockTab } from './StockTab.jsx';
@@ -206,6 +207,19 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
     });
   }, []);
   const unread = useUnread(userId);
+  // the chat with ShopDesk: open from an alert (/?shopdesk=1), and how many of ShopDesk's messages are unread
+  const [desk, setDesk] = useState(shopDeskFromUrl);
+  const [deskUnread, setDeskUnread] = useState(0);
+  const loadDesk = useCallback(
+    () => supabase.rpc('shopdesk_unread').then(({ data, error }) => !error && setDeskUnread(data || 0)),
+    [],
+  );
+  const openDesk = useCallback(() => setDesk(true), []);
+  useEffect(() => {
+    loadDesk();
+    const t = setInterval(loadDesk, 60000);
+    return () => clearInterval(t);
+  }, [loadDesk]);
   useEffect(() => {
     load();
     supabase.rpc('touch_shop');
@@ -227,8 +241,11 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
   useLive(userId, (n) => {
     load();
     unread.reload();
+    loadDesk();
     if (!n) return;
     if (n.kind === 'new_order') say(n.title + ' · ' + n.body);
+    else if (n.kind === 'shopdesk' && !desk) say({ title: 'ShopDesk', text: n.body, action: { label: 'Open', run: openDesk } });
+    else if (n.kind === 'feature') say({ title: n.title, text: n.body, action: { label: 'Open', run: () => setTab('shop') } });
     else if (n.kind === 'monthly_report') {
       const m = (String(n.url).match(/report=(\d{4}-\d{2})/) || [])[1];
       say({
@@ -276,7 +293,7 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
     data.problems.filter((p) => !p.reply && ['open', 'with_shopdesk'].includes(problemState(p))).length +
     Object.keys(unread.chats).length;
   useCount(unpaid, shop.name);
-  const ctx = { shop, data, load, run, say, reloadShop, setTab, unread, focus, setFocus, month, setMonth };
+  const ctx = { shop, data, load, run, say, reloadShop, setTab, unread, focus, setFocus, month, setMonth, openDesk, deskUnread };
   useBusy(!data.loaded && !loadErr);
   return (
     <div className="app">
@@ -300,7 +317,8 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
         </div>
       </header>
       <main className="with-tabs">
-        <StatusBanner shop={shop} reloadShop={reloadShop} />
+        <StatusBanner shop={shop} reloadShop={reloadShop} openDesk={openDesk} />
+        {!desk && <ShopDeskBanner unread={deskUnread} open={openDesk} />}
         <RefundBanner shop={shop} problems={data.problems} orders={data.orders} run={run} say={say} />
         <ShopDeskNotices />
         <AlertsPrompt who="shop" userId={userId} />
@@ -335,10 +353,12 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
               <TabIcon name={k} on={tab === k} />
               {label}
               {k === 'orders' && unpaid > 0 && <span className="badge">{unpaid}</span>}
+              {k === 'shop' && deskUnread > 0 && <span className="badge">{deskUnread}</span>}
             </button>
           ))}
         </div>
       </nav>
+      {desk && <ShopDeskSheet shop={shop} close={() => setDesk(false)} onRead={() => setDeskUnread(0)} />}
       <Toast toast={toast} onClose={closeToast} />
     </div>
   );

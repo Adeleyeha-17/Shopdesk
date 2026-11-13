@@ -523,6 +523,34 @@ await step('the Shop tab has Appearance too', async () => {
   expect((await theme()) === 'light', 'Light did not switch back on the Shop tab');
 });
 
+await step('while Pay online and ShopDesk Delivery are off, the Shop tab shows them as Coming soon; I want this is kept', async () => {
+  const soon = p.locator('.card.soon');
+  await soon.first().waitFor();
+  expect((await soon.count()) === 2, 'there are not 2 Coming soon cards');
+  await soon.filter({ hasText: 'ShopDesk Delivery' }).locator('button:has-text("I want this")').click();
+  await soon.filter({ hasText: 'ShopDesk Delivery' }).locator('.soon-ok').waitFor();
+  await nav('Sales');
+  await nav('Shop');
+  await soon.filter({ hasText: 'ShopDesk Delivery' }).locator('.soon-ok').waitFor();
+  expect((await soon.filter({ hasText: 'Customers pay online' }).locator('button:has-text("I want this")').count()) === 1, 'Pay online lost its button');
+});
+
+await step('the shop messages ShopDesk inside the app: the chat opens from the Shop tab, keeps the message, and shows no names', async () => {
+  await p.locator('.desk-row:has-text("Message ShopDesk")').click();
+  const sheet = p.locator('.desk-sheet');
+  await sheet.waitFor();
+  await sheet.locator('.msg.theirs:has-text("Welcome to ShopDesk")').waitFor();
+  await sheet.locator('textarea').fill('Hi, when does delivery start?');
+  await sheet.locator('button:has-text("Send")').click();
+  await sheet.locator('.msg.mine:has-text("when does delivery start")').waitFor();
+  await sheet.locator('.msg.mine:not(.pending)').waitFor();
+  await sheet.locator('button:has-text("Close")').click();
+  await sheet.waitFor({ state: 'detached' });
+  await p.locator('.desk-row').click();
+  await p.locator('.desk-sheet .msg.mine:has-text("when does delivery start")').waitFor();
+  await p.locator('.desk-sheet button:has-text("Close")').click();
+});
+
 // ---------------- a new shop owner signs up ----------------
 await step('a new shop owner can sign up, type a link name with a dash, have the bank and name found from the account number, and send the shop for approval', async () => {
   await patch((S) => {

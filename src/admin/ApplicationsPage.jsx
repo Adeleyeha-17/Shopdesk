@@ -2,7 +2,6 @@
 import React from 'react';
 import { dayOf } from '../lib/dates.js';
 import { photoUrl } from '../lib/photos.js';
-import { waLink } from '../lib/helpers.js';
 import { introMsg } from './adminHelpers.js';
 
 // ---------- Applications ----------
@@ -56,16 +55,12 @@ export function ApplicationsPage({ d, setModal }) {
               </div>
             )}
             <div className="btns">
-              {a.whatsapp && (
-                <a
-                  className="btn small ghost"
-                  href={waLink(a.whatsapp, introMsg(a))}
-                  target="_blank"
-                  rel="noopener"
-                >
-                  WhatsApp them
-                </a>
-              )}
+              <button
+                className="btn small ghost"
+                onClick={() => setModal({ kind: 'message', shop: { ...a, status: 'pending' }, text: introMsg(a) })}
+              >
+                Message
+              </button>
               <button className="btn small" onClick={() => setModal({ kind: 'approve', shop: a })}>
                 Approve
               </button>

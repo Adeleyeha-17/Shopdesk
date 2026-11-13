@@ -8,6 +8,8 @@ import { SignIn } from '../shared/SignIn.jsx';
 import { ThemeButton } from '../shared/ThemePicker.jsx';
 import { LoadError } from '../shared/LoadError.jsx';
 import { ActionPopup } from './ActionPopup.jsx';
+import { MessagePopup } from './MessagePopup.jsx';
+import { MessagesPage } from './MessagesPage.jsx';
 import { OverviewPage } from './OverviewPage.jsx';
 import { AttentionPage } from './AttentionPage.jsx';
 import { ProblemsPage } from './ProblemsPage.jsx';
@@ -109,6 +111,7 @@ function AdminFrame({ children, right }) {
 const NAV = [
   ['overview', 'Overview'],
   ['attention', 'Needs attention'],
+  ['messages', 'Messages'],
   ['problems', 'Problems'],
   ['applications', 'Applications'],
   ['shops', 'Shops'],
@@ -145,6 +148,7 @@ function AdminLayout({ out, email, userId }) {
       'admin_audit_log',
       'admin_announcements',
       'admin_problems',
+      'admin_shop_threads',
     ];
     const res = await Promise.all(names.map((n) => supabase.rpc(n)));
     const bad = res.find((r) => r.error);
@@ -152,8 +156,8 @@ function AdminLayout({ out, email, userId }) {
       setErr(errText(bad.error));
       return;
     }
-    const [o, attention, growth, reports, audit, notices, problems] = res.map((r) => r.data);
-    setD({ o, attention, growth, reports, audit, notices, problems });
+    const [o, attention, growth, reports, audit, notices, problems, threads] = res.map((r) => r.data);
+    setD({ o, attention, growth, reports, audit, notices, problems, threads });
     setErr('');
   }, []);
   useEffect(() => {
@@ -172,6 +176,7 @@ function AdminLayout({ out, email, userId }) {
   const counts = d
     ? {
         attention: d.attention.length,
+        messages: (d.threads || []).reduce((n, t) => n + (t.unread || 0), 0),
         problems: (d.problems || []).filter((p) => p.status === 'with_shopdesk').length,
         applications: d.o.shops_pending,
         reports: d.reports.filter((r) => !r.resolved_at).length,
@@ -200,7 +205,7 @@ function AdminLayout({ out, email, userId }) {
             >
               <span>{label}</span>
               {counts[key] ? (
-                <em className={['attention', 'problems', 'reports'].includes(key) ? 'hot' : ''}>
+                <em className={['attention', 'messages', 'problems', 'reports'].includes(key) ? 'hot' : ''}>
                   {counts[key]}
                 </em>
               ) : null}
@@ -214,6 +219,8 @@ function AdminLayout({ out, email, userId }) {
             <p className="note">Loading…</p>
           ) : page === 'attention' ? (
             <AttentionPage {...ctx} />
+          ) : page === 'messages' ? (
+            <MessagesPage {...ctx} />
           ) : page === 'problems' ? (
             <ProblemsPage {...ctx} />
           ) : page === 'applications' ? (
@@ -237,7 +244,16 @@ function AdminLayout({ out, email, userId }) {
           )}
         </main>
       </div>
-      {modal && (
+      {modal && modal.kind === 'message' && (
+        <MessagePopup
+          m={modal}
+          close={() => {
+            setModal(null);
+            load();
+          }}
+        />
+      )}
+      {modal && modal.kind !== 'message' && (
         <ActionPopup
           m={modal}
           close={() => setModal(null)}

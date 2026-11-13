@@ -32,6 +32,7 @@ export function MoneyPage({ say }) {
   const [margin, setMargin] = useState('');
   const [service, setService] = useState('');
   const [err, setErr] = useState('');
+  const [wants, setWants] = useState(null); // how many shops tapped "I want this"
   const load = useCallback(
     () =>
       supabase.rpc('admin_money').then(({ data, error }) => {
@@ -47,6 +48,7 @@ export function MoneyPage({ say }) {
   );
   useEffect(() => {
     load();
+    supabase.rpc('admin_feature_wants').then(({ data, error }) => !error && setWants(data));
     money('status')
       .then(setKeys)
       .catch((e) => setKeys({ error: e.message }));
@@ -76,6 +78,7 @@ export function MoneyPage({ say }) {
   const st = d.settings;
   const ships = d.shipments || [];
   const kept = ships.reduce((n, s) => n + (s.price - s.cost), 0);
+  const wantText = (f) => (wants && wants[f] ? ` ${wants[f]} shop${wants[f] === 1 ? '' : 's'} want this.` : '');
   const pk = keys && keys.paystack;
   const ck = keys && keys.courier;
   return (
@@ -89,7 +92,7 @@ export function MoneyPage({ say }) {
           sub={
             st.online_pay_on
               ? 'On: order pages show "Pay online" for every shop that picked its bank by name.'
-              : 'Off: customers pay shops by transfer only.'
+              : 'Off: customers pay shops by transfer only.' + wantText('pay_online')
           }
           click={() =>
             save({ online_pay_on: !st.online_pay_on }, st.online_pay_on ? 'Pay online is off.' : 'Pay online is on.')
@@ -102,7 +105,7 @@ export function MoneyPage({ say }) {
           sub={
             st.delivery_on
               ? 'On: every new delivery order goes with a courier the shop picks, and the customer pays it online.'
-              : 'Off: shops deliver with their own riders, and customers pay them by transfer.'
+              : 'Off: shops deliver with their own riders, and customers pay them by transfer.' + wantText('delivery')
           }
           click={() =>
             save(

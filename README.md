@@ -26,6 +26,7 @@ Live at [shopdesk.com.ng](https://shopdesk.com.ng).
 
 **Admin**
 - Vetting of new shops, suspension and closure, nudges for quiet shops, announcements
+- The ShopDesk chat: talk to any shop inside the app, signed only as ShopDesk (approvals, checks and replies all happen there)
 - Dispute handling with refunds, reports, a "needs attention" list and a full audit log
 - Customer details are only visible through a support view that requires a written reason and is logged
 

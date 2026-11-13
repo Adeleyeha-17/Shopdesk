@@ -17,7 +17,7 @@ export const k = (n) =>
   n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'm' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n);
 
 export const introMsg = (a) =>
-  `Hi, this is ShopDesk. Thanks for signing up ${a.name}. Before we open your shop, please send a few photos or a short video of your stock, and tell us how long you've been selling.`;
+  `Hi ${a.name}, thanks for signing up. Before we open your shop, please send a few photos or a short video of your stock here, and tell us how long you've been selling.`;
 
 export function downloadCsv(rows, name) {
   const esc = (v) => {
