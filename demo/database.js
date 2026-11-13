@@ -1009,20 +1009,6 @@ const RPC = {
     if (s) s.last_active_at = nowIso();
     return null;
   },
-  my_plan: () =>
-    myShop()
-      ? {
-          paid_until: null,
-          open: shopOpen(myShop()),
-          monthly_price: 0,
-          grace_days: 7,
-          close_unpaid: true,
-          pay_bank: '',
-          pay_account_number: '',
-          pay_account_name: '',
-          admin_whatsapp: '',
-        }
-      : null,
   get_announcements: () => [],
   set_delivery_fee: ({ p_order, p_fee }) => {
     const o = ownedOrder(p_order);
@@ -1351,32 +1337,6 @@ const RPC = {
   },
 
   // ----- customers -----
-  // invites: switched on in the demo so the Shop tab shows the card (on the real site Admin switches them on)
-  my_invites: () => {
-    const s = myShop();
-    if (!s || s.status !== 'active') return null;
-    const joined = (days) => new Date(Date.now() - days * 86400000).toISOString();
-    const real = S.shops
-      .filter((x) => x.invited_by === s.id)
-      .map((x) => ({ name: x.name, joined: x.created_at, state: x.status === 'active' ? 'approved' : x.status === 'pending' ? 'pending' : 'closed' }));
-    const sample =
-      s.id === S.shops[0].id
-        ? [
-            { name: 'Kemi Wigs', joined: joined(1), state: 'pending' },
-            { name: "Tola's Kitchen", joined: joined(4), state: 'approved' },
-            { name: 'Ada Fabrics', joined: joined(9), state: 'rewarded' },
-          ]
-        : [];
-    return { on: true, slug: s.slug, months: 1, new_months: 1, rewarded: sample.filter((x) => x.state === 'rewarded').length, shops: [...real, ...sample] };
-  },
-  claim_invite: ({ p_slug }) => {
-    const me = myShop();
-    const inv = S.shops.find((x) => x.slug === String(p_slug || '').toLowerCase() && x.status === 'active');
-    if (!me || !inv || inv.id === me.id || me.invited_by) return false;
-    me.invited_by = inv.id;
-    save();
-    return true;
-  },
   shops_near: () => [
     ...S.shops
       .filter((s) => shopOpen(s) && S.products.some((p) => p.shop_id === s.id && p.active && !p.hidden_by_admin))

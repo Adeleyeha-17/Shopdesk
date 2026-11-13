@@ -26,7 +26,7 @@ function Switch({ id, on, title, sub, click }) {
   );
 }
 
-export function MoneyPage({ say, go }) {
+export function MoneyPage({ say }) {
   const [d, setD] = useState(null);
   const [keys, setKeys] = useState(null);
   const [margin, setMargin] = useState('');

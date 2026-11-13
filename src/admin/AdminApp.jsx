@@ -14,8 +14,6 @@ import { ProblemsPage } from './ProblemsPage.jsx';
 import { ApplicationsPage } from './ApplicationsPage.jsx';
 import { ShopsPage } from './ShopsPage.jsx';
 import { ShopDetailPage } from './ShopDetailPage.jsx';
-import { PlansPage } from './PlansPage.jsx';
-import { InvitesPage } from './InvitesPage.jsx';
 import { MoneyPage } from './MoneyPage.jsx';
 import { AnnouncementsPage } from './AnnouncementsPage.jsx';
 import { ReportsPage, LogPage } from './ReportsLogPage.jsx';
@@ -114,8 +112,6 @@ const NAV = [
   ['problems', 'Problems'],
   ['applications', 'Applications'],
   ['shops', 'Shops'],
-  ['plans', 'Plans & payments'],
-  ['invites', 'Invites'],
   ['money', 'Payments & delivery'],
   ['notices', 'Announcements'],
   ['reports', 'Reports'],
@@ -147,7 +143,6 @@ function AdminLayout({ out, email, userId }) {
       'admin_growth',
       'admin_reports',
       'admin_audit_log',
-      'admin_billing',
       'admin_announcements',
       'admin_problems',
     ];
@@ -157,8 +152,8 @@ function AdminLayout({ out, email, userId }) {
       setErr(errText(bad.error));
       return;
     }
-    const [o, attention, growth, reports, audit, billing, notices, problems] = res.map((r) => r.data);
-    setD({ o, attention, growth, reports, audit, billing, notices, problems });
+    const [o, attention, growth, reports, audit, notices, problems] = res.map((r) => r.data);
+    setD({ o, attention, growth, reports, audit, notices, problems });
     setErr('');
   }, []);
   useEffect(() => {
@@ -227,10 +222,6 @@ function AdminLayout({ out, email, userId }) {
             <ShopsPage {...ctx} />
           ) : page === 'shop' ? (
             <ShopDetailPage key={arg} id={arg} {...ctx} />
-          ) : page === 'plans' ? (
-            <PlansPage {...ctx} />
-          ) : page === 'invites' ? (
-            <InvitesPage {...ctx} />
           ) : page === 'money' ? (
             <MoneyPage {...ctx} />
           ) : page === 'notices' ? (

@@ -7,10 +7,8 @@ import { BarChart } from './BarChart.jsx';
 
 // ---------- Overview ----------
 export function OverviewPage({ d, go }) {
-  const { o, growth, billing, attention } = d;
+  const { o, growth, attention } = d;
   const open = o.shops.filter((s) => s.open).length;
-  const months = billing.months || [];
-  const thisMonth = months.length ? months[months.length - 1].income : 0;
   const weeks = growth.weeks.map((w) => ({ x: w.week, ...w }));
   const tile = (label, value, sub, to, hot) => (
     <a className={'tile' + (hot ? ' hot' : '')} href={to ? '#' + to : undefined}>
@@ -44,7 +42,6 @@ export function OverviewPage({ d, go }) {
         {tile('Open shops', open, `${o.shops_total} shops in all`, 'shops')}
         {tile('Orders this week', o.orders_7d, `${o.orders_today} today`)}
         {tile('Money confirmed', naira(o.paid_value_7d), 'this week, all shops')}
-        {tile('Your plan income', naira(thisMonth), 'this month', 'plans')}
         {tile('Open reports', o.reports_open, o.reports_open ? 'from customers' : 'none', 'reports')}
       </div>
       <div className="grid2">

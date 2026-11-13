@@ -1,4 +1,4 @@
-// One shop in detail: its numbers, details, products (hide/show), reports, plan payments and history.
+// One shop in detail: its numbers, details, products (hide/show), reports and history.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -6,7 +6,7 @@ import { dayOf } from '../lib/dates.js';
 import { photoUrl } from '../lib/photos.js';
 import { payPrice } from '../lib/products.js';
 import { errText, waLink } from '../lib/helpers.js';
-import { STATUS, recent, short, k, planState } from './adminHelpers.js';
+import { STATUS, recent, short, k } from './adminHelpers.js';
 import { BarChart } from './BarChart.jsx';
 
 // ---------- One shop ----------
@@ -35,8 +35,6 @@ export function ShopDetailPage({ id, d, setModal }) {
     );
   if (!x) return <p className="note">Loading…</p>;
   const s = x.shop;
-  const st = d.billing.settings;
-  const p = planState({ ...s, last_paid: x.plan_payments.length ? x.plan_payments[0].created_at : null }, st);
   const weeks = x.weeks.map((w) => ({ x: w.week, ...w }));
   return (
     <>
@@ -48,7 +46,7 @@ export function ShopDetailPage({ id, d, setModal }) {
           <h1>{s.name}</h1>
           <span className="sub">
             {STATUS[s.status]}
-            {s.status === 'active' ? (s.open ? ' · taking orders' : ' · closed for not paying') : ''} · /
+            {s.status === 'active' ? ' · taking orders' : ''} · /
             {s.slug}
           </span>
         </div>
@@ -100,14 +98,6 @@ export function ShopDetailPage({ id, d, setModal }) {
               Reactivate
             </button>
           )}
-          {(s.status === 'active' || s.status === 'suspended') && (
-            <button
-              className="btn small ghost"
-              onClick={() => setModal({ kind: 'payment', shop: s, price: st.monthly_price })}
-            >
-              Record plan payment
-            </button>
-          )}
           <button className="btn small ghost" onClick={() => setModal({ kind: 'support', shop: s })}>
             Support view
           </button>
@@ -130,15 +120,6 @@ export function ShopDetailPage({ id, d, setModal }) {
           <span className="label">Money confirmed</span>
           <span className="big num">{naira(x.totals.money)}</span>
           <span className="sub">all time</span>
-        </div>
-        <div className="tile">
-          <span className="label">Plan</span>
-          <span className="big" style={{ fontSize: 18 }}>
-            {p.label}
-          </span>
-          <span className="sub">
-            {x.plan_payments.length} payment{x.plan_payments.length === 1 ? '' : 's'} to you
-          </span>
         </div>
       </div>
       <div className="grid2">
@@ -232,71 +213,36 @@ export function ShopDetailPage({ id, d, setModal }) {
           <p className="note">No products yet.</p>
         )}
       </section>
-      <div className="grid2">
-        <section className="panel">
-          <div className="panel-head">
-            <h3>Reports</h3>
-          </div>
-          {x.reports.length ? (
-            <div className="rows">
-              {x.reports.map((r) => (
-                <div key={r.id} className="arow">
-                  <span>
-                    <span className="sub">
-                      {short(r.created_at)} · {r.resolved_at ? 'closed' : 'open'}
-                    </span>
-                    <div>{r.reason}</div>
-                    {r.resolved_note && <div className="sub">Closed: {r.resolved_note}</div>}
+      <section className="panel">
+        <div className="panel-head">
+          <h3>Reports</h3>
+        </div>
+        {x.reports.length ? (
+          <div className="rows">
+            {x.reports.map((r) => (
+              <div key={r.id} className="arow">
+                <span>
+                  <span className="sub">
+                    {short(r.created_at)} · {r.resolved_at ? 'closed' : 'open'}
                   </span>
-                  {!r.resolved_at && (
-                    <button
-                      className="btn small ghost"
-                      onClick={() => setModal({ kind: 'resolve', report: r })}
-                    >
-                      Close
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="note">No reports.</p>
-          )}
-        </section>
-        <section className="panel">
-          <div className="panel-head">
-            <h3>Plan payments to you</h3>
+                  <div>{r.reason}</div>
+                  {r.resolved_note && <div className="sub">Closed: {r.resolved_note}</div>}
+                </span>
+                {!r.resolved_at && (
+                  <button
+                    className="btn small ghost"
+                    onClick={() => setModal({ kind: 'resolve', report: r })}
+                  >
+                    Close
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
-          {x.plan_payments.length ? (
-            <div className="table-wrap">
-              <table className="t">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th className="r">Amount</th>
-                    <th>Months</th>
-                    <th>Paid until</th>
-                    <th>Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {x.plan_payments.map((pp, i) => (
-                    <tr key={i}>
-                      <td>{short(pp.created_at)}</td>
-                      <td className="r num">{naira(pp.amount)}</td>
-                      <td>{pp.months}</td>
-                      <td>{short(pp.paid_until)}</td>
-                      <td className="wrap">{pp.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="note">None yet.</p>
-          )}
-        </section>
-      </div>
+        ) : (
+          <p className="note">No reports.</p>
+        )}
+      </section>
       <section className="panel">
         <div className="panel-head">
           <h3>History</h3>

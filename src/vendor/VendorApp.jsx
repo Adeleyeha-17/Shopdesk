@@ -17,7 +17,7 @@ import { Toast, useToast } from '../shared/Toast.jsx';
 import { VendorFrame } from './VendorFrame.jsx';
 import { SetUpShop } from './SetUpShop.jsx';
 import { GetStarted } from './GetStarted.jsx';
-import { StatusBanner, PlanBanner, ShopDeskNotices, RefundBanner } from './Banners.jsx';
+import { StatusBanner, ShopDeskNotices, RefundBanner } from './Banners.jsx';
 import { SalesTab } from './SalesTab.jsx';
 import { OrdersTab } from './OrdersTab.jsx';
 import { StockTab } from './StockTab.jsx';
@@ -302,7 +302,6 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
       <main className="with-tabs">
         <StatusBanner shop={shop} reloadShop={reloadShop} />
         <RefundBanner shop={shop} problems={data.problems} orders={data.orders} run={run} say={say} />
-        <PlanBanner shop={shop} />
         <ShopDeskNotices />
         <AlertsPrompt who="shop" userId={userId} />
         {loadErr && data.loaded && (

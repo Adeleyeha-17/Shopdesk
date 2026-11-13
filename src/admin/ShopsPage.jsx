@@ -1,15 +1,10 @@
 // Shops: every shop, with search, filters, sorting and export to a spreadsheet.
 import React, { useMemo, useState } from 'react';
 import { naira } from '../lib/money.js';
-import { STATUS, recent, short, planState, downloadCsv } from './adminHelpers.js';
+import { STATUS, recent, short, downloadCsv } from './adminHelpers.js';
 
 // ---------- Shops: search, filter, export ----------
 export function ShopsPage({ d, go }) {
-  const st = d.billing.settings;
-  const lastPaid = useMemo(
-    () => Object.fromEntries(d.billing.shops.map((s) => [s.id, s.last_paid])),
-    [d.billing.shops],
-  );
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
   const [sort, setSort] = useState('new');
@@ -19,7 +14,6 @@ export function ShopsPage({ d, go }) {
       const hay = [s.name, s.slug, s.sells, s.location, s.owner_email, s.whatsapp].join(' ').toLowerCase();
       if (!words.every((w) => hay.includes(w))) return false;
       if (status === 'open') return s.open;
-      if (status === 'unpaid') return s.status === 'active' && !s.open;
       if (status === 'flagged')
         return s.reports_open > 0 || s.cancelled_30d >= 5 || recent(s.details_changed_at, 14);
       return status === 'all' || s.status === status;
@@ -49,7 +43,6 @@ export function ShopsPage({ d, go }) {
           'Orders 7d',
           'Money 30d',
           'Products',
-          'Plan until',
           'Open reports',
         ],
         ...list.map((s) => [
@@ -66,7 +59,6 @@ export function ShopsPage({ d, go }) {
           s.orders_7d,
           s.money_30d,
           s.products,
-          (s.paid_until || '').slice(0, 10),
           s.reports_open,
         ]),
       ],
@@ -95,7 +87,6 @@ export function ShopsPage({ d, go }) {
           <option value="open">Taking orders</option>
           <option value="pending">Waiting for approval</option>
           <option value="flagged">Flagged</option>
-          <option value="unpaid">Closed for not paying</option>
           <option value="suspended">Suspended</option>
           <option value="banned">Closed for good</option>
           <option value="rejected">Not approved</option>
@@ -123,13 +114,11 @@ export function ShopsPage({ d, go }) {
                 <th className="r">Orders 7d</th>
                 <th className="r">Money 30d</th>
                 <th className="r">Products</th>
-                <th>Plan</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {list.map((s) => {
-                const p = planState({ ...s, last_paid: lastPaid[s.id] ?? null }, st);
                 const flags = [
                   s.reports_open && `${s.reports_open} report${s.reports_open > 1 ? 's' : ''}`,
                   s.cancelled_30d >= 5 && `${s.cancelled_30d} cancelled`,
@@ -153,7 +142,6 @@ export function ShopsPage({ d, go }) {
                     <td className="r num">{s.orders_7d}</td>
                     <td className="r num">{naira(s.money_30d)}</td>
                     <td className="r num">{s.products}</td>
-                    <td>{p.tone ? <span className={'chip ' + p.tone}>{p.label}</span> : p.label}</td>
                     <td>
                       {STATUS[s.status] || s.status}
                       {s.status === 'active' && !s.open ? ' · closed' : ''}

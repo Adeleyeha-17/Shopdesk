@@ -2,15 +2,13 @@
 // support view, close a report, hide/show a product, record a plan payment, and the WhatsApp message to send afterwards.
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
-import { naira, toInt } from '../lib/money.js';
+import { naira } from '../lib/money.js';
 import { dayOf } from '../lib/dates.js';
 import { errText, waLink } from '../lib/helpers.js';
 
 // ---------- One pop-up for every action ----------
 export function ActionPopup({ m, close, after }) {
   const [note, setNote] = useState('');
-  const [amount, setAmount] = useState(m.price != null ? String(m.price) : '');
-  const [months, setMonths] = useState('1');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState(null);
@@ -72,11 +70,6 @@ export function ActionPopup({ m, close, after }) {
       'It goes back on the order page if the vendor has it switched on.',
       'Show again',
     ],
-    payment: [
-      `Record a plan payment: ${s && s.name}`,
-      'Only record money that has landed in your account. Their plan runs on from today or from its current end, whichever is later.',
-      'Record payment',
-    ],
     notify: [`Tell ${s && s.name} on WhatsApp`, '', ''],
   }[m.kind];
   async function run() {
@@ -111,20 +104,6 @@ export function ActionPopup({ m, close, after }) {
       });
     else if (m.kind === 'support')
       r = await supabase.rpc('admin_support_view', { p_shop: s.id, p_reason: n });
-    else if (m.kind === 'payment') {
-      const amt = toInt(amount);
-      if (amt == null) {
-        setBusy(false);
-        setErr('Enter the amount they paid.');
-        return;
-      }
-      r = await supabase.rpc('admin_record_payment', {
-        p_shop: s.id,
-        p_amount: amt,
-        p_months: parseInt(months, 10),
-        p_note: n || null,
-      });
-    }
     setBusy(false);
     if (r.error) {
       setErr(errText(r.error));
@@ -154,17 +133,6 @@ export function ActionPopup({ m, close, after }) {
               kind: 'notify',
               shop: s,
               text: `Hi, this is ShopDesk. Thanks for applying with ${s.name}. We can't open your shop yet: ${n}\nReply here once that's sorted and we'll check again.`,
-            }
-          : null,
-      );
-    else if (m.kind === 'payment')
-      after(
-        `Payment recorded. ${s.name} is paid until ${dayOf(r.data)}.`,
-        s.whatsapp
-          ? {
-              kind: 'notify',
-              shop: s,
-              text: `Hi ${s.name}, this is ShopDesk. We've received your payment, thank you. Your plan now runs until ${dayOf(r.data)}.`,
             }
           : null,
       );
@@ -239,38 +207,12 @@ export function ActionPopup({ m, close, after }) {
         ) : (
           <>
             {T[1] && <p className="note">{T[1]}</p>}
-            {m.kind === 'payment' && (
-              <div className="form2">
-                <div className="field">
-                  <label htmlFor="mAmt">Amount received (₦)</label>
-                  <input
-                    id="mAmt"
-                    inputMode="numeric"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="mMo">Months</label>
-                  <select id="mMo" value={months} onChange={(e) => setMonths(e.target.value)}>
-                    {[1, 2, 3, 6, 12].map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
             {m.kind !== 'show' && (
               <div className="field">
                 <label htmlFor="mNote">
                   {m.kind === 'approve'
                     ? 'Note (optional)'
-                    : m.kind === 'payment'
-                      ? 'Note (optional), e.g. transfer reference'
-                      : m.kind === 'reject' || m.kind === 'hide'
+                    : m.kind === 'reject' || m.kind === 'hide'
                         ? 'Reason (the vendor sees this)'
                         : 'Reason'}
                 </label>
@@ -278,7 +220,7 @@ export function ActionPopup({ m, close, after }) {
                   id="mNote"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  autoFocus={m.kind !== 'payment'}
+                  autoFocus
                 />
               </div>
             )}

@@ -19,33 +19,6 @@ export const k = (n) =>
 export const introMsg = (a) =>
   `Hi, this is ShopDesk. Thanks for signing up ${a.name}. Before we open your shop, please send a few photos or a short video of your stock, and tell us how long you've been selling.`;
 
-export function planState(s, st) {
-  if (s.status !== 'active' && s.status !== 'suspended') return { label: '—', tone: '' };
-  if (!s.paid_until) return { label: 'No end date', tone: '' };
-  if (st && !st.monthly_price) return { label: 'Free (no price set)', tone: '' };
-  // the free plan: the plan or trial has run out, and the shop pays only in months it passes the free orders
-  if (st && st.free_orders > 0 && new Date(s.paid_until) < new Date()) {
-    const n = s.month_orders || 0;
-    if (n <= st.free_orders) return { label: `Free plan · ${n} of ${st.free_orders} orders`, tone: '' };
-    if (!st.close_unpaid) return { label: `Passed ${st.free_orders} free orders`, tone: 'warn' };
-    if (s.open)
-      return {
-        label: `Passed ${st.free_orders} free orders · closes ${short(new Date(s.passed_at).getTime() + st.grace_days * DAY)}`,
-        tone: 'owe',
-      };
-    return { label: 'Closed until they pay', tone: 'owe' };
-  }
-  const end = new Date(s.paid_until).getTime();
-  const days = Math.ceil((end - Date.now()) / DAY);
-  const trial = s.last_paid === null;
-  if (days > 7) return { label: `${trial ? 'Free trial' : 'Paid'} until ${short(end)}`, tone: 'paid' };
-  if (days >= 0)
-    return { label: `${trial ? 'Trial ends' : 'Ends'} in ${days} day${days === 1 ? '' : 's'}`, tone: 'warn' };
-  if (!st || !st.close_unpaid) return { label: `Ended ${short(end)}`, tone: 'warn' };
-  if (s.open) return { label: `Ended ${short(end)} · closes ${short(end + st.grace_days * DAY)}`, tone: 'owe' };
-  return { label: 'Closed for not paying', tone: 'owe' };
-}
-
 export function downloadCsv(rows, name) {
   const esc = (v) => {
     const t = v == null ? '' : String(v);

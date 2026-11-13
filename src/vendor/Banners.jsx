@@ -1,11 +1,11 @@
 // Messages at the top of the vendor's app: waiting for approval / not approved / suspended,
-// a refund ShopDesk ordered, "time to renew your plan", and announcements from ShopDesk.
+// a refund ShopDesk ordered, and announcements from ShopDesk.
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
-import { DAY, dayOf, atText } from '../lib/dates.js';
+import { atText } from '../lib/dates.js';
 import { RefundSent, refundLine } from './RefundSent.jsx';
-import { waLink, orderCode } from '../lib/helpers.js';
+import { orderCode } from '../lib/helpers.js';
 
 export function StatusBanner({ shop, reloadShop }) {
   if (shop.status === 'active') return null;
@@ -37,86 +37,6 @@ export function StatusBanner({ shop, reloadShop }) {
     <div className="banner bad">
       <strong>Shop suspended</strong>
       <span>Your page is closed for now. Contact ShopDesk.</span>
-    </div>
-  );
-}
-
-// Your plan with ShopDesk: quiet during the trial, a reminder in the last week, and a clear message if the order page closed.
-// On the free plan (once the plan or trial has run out): quiet until most of this month's free orders are used, then a note,
-// then "pay by" once the shop passes them, and "closed" after the grace days. The free orders come back on the 1st.
-export function PlanBanner({ shop }) {
-  const [p, setP] = useState(null);
-  useEffect(() => {
-    if (shop.status === 'active') supabase.rpc('my_plan').then(({ data }) => setP(data || null));
-  }, [shop.status, shop.id]);
-  if (!p || !p.monthly_price || !p.paid_until || shop.status !== 'active') return null;
-  const end = new Date(p.paid_until).getTime();
-  const days = Math.ceil((end - Date.now()) / DAY);
-  const free = p.free_orders || 0;
-  const where = p.pay_account_number ? ` to ${p.pay_bank} ${p.pay_account_number} (${p.pay_account_name})` : '';
-  const proof =
-    p.admin_whatsapp &&
-    waLink(p.admin_whatsapp, `Hi ShopDesk, I've paid ${naira(p.monthly_price)} for ${shop.name}. Here is my proof:`);
-  const proofLink = proof && (
-    <a className="linkbtn" href={proof} target="_blank" rel="noopener">
-      Send proof on WhatsApp
-    </a>
-  );
-  if (free > 0) {
-    if (days > 7) return null;
-    if (days >= 0)
-      return (
-        <div className="banner notice">
-          <strong>Your plan ends {days === 0 ? 'today' : days === 1 ? 'tomorrow' : dayOf(end)}</strong>
-          <span>
-            After that you get {free} free orders a month. Pay {naira(p.monthly_price)}
-            {where} only in months you pass them.
-          </span>
-        </div>
-      );
-    const n = p.month_orders || 0;
-    const next = new Date();
-    next.setMonth(next.getMonth() + 1, 1);
-    if (n <= free) {
-      if (n < Math.ceil(free * 0.8)) return null;
-      return (
-        <div className="banner notice">
-          <strong>
-            {n} of {free} free orders this month
-          </strong>
-          <span>
-            Busy month! After {free} orders it&apos;s {naira(p.monthly_price)} for the month{where}. Your free orders
-            come back on {dayOf(next)}.
-          </span>
-        </div>
-      );
-    }
-    const closes = new Date(new Date(p.passed_at).getTime() + p.grace_days * DAY);
-    return (
-      <div className="banner bad">
-        <strong>{p.open ? `You passed ${free} orders this month` : 'Shop closed'}</strong>
-        <span>
-          {p.open
-            ? `Pay ${naira(p.monthly_price)}${where} by ${dayOf(closes)} to keep taking orders.`
-            : `You passed ${free} orders this month. Pay ${naira(p.monthly_price)}${where} to reopen, or wait for your free orders on ${dayOf(next)}.`}
-        </span>
-        {proofLink}
-      </div>
-    );
-  }
-  if (days > 7) return null;
-  const closes = new Date(end + p.grace_days * DAY);
-  const text =
-    days >= 0
-      ? `Plan ends ${days === 0 ? 'today' : days === 1 ? 'tomorrow' : dayOf(end)}. Pay ${naira(p.monthly_price)}${where}.`
-      : p.open
-        ? `Your page closes ${dayOf(closes)} unless you pay ${naira(p.monthly_price)}${where}.`
-        : `Pay ${naira(p.monthly_price)}${where} to reopen.`;
-  return (
-    <div className={'banner' + (days < 0 ? ' bad' : '')}>
-      <strong>{days < 0 ? (p.open ? 'Plan ended' : 'Shop closed') : 'Time to renew'}</strong>
-      <span>{text}</span>
-      {proofLink}
     </div>
   );
 }

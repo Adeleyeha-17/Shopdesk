@@ -25,7 +25,7 @@ Live at [shopdesk.com.ng](https://shopdesk.com.ng).
 - Push notifications, with an email digest as a fallback when the app has not been opened
 
 **Admin**
-- Vetting of new shops, suspension and closure, plans and payments, announcements
+- Vetting of new shops, suspension and closure, nudges for quiet shops, announcements
 - Dispute handling with refunds, reports, a "needs attention" list and a full audit log
 - Customer details are only visible through a support view that requires a written reason and is logged
 
