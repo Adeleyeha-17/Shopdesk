@@ -27,7 +27,7 @@ import { myTokens } from './savedOrders.js';
 import { ReportProblemForm, CustomerProblem } from './ProblemBox.jsx';
 import { RateShop } from './RateShop.jsx';
 import { money } from '../lib/moneyApi.js';
-import { useShipment, CourierHead } from '../shared/Shipment.jsx';
+import { useShipment, CourierRider } from '../shared/Shipment.jsx';
 import { useLiveRider, LiveRiderCard } from '../shared/LiveRider.jsx';
 
 // Why an order was cancelled, in the customer's words.
@@ -247,44 +247,82 @@ export function OrderPage({ token }) {
     (o.status === 'delivered' && o.received_by !== 'customer');
   const headline = headlineFor(o, pickup, feeWait);
   const steps = [
-    ['Order placed', o.created_at],
-    [`Confirmed by ${o.shop.name}`, o.confirmed_at],
-    ['Payment confirmed', o.paid_at],
-    [
-      pickup ? 'Ready for pick-up' : 'With the rider',
-      o.out_at,
-      o.deliver_by
+    { title: 'Order placed', at: o.created_at },
+    { title: `Confirmed by ${o.shop.name}`, at: o.confirmed_at },
+    { title: 'Payment confirmed', at: o.paid_at },
+    {
+      title: pickup ? 'Ready for pick-up' : 'On the way',
+      at: o.out_at,
+      extra: o.deliver_by
         ? pickup
           ? `from ${whenText(o.deliver_by).replace(' by ', ', ')}`
           : `arriving ${whenText(o.deliver_by)}`
         : '',
-    ],
-    [
-      pickup ? 'Collected' : 'Delivered',
-      o.status === 'delivered' ? o.received_at || o.done_at : null,
-      o.status === 'delivered'
-        ? o.received_by === 'customer'
-          ? 'you confirmed it'
-          : 'the shop marked it; please confirm'
-        : '',
-    ],
+    },
+    {
+      title: pickup ? 'Collected' : 'Delivered',
+      at: o.status === 'delivered' ? o.received_at || o.done_at : null,
+      extra:
+        o.status === 'delivered'
+          ? o.received_by === 'customer'
+            ? 'you confirmed it'
+            : 'the shop marked it; please confirm'
+          : '',
+    },
   ];
-  // ShopDesk Delivery: the courier's own steps take the place of "With the rider" and "Delivered"
+  // ShopDesk Delivery: the courier's own steps take the place of "On the way" and "Delivered"
   if (sh && o.paid_at) {
     const done = o.status === 'delivered';
-    const courierSteps = (sh.steps || []).map((s) => [s.status, s.at || o.out_at, '']);
-    steps.splice(3, 2, ...(courierSteps.length ? courierSteps : [[`Booked with ${sh.courier}`, o.out_at, '']]));
-    if (!courierSteps.some((s) => /deliver/i.test(s[0])))
-      steps.push(['Delivered', done ? o.received_at || o.done_at : null, done || !o.deliver_by ? '' : `arriving ${whenText(o.deliver_by)}`]);
+    const courierSteps = (sh.steps || []).map((s) => ({ title: s.status, at: s.at || o.out_at }));
+    steps.splice(3, 2, ...(courierSteps.length ? courierSteps : [{ title: `Booked with ${sh.courier}`, at: o.out_at }]));
+    if (!courierSteps.some((s) => /deliver/i.test(s.title)))
+      steps.push({
+        title: 'Delivered',
+        at: done ? o.received_at || o.done_at : null,
+        extra: done || !o.deliver_by ? '' : `arriving ${whenText(o.deliver_by)}`,
+      });
   }
-  const current = o.status === 'cancelled' ? -1 : steps.findIndex((s) => !s[1]);
-  // the service fee is part of the total when the order can only be paid online, until it's paid
-  const feeOnTop = pay && pay.online_only && pay.online && unpaid ? serviceFee(pay) : 0;
+  const current = o.status === 'cancelled' ? -1 : steps.findIndex((s) => !s.at);
   // Orders from before accounts have no owner; anyone with the link can update those (the database still refuses shop accounts).
   const canAct = o.mine || !o.saved;
   const wantsCustomer =
     o.status !== 'cancelled' && (canReceive || (unpaid && !feeWait && !o.customer_says_paid));
   const gate = wantsCustomer && !canAct && who !== undefined;
+  const canComplain = o.can_report && !complaining && !o.report_block;
+  // While it's on its way, who is bringing it sits under the latest step; "I got everything" sits under the last step.
+  const riderStep = o.status === 'out' && !pickup ? steps.map((s) => !!s.at).lastIndexOf(true) : -1;
+  const receiveStep = canReceive && canAct ? steps.length - 1 : -1;
+  const riderBox = sh ? (
+    <CourierRider sh={sh} />
+  ) : (
+    <div className="step-box">
+      <LiveRiderCard live={live} name={o.rider_name} />
+      <div className="row">
+        <div className="who">
+          <strong>{o.rider_name}</strong>
+          <span className="sub">{o.rider_phone}</span>
+        </div>
+        <a className="btn small" href={telLink(o.rider_phone)} style={{ textDecoration: 'none' }}>
+          Call
+        </a>
+      </div>
+    </div>
+  );
+  const receiveBox = (
+    <div className="step-box">
+      <span className="ask">
+        {o.status === 'delivered' ? 'Got everything?' : pickup ? 'Collected it?' : 'Got it?'}
+      </span>
+      <button className="btn" onClick={() => act('customer_received', 'Thanks! Enjoy.')} disabled={busy}>
+        I got everything
+      </button>
+      {canComplain && (
+        <button className="btn small ghost" onClick={() => setComplaining(true)}>
+          {late ? "It didn't arrive" : 'Something wrong?'}
+        </button>
+      )}
+    </div>
+  );
   return (
     <Page title={o.shop.name} titleHref={'/' + o.shop.slug} back="/orders" tabs={tabs}>
       <section className="card">
@@ -307,25 +345,6 @@ export function OrderPage({ token }) {
         )}
       </section>
 
-      {o.status === 'out' && !pickup && !sh && (
-        <section className="card boxed">
-          <div className="label">Your rider</div>
-          <LiveRiderCard live={live} name={o.rider_name} />
-          <div className="row">
-            <div>
-              <strong style={{ fontSize: 17 }}>{o.rider_name}</strong>
-              <div className="sub">{o.rider_phone}</div>
-            </div>
-            <a className="btn small" href={telLink(o.rider_phone)} style={{ textDecoration: 'none' }}>
-              Call rider
-            </a>
-          </div>
-          <p className="note">
-            Promised {whenText(o.deliver_by)}.{late ? ' Call the rider, or report a problem below.' : ''}
-          </p>
-        </section>
-      )}
-
       {gate &&
         (who === '' ? (
           <section className="card boxed">
@@ -342,46 +361,6 @@ export function OrderPage({ token }) {
           </section>
         ))}
 
-      {canReceive && canAct && (
-        <section className="card">
-          <p className="note">
-            {o.status === 'delivered' ? 'Got everything?' : pickup ? 'Collected it?' : 'Got it?'}
-          </p>
-          <button className="btn" onClick={() => act('customer_received', 'Thanks! Enjoy.')} disabled={busy}>
-            I got everything
-          </button>
-          {o.can_report && !complaining && !o.report_block && (
-            <button className="btn ghost" onClick={() => setComplaining(true)}>
-              {late ? "It didn't arrive" : 'Something wrong?'}
-            </button>
-          )}
-        </section>
-      )}
-      {o.mine && o.status === 'delivered' && <RateShop token={token} shopName={o.shop.name} slug={o.shop.slug} />}
-      {!canReceive && o.can_report && !complaining && !o.report_block && (
-        <section className="card">
-          <p className="note">Something wrong? Report it until {atText(o.report_until)}.</p>
-          <button className="btn ghost" onClick={() => setComplaining(true)}>
-            Report a problem
-          </button>
-        </section>
-      )}
-      {o.can_report && o.report_block && !o.problem && <p className="note">{o.report_block}</p>}
-      {complaining && o.can_report && !o.report_block && (
-        <ReportProblemForm
-          orderId={o.order_id}
-          token={token}
-          late={late}
-          onCancel={() => setComplaining(false)}
-          onDone={() => {
-            setComplaining(false);
-            setMsg('Sent. The shop has 48 hours to answer.');
-            kick();
-            load();
-          }}
-        />
-      )}
-      {o.problem && <CustomerProblem p={o.problem} token={token} reload={load} setMsg={setMsg} />}
       {msg && <p className="ok">{msg}</p>}
       {err && <p className="err">{err}</p>}
 
@@ -408,7 +387,7 @@ export function OrderPage({ token }) {
                     ? 'Opening Paystack…'
                     : `Pay ${naira(left + serviceFee(pay))}${onlineOnly ? '' : ' online'}`}
                 </button>
-                {!onlineOnly && serviceFee(pay) > 0 && (
+                {serviceFee(pay) > 0 && (
                   <span className="sub">Includes {naira(serviceFee(pay))} service fee</span>
                 )}
                 {!onlineOnly && (
@@ -420,58 +399,58 @@ export function OrderPage({ token }) {
             )}
             {!onlineOnly && (
               <>
-            <p className="note">
-              Pay <strong>{naira(left)}</strong> in one transfer to:
-            </p>
-            <div className="slip pay-slip">
-              <div className="pay-line">
-                <div>
-                  <div className="label">Account number</div>
-                  <span className="acct">{o.shop.account_number}</span>
+                <p className="note">
+                  Pay <strong>{naira(left)}</strong> in one transfer to:
+                </p>
+                <div className="slip pay-slip">
+                  <div className="pay-line">
+                    <div>
+                      <div className="label">Account number</div>
+                      <span className="acct">{o.shop.account_number}</span>
+                    </div>
+                    <button
+                      className="btn small"
+                      onClick={() => copyText(o.shop.account_number, setCopied, 'Account number copied.')}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div className="pay-line">
+                    <div>
+                      <div className="label">Amount</div>
+                      <span className="acct">{naira(left)}</span>
+                    </div>
+                    <button
+                      className="btn small"
+                      onClick={() => copyText(String(left), setCopied, 'Amount copied.')}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div className="pay-line">
+                    <div>
+                      <div className="label">Transfer note (narration)</div>
+                      <span className="acct">{o.code}</span>
+                    </div>
+                    <button className="btn small" onClick={() => copyText(o.code, setCopied, 'Code copied.')}>
+                      Copy
+                    </button>
+                  </div>
+                  <div>
+                    <div className="label">Bank and name</div>
+                    <span>
+                      {o.shop.bank} · {o.shop.account_name}
+                    </span>
+                  </div>
                 </div>
-                <button
-                  className="btn small"
-                  onClick={() => copyText(o.shop.account_number, setCopied, 'Account number copied.')}
-                >
-                  Copy
-                </button>
-              </div>
-              <div className="pay-line">
-                <div>
-                  <div className="label">Amount</div>
-                  <span className="acct">{naira(left)}</span>
-                </div>
-                <button
-                  className="btn small"
-                  onClick={() => copyText(String(left), setCopied, 'Amount copied.')}
-                >
-                  Copy
-                </button>
-              </div>
-              <div className="pay-line">
-                <div>
-                  <div className="label">Transfer note (narration)</div>
-                  <span className="acct">{o.code}</span>
-                </div>
-                <button className="btn small" onClick={() => copyText(o.code, setCopied, 'Code copied.')}>
-                  Copy
-                </button>
-              </div>
-              <div>
-                <div className="label">Bank and name</div>
-                <span>
-                  {o.shop.bank} · {o.shop.account_name}
-                </span>
-              </div>
-            </div>
-            <p className="note">
-              Put <strong>{o.code}</strong> in the transfer note.
-            </p>
-            {copied && (
-              <p className="ok" role="status">
-                {copied}
-              </p>
-            )}
+                <p className="note">
+                  Put <strong>{o.code}</strong> in the transfer note.
+                </p>
+                {copied && (
+                  <p className="ok" role="status">
+                    {copied}
+                  </p>
+                )}
               </>
             )}
             {!onlineOnly &&
@@ -514,6 +493,39 @@ export function OrderPage({ token }) {
           </div>
         ))}
 
+      <section className="card">
+        <h2>Progress</h2>
+        <ol className="timeline">
+          {steps.map((s, i) => (
+            <li key={i} className={s.at ? 'done' : i === current ? 'now' : ''}>
+              <strong>{s.title}</strong>
+              {s.at && <span className="sub">{atText(s.at)}</span>}
+              {s.extra && <span className="sub">{s.extra}</span>}
+              {i === riderStep && riderBox}
+              {i === receiveStep && receiveBox}
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {o.can_report && o.report_block && !o.problem && <p className="note">{o.report_block}</p>}
+      {complaining && o.can_report && !o.report_block && (
+        <ReportProblemForm
+          orderId={o.order_id}
+          token={token}
+          late={late}
+          onCancel={() => setComplaining(false)}
+          onDone={() => {
+            setComplaining(false);
+            setMsg('Sent. The shop has 48 hours to answer.');
+            kick();
+            load();
+          }}
+        />
+      )}
+      {o.problem && <CustomerProblem p={o.problem} token={token} reload={load} setMsg={setMsg} />}
+      {o.mine && o.status === 'delivered' && <RateShop token={token} shopName={o.shop.name} slug={o.shop.slug} />}
+
       {o.mine && uid && <AlertsPrompt who="customer" userId={uid} />}
 
       {o.mine && (o.can_chat || chat) && (
@@ -523,7 +535,7 @@ export function OrderPage({ token }) {
             {!chat && unread.chats[o.order_id] > 0 && (
               <span className="badge">{unread.chats[o.order_id]}</span>
             )}
-            <span className="sub">{chat ? 'Hide' : 'Open'}</span>
+            {chat && <span className="sub">Hide</span>}
           </button>
           {chat && (
             <Chat
@@ -538,54 +550,14 @@ export function OrderPage({ token }) {
         </section>
       )}
 
-      <section className="card">
-        <h2>Progress</h2>
-        {sh && o.status === 'out' && <CourierHead sh={sh} />}
-        <ol className="timeline">
-          {steps.map(([title, at, extra], i) => (
-            <li key={i} className={at ? 'done' : i === current ? 'now' : ''}>
-              <strong>{title}</strong>
-              {at && <span className="sub">{atText(at)}</span>}
-              {extra && <span className="sub">{extra}</span>}
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="card">
-        <div className="row">
-          <span className="sub">Items</span>
-          <span className="num">{naira(o.items_total)}</span>
-        </div>
-        {o.mode === 'delivery' && (
-          <div className="row">
-            <span className="sub">Delivery</span>
-            <span className="num">
-              {o.delivery_paid_by === 'vendor'
-                ? 'Free'
-                : o.delivery_fee == null
-                  ? 'Shop is confirming'
-                  : naira(o.delivery_fee)}
-            </span>
-          </div>
-        )}
-        {feeOnTop > 0 && (
-          <div className="row">
-            <span className="sub">Service fee</span>
-            <span className="num">{naira(feeOnTop)}</span>
-          </div>
-        )}
-        <div className="row">
-          <span className="sub">{feeWait ? 'Total so far' : 'Total'}</span>
-          <span className="num">{naira(o.to_pay + feeOnTop)}</span>
-        </div>
-        {o.amount_paid > 0 && (
-          <div className="row">
-            <span className="sub">Paid</span>
-            <span className="num">{naira(o.amount_paid)}</span>
-          </div>
-        )}
-      </section>
+      {!canReceive && canComplain && (
+        <section className="card">
+          <p className="note">Something wrong? Report it until {atText(o.report_until)}.</p>
+          <button className="btn ghost" onClick={() => setComplaining(true)}>
+            Report a problem
+          </button>
+        </section>
+      )}
 
       {!o.mine && who === '' && !gate ? (
         <p className="note" style={{ fontSize: 12 }}>

@@ -56,12 +56,33 @@ function TrackRow({ sh }) {
   );
 }
 
-// The customer's order page: who is bringing it, at the top of Progress (the steps are in the Progress list).
-export function CourierHead({ sh }) {
+// The customer's order page: who is bringing it, inside the latest step of Progress.
+export function CourierRider({ sh }) {
+  const rider = riderOf(sh);
   return (
-    <div className="ship ship-head">
-      <span className="label">{sh.courier}</span>
-      <TrackRow sh={sh} />
+    <div className="step-box">
+      <div className="row">
+        <div className="who">
+          <strong>{rider ? rider.name || 'Your rider' : sh.courier}</strong>
+          {rider && <span className="sub">{[sh.courier, rider.phone].filter(Boolean).join(' · ')}</span>}
+        </div>
+        {rider && rider.phone && (
+          <a className="btn small" href={telLink(rider.phone)} style={{ textDecoration: 'none' }}>
+            Call
+          </a>
+        )}
+      </div>
+      {sh.tracking_url && (
+        <a
+          className="btn small ghost"
+          href={sh.tracking_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ textDecoration: 'none', alignSelf: 'flex-start' }}
+        >
+          Track it live
+        </a>
+      )}
     </div>
   );
 }

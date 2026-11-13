@@ -130,13 +130,14 @@ await step('with ShopDesk Delivery on, a new delivery order needs a courier: the
   expect((await card2().locator('button:has-text("Money in")').count()) === 0, 'Money in still shows');
 });
 
-await step('the customer pays online only: one service fee line in the total, no transfer details, and the order is paid at once', async () => {
+await step('the customer pays online only: one short service fee line, no totals box, no transfer details, and the order is paid at once', async () => {
   await as('Customer');
   await tab('Orders').click();
   await p.locator(`a:has-text("${code2}")`).click();
   await see('Delivered by Dellyman with ShopDesk Delivery');
   const page = await text();
-  expect(/Service fee\s*₦[\d,]+/.test(page), 'the service fee line is missing');
+  expect(/Includes ₦[\d,]+ service fee/.test(page), 'the service fee line is missing');
+  expect(!/Total so far|\bTotal\b/.test(page), 'the totals box still shows');
   expect(!/card fee|ShopDesk fee|Pay by|Saved to/.test(page), 'the long fee text, pay-by line or saved line still shows');
   expect((await p.locator('text=Account number').count()) === 0, 'transfer details still show');
   expect((await p.locator('button:has-text("sent the money")').count()) === 0, "I've sent the money still shows");
@@ -180,7 +181,9 @@ await step('the delivery moves on by itself; the customer sees the courier steps
   await pause(6200);
   await p.locator(`a:has-text("${code2}")`).click();
   await p.locator('.timeline li.done:has-text("On the way")').waitFor();
-  expect((await p.locator('.ship-head').innerText()).includes('Musa Bello'), 'the rider is not at the top of Progress');
+  await p.locator('.timeline li.done .step-box:has-text("Musa Bello")').waitFor({ timeout: 4000 }).catch(async () => {
+    throw new Error('the rider is not inside the latest step: ' + (await p.locator('.timeline').innerText()).replace(/\s+/g, ' ') + ' | status: ' + (await p.locator('h2').first().innerText()));
+  });
   expect((await p.locator('text=Tracking code').count()) === 0, 'the tracking code still shows');
   expect((await p.locator('.timeline li:has-text("With the rider")').count()) === 0, 'the old rider step still shows next to the courier steps');
   await pause(6200);
@@ -337,11 +340,12 @@ await step('the customer sees the rider and confirms delivery', async () => {
   await as('Customer');
   await tab('Orders').click();
   await p.locator(`a:has-text("${code}")`).click();
-  await see('Kola Ade');
-  await p.locator('.livemap .livemap-pin.rider').waitFor();
+  await p.locator('.timeline li:has-text("On the way") .step-box:has-text("Kola Ade")').waitFor();
+  await p.locator('.timeline li:has-text("On the way") .livemap .livemap-pin.rider').waitFor();
+  expect((await p.locator('.chat-toggle').innerText()).includes('Open') === false, 'Open still shows beside the chat');
   expect((await p.locator('.live-line').innerText()).includes('Live location'), 'the live line is missing');
   await pause(500); // the page finishes sliding in; a tap during the slide is lost
-  await p.locator('button:has-text("I got everything")').click();
+  await p.locator('.timeline li:has-text("Delivered") button:has-text("I got everything")').click();
   await p.locator('h2:text-is("Delivered")').waitFor();
 });
 
