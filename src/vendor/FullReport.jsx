@@ -1,7 +1,7 @@
 // The Full report: the Sales tab's numbers as tables, one sheet at a time, the same sheets as the Excel file.
 // Every table sorts by tapping a column, has a search box when it's long, and a totals row that adds up what's
-// showing (so a search gives the total for just those rows). Tapping an order opens it; customers and people who
-// owe have a WhatsApp button.
+// showing (so a search gives the total for just those rows). Tapping an order opens it; customers have a Message
+// button.
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -17,7 +17,6 @@ export const SHEETS = [
   ['orders', 'Orders'],
   ['products', 'Products'],
   ['customers', 'Customers'],
-  ['owed', 'Owed'],
   ['out', 'Money out'],
   ['sources', 'Sources'],
   ['areas', 'Areas'],
@@ -192,26 +191,10 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
   }, []);
   const periodText = `${dShort(r.period.start)} – ${dShort(r.period.key === 'custom' ? r.period.finish - 1 : r.period.end)}`;
   const first = (name) => String(name || '').split(' ')[0];
-  const remindText = (o) =>
-    `Hi ${first(o.name)}, a reminder that order ${orderCode(shop, o)} still has ${naira(o.owes)} to pay. ` +
-    `Please send it to ${shop.bank} ${shop.account_number} (${shop.account_name}) and tap "I've sent the money". Thank you!`;
   const helloText = (c) =>
     `Hi ${first(c.name)}, we miss you at ${shop.name}! New stock just came in. Tap to have a look.`;
-  // writing to a customer inside ShopDesk: a reminder goes in the order's chat; a message goes to their Shops tab
+  // writing to a customer inside ShopDesk: a message goes to their Shops tab
   const [compose, setCompose] = useState(null);
-  const remind = (o) =>
-    setCompose({
-      title: 'Remind to pay',
-      to: o.name,
-      note: `in the chat on ${orderCode(shop, o)}`,
-      text: remindText(o),
-      send: async (body) => {
-        const { error } = await supabase.rpc('send_message', { p_order: o.id, p_body: body });
-        if (error) throw error;
-        kick();
-        say(`Reminder sent to ${first(o.name)} in ShopDesk`);
-      },
-    });
   const message = (c) =>
     setCompose({
       title: 'Message a customer',
@@ -249,9 +232,6 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
     ['Average order', s.avgOrder, s.prevAvgOrder, 'money'],
     ['Items sold', s.itemsSold, s.prevItemsSold, 'int'],
     ['Customers', s.customers, s.prevCustomers, 'int'],
-    ['Orders placed (value)', m.orderValue, null, 'money'],
-    ['   Paid', m.paidOnThese, null, 'money'],
-    ['   Still owed', m.owedOnThese, null, 'money'],
     ...(m.hasOut
       ? [
           ['Money out', m.spent, m.spentBefore, 'money'],
@@ -357,7 +337,6 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
           { k: 'items_total', label: 'Items', t: 'money', sum: true },
           { k: 'fee', label: 'Delivery', t: 'money', sum: true },
           { k: 'amount_paid', label: 'Paid', t: 'money', sum: true },
-          { k: 'owed', label: 'Owes', t: 'money', sum: true },
           { k: 'statusText', label: 'Status' },
         ]}
         rows={r.orders.map((o) => ({
@@ -366,12 +345,6 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
           areaText: o.mode === 'pickup' ? 'Pick-up' : o.area || '',
           sourceText: SOURCES[o.source || 'direct'],
           fee: o.delivery_paid_by === 'customer' ? o.delivery_fee : null,
-          owed: ['awaiting', 'part'].includes(o.status)
-            ? Math.max(
-                0,
-                o.items_total + (o.delivery_paid_by === 'customer' ? o.delivery_fee || 0 : 0) - o.amount_paid,
-              )
-            : 0,
           statusText: STATUS[o.status] || o.status,
         }))}
         sortBy={['id', -1]}
@@ -442,44 +415,6 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
           .map((c) => ({ ...c, tag: c.isNew ? 'New' : c.regular ? 'Regular' : '' }))}
         sortBy={['periodSpent', -1]}
       />
-    ),
-    owed: (
-      <>
-        <div className="age-chips">
-          {r.ageTotals.map((a) => (
-            <div key={a.age} className={'age-chip' + (a.age === 'Over 30 days' && a.count ? ' late' : '')}>
-              <span>{a.age}</span>
-              <strong className="num">{naira(a.amount)}</strong>
-              <span className="sub">
-                {a.count} order{a.count === 1 ? '' : 's'}
-              </span>
-            </div>
-          ))}
-        </div>
-        <Table
-          cols={[
-            {
-              k: 'name',
-              label: 'Customer',
-              render: (o) => (
-                <span className="rt-two">
-                  {o.name}
-                  <span className="sub">
-                    {o.code}
-                    {o.says ? ' · says paid' : ''}
-                  </span>
-                </span>
-              ),
-            },
-            { k: 'owes', label: 'Owes', t: 'money', sum: true },
-            { k: 'msg', label: '', render: (o) => sendButton('Remind', () => remind(o)) },
-            { k: 'days', label: 'Days', t: 'int', cls: (o) => (o.days > 30 ? 'down' : '') },
-          ]}
-          rows={r.owed.map((o) => ({ ...o, code: orderCode(shop, o) }))}
-          onRow={(o) => openOrder(o.id)}
-          empty="Nobody owes you right now."
-        />
-      </>
     ),
     out: (
       <>

@@ -25,7 +25,8 @@ export function PrivacyPage() {
         <p className="note">
           <strong>Chat and alerts.</strong> Messages you send in an order's chat are kept with the order and
           can't be edited or deleted. ShopDesk reads a chat when a problem or report about that order comes to
-          us, or, with a recorded reason, to check a complaint or stop fraud. If you turn on alerts, we keep
+          us (and may write in it, as ShopDesk, while it decides a problem), or, with a recorded reason, to check a
+          complaint or stop fraud. If you turn on alerts, we keep
           your phone's alert address until you sign out. If you haven't opened ShopDesk for 10 minutes after
           something happens, we email you what you missed, at most once every 30 minutes; every email has a
           link to stop them.
@@ -70,22 +71,44 @@ export function PrivacyPage() {
           <li>Be respectful in chat. No insults, threats or pressure.</li>
         </ol>
         <p className="note">
-          Shops that break these rules can be suspended or removed. Customers can report a shop from its order
-          page, or report a message in the chat.
+          Shops that break these rules can be suspended or removed. A customer can report a shop from its order
+          page, or report a message by tapping it in the chat.
         </p>
       </section>
       <section className="card" id="customers">
         <h2>Customer rules</h2>
         <ol className="steps">
-          <li>Be respectful in chat. No insults, threats or pressure.</li>
-          <li>Report real problems only, with a photo when something is wrong or missing.</li>
+          <li>
+            Pay for your order in full within 48 hours. After that it's cancelled for you, and the items go back on
+            sale.
+          </li>
           <li>Only tap "I've sent the money" after you've sent it.</li>
-          <li>Pay within 48 hours or cancel. Unpaid orders cancel themselves.</li>
+          <li>Report real problems only, with a photo when something is wrong or missing.</li>
+          <li>Be respectful in chat: no insults, threats or pressure.</li>
         </ol>
         <p className="note">
-          Customers who break these rules can have reporting paused or their account blocked. Shops can report
-          a message in the chat.
+          If you break these rules, ShopDesk can pause your reporting or block your account. A shop can report a
+          rude message by tapping it in the chat.
         </p>
+      </section>
+      <section className="card" id="problems">
+        <h2>If something goes wrong with an order</h2>
+        <ol className="steps">
+          <li>The customer reports it on the order page, up to 3 days after delivery, with a photo.</li>
+          <li>The shop has 48 hours to refund, send it again, or explain.</li>
+          <li>
+            Not sorted? The customer asks ShopDesk to decide. If the shop doesn't answer in 48 hours, it comes to
+            ShopDesk by itself.
+          </li>
+          <li>
+            ShopDesk reads the order's chat and photos, may ask both of you questions in that chat, and decides within
+            48 hours.
+          </li>
+          <li>
+            If the shop has to refund, it has 48 hours to pay and add the receipt, or its page stops taking orders
+            until it does.
+          </li>
+        </ol>
       </section>
     </Page>
   );

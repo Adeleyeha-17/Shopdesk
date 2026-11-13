@@ -1,6 +1,6 @@
 // The Sales tab: how the shop is doing, where the money stands, and what to do today.
 // Pick a period (Today, 7 days, 30 days, This month, This year, or your own dates) and everything follows it.
-// Top to bottom: this month's goal, sales and how they compare, where the money stands (order value = paid + owed,
+// Top to bottom: this month's goal, sales and how they compare, where the money stands (money in, and orders waiting,
 // money out, what's left), "Do this today", the sales chart, what's selling, where orders come from, when people
 // order, customers and records. "Full report" opens the same numbers as tables; "Download for Excel" saves them.
 // Every number comes from report.js, so the screen, the Full report and the Excel file always agree.
@@ -11,7 +11,7 @@ import { dayOf, timeOf } from '../lib/dates.js';
 import { copyText, errText, orderCode } from '../lib/helpers.js';
 import { lowStock } from '../lib/products.js';
 import { useBusy } from '../lib/busy.js';
-import { PERIODS, slotLabel, slotTitle, change, owedIncome } from './salesMath.js';
+import { PERIODS, slotLabel, slotTitle, change } from './salesMath.js';
 import { loadReport, reportPeriod, buildReport, hourWord } from './report.js';
 import { IncomeChart, RunningChart, RankList } from './charts.jsx';
 import { FullReport } from './FullReport.jsx';
@@ -339,8 +339,8 @@ function GoalCard({ goal, saveGoal }) {
   );
 }
 
-// Where the money stands, as a short statement: what orders were placed for, how much of that is in and how much
-// is still owed; money in for the period. Money out and what's left only show once the shop has noted some spending
+// Where the money stands, as a short statement: money in for the period (every order is paid in full, so nobody owes
+// anything; orders not paid yet are just waiting, and cancel after 48 hours). Money out and what's left only show once the shop has noted some spending
 // itself (until then it's one quiet "Track what you spend" link), so a half-empty "left" never looks like profit.
 function MoneyCard({ r, openFull, addOut }) {
   const m = r.money;
@@ -350,33 +350,6 @@ function MoneyCard({ r, openFull, addOut }) {
         <h2>Where the money stands</h2>
       </div>
       <div className="stmt">
-        <div className="stmt-row strong">
-          <span>Orders placed</span>
-          <span className="num">{naira(m.orderValue)}</span>
-        </div>
-        <div className="stmt-row indent">
-          <span>
-            <i className="dot-in" /> Paid
-          </span>
-          <span className="num">{naira(m.paidOnThese)}</span>
-        </div>
-        <button className="stmt-row indent tap" onClick={() => openFull('owed')}>
-          <span>
-            <i className="dot-owed" /> Still owed
-          </span>
-          <span className="num">{naira(m.owedOnThese)} ›</span>
-        </button>
-        <div className="split" aria-hidden="true">
-          {m.orderValue ? (
-            <>
-              <i className="part-in" style={{ flexGrow: m.paidOnThese }} />
-              {m.owedOnThese > 0 && <i className="part-owed" style={{ flexGrow: m.owedOnThese }} />}
-            </>
-          ) : (
-            <i className="part-empty" style={{ flexGrow: 1 }} />
-          )}
-        </div>
-        <div className="stmt-gap" />
         <div className={'stmt-row' + (m.hasOut ? '' : ' total')}>
           <span>Money in (your sales)</span>
           <span className="num">{naira(m.sales)}</span>
@@ -405,6 +378,12 @@ function MoneyCard({ r, openFull, addOut }) {
               Cancelled {naira(m.cancelledValue)} · {m.cancelled} order{m.cancelled === 1 ? '' : 's'}
             </span>
           )}
+          {m.waiting > 0 && (
+            <span>
+              {m.waiting} order{m.waiting === 1 ? '' : 's'} waiting for payment ({naira(m.waitingValue)}). Unpaid orders
+              cancel after 48 hours.
+            </span>
+          )}
         </div>
       </div>
       {m.hasOut ? (
@@ -421,7 +400,7 @@ function MoneyCard({ r, openFull, addOut }) {
 }
 
 const ACTION_ICON = {
-  owed: 'M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2 2.6 5 3.2 5 1.4 5 3.3-2.2 3.3-5 3.3-5-1.2-5-3.3',
+  unpaid: 'M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2 2.6 5 3.2 5 1.4 5 3.3-2.2 3.3-5 3.3-5-1.2-5-3.3',
   stock: 'M4 8l8-4 8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8',
   quiet: 'M4 6h16v10H8l-4 4zM8 10h8M8 13h5',
   post: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z',
@@ -556,19 +535,19 @@ function SalesView({
   const areasTotal = r.areas.reduce((a, x) => a + x.sales, 0);
 
   function act(a) {
-    if (a.kind === 'owed') openFull('owed');
+    if (a.kind === 'unpaid') setTab('orders');
     if (a.kind === 'stock') setTab('stock');
     if (a.kind === 'quiet') openFull('quiet');
   }
 
   // A short message about today, to copy into WhatsApp or notes.
   function todayMessage() {
-    const owing = data.orders.filter((o) => owedIncome(o) > 0);
+    const waiting = data.orders.filter((o) => o.status === 'awaiting');
     const low = lowStock(data.products);
     const t = r.cashBook.length ? r.cashBook[r.cashBook.length - 1] : null;
     return (
       `${shop.name} today.\nSales so far: ${naira(t ? t.moneyIn : 0)} from ${t ? t.orders : 0} order${t && t.orders === 1 ? '' : 's'}.\n` +
-      `Owed to you: ${naira(r.money.owedNow)}${owing.length ? ' (' + owing.map((o) => o.customer_name).join(', ') + ')' : ''}.\n` +
+      (waiting.length ? `Waiting for payment: ${waiting.length} order${waiting.length === 1 ? '' : 's'}.\n` : '') +
       (low.length
         ? 'Running low: ' + low.map((x) => `${x.name} (${x.stock} left)`).join(', ') + '.'
         : 'Stock is fine.')

@@ -226,7 +226,7 @@ create table if not exists public.messages (
   order_id bigint not null references public.orders(id) on delete cascade,
   shop_id uuid not null references public.shops(id) on delete cascade,
   customer_id uuid references auth.users(id) on delete set null,
-  sender text not null check (sender in ('shop', 'customer')),
+  sender text not null constraint messages_sender_check check (sender in ('shop', 'customer', 'shopdesk')),
   body text not null default '' check (char_length(body) <= 1000),
   photo text check (char_length(photo) <= 200),
   created_at timestamptz not null default now(),
@@ -478,6 +478,13 @@ create or replace function public.problem_status(p public.problems) returns text
 language sql stable set search_path = public as $$
   select case when p.status = 'open' and p.created_at < now() - interval '48 hours' then 'with_shopdesk' else p.status end;
 $$;
+
+-- ShopDesk decides within 48 hours of a problem coming to it (the customer asking, or the shop not answering in 48 hours).
+create or replace function public.problem_decide_by(p public.problems) returns timestamptz
+language sql immutable as $$
+  select coalesce(p.escalated_at, p.created_at + interval '48 hours') + interval '48 hours';
+$$;
+revoke execute on function public.problem_decide_by(public.problems) from public, anon, authenticated;
 
 -- Can the customer still report a problem? Up to 3 days after delivery, or once the promised delivery time has passed.
 create or replace function public.can_report(o public.orders) returns boolean
@@ -970,7 +977,7 @@ language sql stable security definer set search_path = public as $$
         'escalated_by', coalesce(p.escalated_by, case when public.problem_status(p) = 'with_shopdesk' and p.status = 'open' then 'no_reply' end),
         'reply', p.reply, 'reply_note', p.reply_note, 'reply_photos', to_jsonb(p.reply_photos), 'refund_amount', p.refund_amount,
         'refund_received_at', p.refund_received_at, 'created_at', p.created_at, 'reply_by', p.created_at + interval '48 hours', 'answered_at', p.answered_at,
-        'decision', p.decision, 'decision_note', p.decision_note, 'decided_at', p.decided_at,
+        'decision', p.decision, 'decision_note', p.decision_note, 'decided_at', p.decided_at, 'decide_by', public.problem_decide_by(p),
         'owed_amount', p.owed_amount, 'owed_by', p.owed_by, 'owed_sent_at', p.owed_sent_at, 'owed_paid_at', p.owed_paid_at,
         'owed_receipt', p.owed_receipt, 'owed_disputed_at', p.owed_disputed_at, 'owed_cleared_by', p.owed_cleared_by)
       from public.problems p where p.order_id = o.id) end)
@@ -1214,6 +1221,7 @@ begin
   elsif v.customer_id is not null and v.customer_id = auth.uid() then who := 'customer';
   else raise exception 'Message not found.'; end if;
   if m.sender = who then raise exception 'You can''t report your own message.'; end if;
+  if m.sender = 'shopdesk' then raise exception 'That message is from ShopDesk.'; end if;
   if char_length(trim(coalesce(p_reason, ''))) < 3 then raise exception 'Say what''s wrong with it.'; end if;
   if exists (select 1 from public.reports where message_id = m.id and reporter_id = auth.uid()) then raise exception 'You''ve already reported this message.'; end if;
   if (select count(*) from public.reports where reporter_id = auth.uid() and created_at > now() - interval '1 day') >= 10 then
@@ -1989,7 +1997,7 @@ begin
       'status', e.st, 'escalated_by', coalesce(p.escalated_by, case when e.st = 'with_shopdesk' and p.status = 'open' then 'no_reply' end),
       'kind', p.kind, 'details', p.details, 'photos', to_jsonb(p.photos), 'reply', p.reply, 'reply_note', p.reply_note, 'reply_photos', to_jsonb(p.reply_photos),
       'refund_amount', p.refund_amount, 'refund_received_at', p.refund_received_at, 'created_at', p.created_at, 'reply_by', p.created_at + interval '48 hours',
-      'answered_at', p.answered_at, 'escalated_at', p.escalated_at, 'decision', p.decision, 'decision_note', p.decision_note, 'decided_at', p.decided_at, 'closed_at', p.closed_at,
+      'answered_at', p.answered_at, 'escalated_at', p.escalated_at, 'decide_by', public.problem_decide_by(p), 'decision', p.decision, 'decision_note', p.decision_note, 'decided_at', p.decided_at, 'closed_at', p.closed_at,
       'owed_amount', p.owed_amount, 'owed_by', p.owed_by, 'owed_sent_at', p.owed_sent_at, 'owed_paid_at', p.owed_paid_at, 'owed_cleared_by', p.owed_cleared_by,
       'owed_receipt', p.owed_receipt, 'owed_disputed_at', p.owed_disputed_at,
       'order', public.admin_order_json(o.id),
@@ -2029,6 +2037,10 @@ begin
   insert into public.audit_log (actor, action, shop_id, detail) values (auth.uid(), 'problem_decided', pr.shop_id,
     left('Order ' || c || ': ' || case when p_decision = 'customer' then 'the customer was right. ' else 'the shop was right. ' end
       || case when p_owed is not null then 'Refund ' || public.naira(p_owed) || '. ' else '' end || trim(p_note), 300));
+  insert into public.messages (order_id, shop_id, customer_id, sender, body) values (v.id, v.shop_id, v.customer_id, 'shopdesk', left(
+    'ShopDesk decided: ' || case when p_decision = 'shop' then 'the shop was right.'
+      else 'the customer was right.' || case when p_owed is not null then ' ' || s.name || ' refunds ' || public.naira(p_owed) || ' by ' || public.lagos_time(due) || '.' else '' end end
+    || E'\n' || trim(p_note), 1000));
   perform public.notify(v.customer_id, v.id, 'decided', 'ShopDesk decided · ' || c,
     case when p_decision = 'shop' then 'The shop was right.'
          when p_owed is not null then 'You were right. ' || s.name || ' must refund ' || public.naira(p_owed) || ' by ' || public.lagos_time(due) || '.'
@@ -2038,6 +2050,55 @@ begin
          when p_owed is not null then 'Refund ' || public.naira(p_owed) || ' by ' || public.lagos_time(due) || ' or your page pauses.'
          else 'The customer was right.' end, '/?order=' || v.id || '#orders');
 end $$;
+
+-- While a problem is with ShopDesk, you can write in that order's chat. Both the shop and the customer see it as
+-- "ShopDesk" and hear about it. Once you decide, you can't write there any more.
+create or replace function public.admin_case_message(p_problem bigint, p_body text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare pr public.problems; v public.orders; s public.shops; m public.messages; b text := left(trim(coalesce(p_body, '')), 1000); c text;
+begin
+  if not public.is_admin() then raise exception 'Not allowed.'; end if;
+  select * into pr from public.problems where id = p_problem;
+  if not found then raise exception 'Problem not found.'; end if;
+  if public.problem_status(pr) <> 'with_shopdesk' then raise exception 'You can write in the chat only while the problem is with you.'; end if;
+  if b = '' then raise exception 'Write a message.'; end if;
+  select * into v from public.orders where id = pr.order_id;
+  select * into s from public.shops where id = v.shop_id;
+  insert into public.messages (order_id, shop_id, customer_id, sender, body) values (v.id, v.shop_id, v.customer_id, 'shopdesk', b) returning * into m;
+  c := public.order_code(s.order_prefix, v.id);
+  perform public.notify(v.customer_id, v.id, 'message', 'ShopDesk · ' || c, b, '/o/' || v.public_token || '#chat');
+  perform public.notify(s.owner_id, v.id, 'message', 'ShopDesk · ' || c, b, '/?chat=' || v.id || '#orders');
+  return jsonb_build_object('id', m.id, 'sender', m.sender, 'body', m.body, 'photo', m.photo, 'flag', m.flag, 'created_at', m.created_at);
+end $$;
+
+-- Admin > Customers: find a customer by name, email or phone, with their orders, problems and reports, to block them.
+create or replace function public.admin_find_customers(p_q text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare q text := lower(trim(coalesce(p_q, ''))); d text := regexp_replace(coalesce(p_q, ''), '\D', '', 'g');
+begin
+  if not public.is_admin() then raise exception 'Not allowed.'; end if;
+  if char_length(q) < 2 then return '[]'::jsonb; end if;
+  return coalesce((select jsonb_agg(x order by x->>'last_order' desc nulls last) from (
+    select jsonb_build_object('id', u.id, 'email', u.email,
+        'name', coalesce(nullif(c.name, ''), (select o.customer_name from public.orders o where o.customer_id = u.id order by o.created_at desc limit 1), ''),
+        'phone', coalesce(nullif(c.phone, ''), (select o.customer_phone from public.orders o where o.customer_id = u.id order by o.created_at desc limit 1), ''),
+        'orders', (select count(*) from public.orders o where o.customer_id = u.id),
+        'problems', (select count(*) from public.problems p where p.customer_id = u.id),
+        'lost', (select count(*) from public.problems p where p.customer_id = u.id and p.decision = 'shop'),
+        'reported', (select count(*) from public.reports r join public.messages m on m.id = r.message_id where r.about = 'customer' and m.customer_id = u.id),
+        'last_order', (select max(o.created_at) from public.orders o where o.customer_id = u.id),
+        'blocked', public.is_blocked(u.id), 'block_reason', (select b.reason from public.blocked_users b where b.user_id = u.id)) x
+    from auth.users u left join public.customers c on c.user_id = u.id
+    where not public.has_shop(u.id) and not exists (select 1 from public.admins a where a.user_id = u.id)
+      and (lower(coalesce(u.email, '')) like '%' || q || '%' or lower(coalesce(c.name, '')) like '%' || q || '%'
+        or (char_length(d) >= 4 and regexp_replace(coalesce(c.phone, ''), '\D', '', 'g') like '%' || d || '%')
+        or exists (select 1 from public.orders o where o.customer_id = u.id
+                   and (lower(o.customer_name) like '%' || q || '%' or (char_length(d) >= 4 and regexp_replace(coalesce(o.customer_phone, ''), '\D', '', 'g') like '%' || d || '%'))))
+    limit 30) z), '[]'::jsonb);
+end $$;
+
+revoke all on function public.admin_case_message(bigint, text), public.admin_find_customers(text) from public, anon;
+grant execute on function public.admin_case_message(bigint, text), public.admin_find_customers(text) to authenticated;
 
 -- Block a customer who abuses ShopDesk (insults, fake problems, unpaid orders). They can't order, write or report.
 create or replace function public.admin_block_user(p_user uuid, p_block boolean, p_reason text) returns void

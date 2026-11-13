@@ -1,0 +1,30 @@
+C1 the shop did not answer in 48 hours, so ShopDesk decides by 48 hours after that; the customer sees the same time (expect with_shopdesk, t, t):
+with_shopdesk
+t
+t
+C2 ShopDesk writes in the order chat; the shop and the customer both see it and hear it (expect shopdesk, then 2 alerts, then 1 visible to each):
+shopdesk
+2|ShopDesk · CW-54
+1
+1
+C3 nobody can report a ShopDesk message, and only the admin can write as ShopDesk (expect 2 errors):
+psql:cases.sql:41: ERROR:  That message is from ShopDesk.
+CONTEXT:  PL/pgSQL function report_message(bigint,text) line N at RAISE
+psql:cases.sql:42: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_case_message(bigint,text) line N at RAISE
+C4 deciding writes the decision in the chat, and after that ShopDesk cannot write there (expect the decision, then an error):
+
+ShopDesk decided: the customer was right. Case Wigs refunds ₦20,000 by <day>, <clock>.
+The packing photo shows the short wig. Refund the customer.
+psql:cases.sql:49: ERROR:  You can write in the chat only while the problem is with you.
+CONTEXT:  PL/pgSQL function admin_case_message(bigint,text) line N at RAISE
+C5 Admin finds the customer by name, email or phone, but never a shop owner; then can block them (expect the customer, 1, 1, 0, then blocked):
+ngozi.case@example.com|1|1|false
+1
+1
+0
+
+true|Fake complaints on several shops
+C6 only the admin can search customers (expect Not allowed):
+psql:cases.sql:61: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_find_customers(text) line N at RAISE

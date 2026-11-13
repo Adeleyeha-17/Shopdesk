@@ -140,7 +140,7 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
       { h: 'Delivery fee', w: 12, s: 'money', total: 'sum' },
       { h: 'Customer pays', w: 14, s: 'money', total: 'sum' },
       { h: 'Paid so far', w: 13, s: 'money', total: 'sum' },
-      { h: 'Still owed (your sales)', w: 14, s: 'money', total: 'sum' },
+      { h: 'Not paid yet', w: 14, s: 'money', total: 'sum' },
       { h: 'Status', w: 12 },
       { h: 'Paid on', w: 21, s: 'datetime' },
       { h: 'Paid (1 = yes)', w: 8, s: 'int', total: 'sum' },
@@ -457,40 +457,6 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
     }),
   });
 
-  // ---------- Owed (as it is now) ----------
-  const owN = 4 + Math.max(1, r.owed.length);
-  const owedSheet = dataSheet({
-    name: 'Owed',
-    table: 'OwedTable',
-    title: 'Who owes you',
-    note: `As it was when you downloaded this, oldest first. ${r.ageTotals.map((a) => `${a.age}: ${naira(a.amount)} (${a.count})`).join(' · ')}.`,
-    columns: [
-      { h: 'Order', w: 10 },
-      { h: 'Customer', w: 22 },
-      { h: 'Phone', w: 15 },
-      { h: 'Placed', w: 21, s: 'datetime' },
-      { h: 'Days', w: 7, s: 'int' },
-      { h: 'Age', w: 13 },
-      { h: 'Owes', w: 13, s: 'money', total: 'sum' },
-      { h: 'Says they paid', w: 12 },
-    ],
-    rows: r.owed.map((o) => [
-      {
-        f: `HYPERLINK("https://shopdesk.com.ng/?order=${o.id}#orders","${orderCode(shop, o)}")`,
-        v: orderCode(shop, o),
-        s: 'link',
-      },
-      o.name,
-      o.phone,
-      X(o.created_at),
-      o.days,
-      o.age,
-      o.owes,
-      o.says ? 'Yes' : '',
-    ]),
-    rules: [{ ref: `E5:G${owN}`, when: '$E5>30', style: 'bad' }],
-  });
-
   // ---------- Daily (the period on screen) and Monthly ----------
   // money out and "left" only appear for shops that note their spending (see report.js: hasOut)
   const hasOut = m.hasOut;
@@ -711,7 +677,7 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
       `SUMIFS(${O('I')},${inP(O('B'))},${O('N')},"<>Cancelled")`,
     ),
     kpi('   Paid', m.paidOnThese, null, 'B15-B17'),
-    kpi('   Still owed', m.owedOnThese, null, `SUMIFS(${O('M')},${inP(O('B'))},${O('N')},"<>Cancelled")`),
+    kpi('   Not paid yet', m.owedOnThese, null, `SUMIFS(${O('M')},${inP(O('B'))},${O('N')},"<>Cancelled")`),
     ...(hasOut
       ? [
           kpi(
@@ -980,7 +946,6 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
       { ...sourcesSheet, tab: '16A34A' },
       { ...areasSheet, tab: '16A34A' },
       { ...ridersSheet, tab: '16A34A' },
-      { ...owedSheet, tab: 'DC2626' },
       ordersSheet,
       itemsSheet,
       paymentsSheet,

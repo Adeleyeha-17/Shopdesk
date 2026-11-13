@@ -178,8 +178,9 @@ export function CustomerProblem({ p, token, reload, setMsg }) {
       {p.status === 'with_shopdesk' && (
         <>
           <p className="note">
-            {p.escalated_by === 'no_reply' ? "The shop didn't answer, so " : ''}ShopDesk is deciding. You'll
-            see it here.
+            {p.escalated_by === 'no_reply' ? "The shop didn't answer, so " : ''}ShopDesk is deciding
+            {p.decide_by ? <> by <strong>{atText(p.decide_by)}</strong></> : ''}. If ShopDesk needs anything, it
+            asks in the chat.
           </p>
           <div className="btns">
             <button className="linkbtn" onClick={() => act('sorted', 'Thanks. Closed.')} disabled={busy}>

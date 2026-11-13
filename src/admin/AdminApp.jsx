@@ -10,6 +10,7 @@ import { LoadError } from '../shared/LoadError.jsx';
 import { ActionPopup } from './ActionPopup.jsx';
 import { MessagePopup } from './MessagePopup.jsx';
 import { MessagesPage } from './MessagesPage.jsx';
+import { CustomersPage } from './CustomersPage.jsx';
 import { OverviewPage } from './OverviewPage.jsx';
 import { AttentionPage } from './AttentionPage.jsx';
 import { ProblemsPage } from './ProblemsPage.jsx';
@@ -115,6 +116,7 @@ const NAV = [
   ['problems', 'Problems'],
   ['applications', 'Applications'],
   ['shops', 'Shops'],
+  ['customers', 'Customers'],
   ['money', 'Payments & delivery'],
   ['notices', 'Announcements'],
   ['reports', 'Reports'],
@@ -225,6 +227,8 @@ function AdminLayout({ out, email, userId }) {
             <ProblemsPage {...ctx} />
           ) : page === 'applications' ? (
             <ApplicationsPage {...ctx} />
+          ) : page === 'customers' ? (
+            <CustomersPage {...ctx} />
           ) : page === 'shops' ? (
             <ShopsPage {...ctx} />
           ) : page === 'shop' ? (

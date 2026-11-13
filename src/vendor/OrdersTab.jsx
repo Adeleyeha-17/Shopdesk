@@ -106,12 +106,14 @@ export function OrdersTab({ shop, data, run, say, unread, focus, setFocus, setTa
       {owing.length > 0 && (
         <section className="card owed-line">
           <div className="row">
-            <span className="label">Customers owe you</span>
+            <span className="label">
+              {owing.length} order{owing.length === 1 ? '' : 's'} waiting for payment
+            </span>
             <strong className="num">{naira(owing.reduce((a, o) => a + owes(o), 0))}</strong>
           </div>
           <div className="sub">
-            {owing.length} order{owing.length === 1 ? '' : 's'} not fully paid
-            {feeless > 0 && ` · ${feeless} need${feeless === 1 ? 's' : ''} a delivery fee first`}
+            Unpaid orders cancel after 48 hours.
+            {feeless > 0 && ` ${feeless} need${feeless === 1 ? 's' : ''} a delivery fee first.`}
           </div>
         </section>
       )}

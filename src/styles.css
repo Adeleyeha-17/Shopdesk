@@ -1221,3 +1221,14 @@ body.desk-open { overflow: hidden; }
 /* chats scroll without a visible scroll bar */
 .chat-list { scrollbar-width: none; }
 .chat-list::-webkit-scrollbar { display: none; }
+/* ShopDesk's messages in an order chat (while it decides a problem) */
+.msg.desk { background: var(--bubble); border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent); }
+.desk-who { display: inline-flex; align-items: center; gap: 5px; text-transform: none; opacity: 1; font-weight: 800; }
+.desk-who .desk-mark { width: 14px; height: 14px; border-radius: 4px; }
+.late-text { color: var(--bad); }
+.case-chat .chat-list { max-height: 420px; }
+/* Admin > Customers */
+.cust-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); }
+.rows > .cust-row:first-child { border-top: 0; }
+.cust-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.panel > .search { margin-bottom: 12px; }

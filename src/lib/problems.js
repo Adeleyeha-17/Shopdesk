@@ -14,6 +14,11 @@ export const kindText = (k) => (KINDS.find((x) => x[0] === k) || [k, 'Problem'])
 const HOURS_48 = 48 * 3600e3;
 // The shop has 48 hours to answer; after that a problem is with ShopDesk even if nobody has opened it.
 export const replyBy = (p) => new Date(new Date(p.created_at).getTime() + HOURS_48);
+// ShopDesk decides within 48 hours of a problem coming to it (the customer asking, or the shop not answering in 48 hours).
+export const decideBy = (p) =>
+  p.decide_by
+    ? new Date(p.decide_by)
+    : new Date((p.escalated_at ? new Date(p.escalated_at).getTime() : new Date(p.created_at).getTime() + HOURS_48) + HOURS_48);
 export const problemState = (p) =>
   p.status === 'open' && Date.now() > replyBy(p).getTime() ? 'with_shopdesk' : p.status;
 export const isActive = (p) => ['open', 'answered', 'with_shopdesk'].includes(problemState(p));

@@ -460,15 +460,13 @@ export function buildReport({ shop, data: raw, products, openOrders, period, now
   // ---------- "Do this today": a few things that make money, each one tap away ----------
   const actions = [];
   const owedTotal = sum(owed, (x) => x.owes);
+  // orders not paid yet: nobody owes anything (payment is in full, up front); these just wait, then cancel after 48 hours
   if (owed.length)
     actions.push({
-      kind: 'owed',
-      title: `${owed.length} ${owed.length === 1 ? 'customer owes' : 'customers owe'} you ${'₦' + owedTotal.toLocaleString('en-NG')}`,
-      text:
-        owed[0].days >= 2
-          ? `${owed[0].name}'s order is ${owed[0].days} days old.`
-          : 'Send a reminder with your account details.',
-      button: 'Remind',
+      kind: 'unpaid',
+      title: `${owed.length} ${owed.length === 1 ? 'order is' : 'orders are'} waiting for payment`,
+      text: 'Unpaid orders cancel after 48 hours, and the items go back on sale.',
+      button: 'See them',
     });
   const running = productRows
     .filter((p) => p.runsOut != null && p.runsOut <= 10)
@@ -530,6 +528,8 @@ export function buildReport({ shop, data: raw, products, openOrders, period, now
         (x) => x.amount,
       ),
       owedNow: owedTotal,
+      waiting: owed.length,
+      waitingValue: owedTotal,
     },
     goal,
     products: productRows,

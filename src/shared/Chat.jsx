@@ -104,9 +104,11 @@ export function ChatView({
   return (
     <div className="chat-list" ref={listRef}>
       {messages.map((m, i) => {
-        const mine = m.sender === me;
-        // tap a message: Copy, and Report for the other side's messages
-        const reportable = canReport && !mine && !m.pending && me !== 'admin';
+        // ShopDesk's own messages (while it decides a problem): Admin sees them as its own
+        const desk = m.sender === 'shopdesk';
+        const mine = m.sender === me || (me === 'admin' && desk);
+        // tap a message: Copy, and Report for the other side's messages (not ShopDesk's)
+        const reportable = canReport && !mine && !desk && !m.pending && me !== 'admin';
         const tappable = !m.pending && (reportable || !!m.body);
         const prev = messages[i - 1];
         const day = dayOfMsg(m);
@@ -122,6 +124,7 @@ export function ChatView({
               className={
                 'msg ' +
                 (mine ? 'mine' : 'theirs') +
+                (desk && !mine ? ' desk' : '') +
                 (m.pending ? ' pending' : '') +
                 (!newDay && prev && prev.sender === m.sender ? ' cont' : '') +
                 (last ? ' last' : '')
@@ -129,13 +132,19 @@ export function ChatView({
               onClick={tappable ? () => setMenu(menu === m.id ? null : m.id) : undefined}
             >
               {me === 'admin' && <span className="msg-who">{names[m.sender] || m.sender}</span>}
+              {desk && me !== 'admin' && (
+                <span className="msg-who desk-who">
+                  <i className="desk-mark" aria-hidden="true" />
+                  ShopDesk
+                </span>
+              )}
               {m.photo && <PhotoStrip paths={[m.photo]} label="Photo" />}
               {(m.video || m.localVideo) && <ChatVideo path={m.video} local={m.localVideo} />}
               {m.body && <p>{withLinks(m.body)}</p>}
               <span className="msg-time" title={m.pending ? '' : atText(m.created_at)}>
                 {m.pending ? 'Sending…' : clockOf(m.created_at)}
               </span>
-              {warnPay && !mine && otherAccount(m.body, payAccount) && (
+              {warnPay && !mine && !desk && otherAccount(m.body, payAccount) && (
                 <span className="msg-warn">Only pay to the account on your order.</span>
               )}
               {me === 'admin' && m.flag === 'other_account' && (

@@ -1,7 +1,7 @@
 // One order as you see it on Problems, Reports and Records: what was ordered (with the product photo the customer saw), the money, when each step happened (and
-// why it was cancelled), the packing photo, and the chat between the shop and the customer (read-only). A chat with no
-// problem or report opens only with a reason; each look goes in the Log.
-import React, { useState } from 'react';
+// why it was cancelled), the packing photo, and the chat between the shop and the customer. A chat with no problem or report
+// opens only with a reason; each look goes in the Log. While a problem is with you, you can write in the chat as ShopDesk.
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { atText } from '../lib/dates.js';
@@ -9,14 +9,33 @@ import { errText } from '../lib/helpers.js';
 import { photoUrl } from '../lib/photos.js';
 import { PhotoStrip } from '../shared/OrderPhotos.jsx';
 import { ChatView } from '../shared/Chat.jsx';
+import { MessageBox } from '../shared/MessageBox.jsx';
 
-export function AdminOrder({ o, canChat = true }) {
+export function AdminOrder({ o, canChat = true, caseId = null }) {
   const [chat, setChat] = useState(
     o && o.chat ? { messages: o.chat, shop: 'Shop', customer: o.customer_name } : null,
   );
   const [err, setErr] = useState('');
   const [asking, setAsking] = useState(false);
   const [why, setWhy] = useState('');
+  // a problem with you: the chat opens by itself, and you can write in it as ShopDesk
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    if (caseId && o && !chat)
+      supabase.rpc('admin_order_chat', { p_order: o.id, p_reason: null }).then(({ data, error }) => !error && setChat(data));
+  }, [caseId, o && o.id]);
+  async function sendCase() {
+    setSending(true);
+    setErr('');
+    const { data, error } = await supabase.rpc('admin_case_message', { p_problem: caseId, p_body: text });
+    setSending(false);
+    if (error) setErr(errText(error));
+    else {
+      setText('');
+      setChat((c) => ({ ...c, messages: [...((c && c.messages) || []), data] }));
+    }
+  }
   if (!o) return null;
   const pickup = o.mode === 'pickup';
   const steps = [
@@ -95,7 +114,21 @@ export function AdminOrder({ o, canChat = true }) {
           {o.packing_photo && <PhotoStrip paths={[o.packing_photo]} label="Packing photo" />}
         </div>
       </div>
-      {o.messages > 0 &&
+      {caseId ? (
+        <div className="stack-sm case-chat">
+          <span className="label">Their chat · what you write here, both of them see as ShopDesk</span>
+          {chat ? (
+            <ChatView
+              messages={chat.messages}
+              me="admin"
+              names={{ shop: chat.shop, customer: chat.customer, shopdesk: 'ShopDesk (you)' }}
+            />
+          ) : (
+            <p className="sub">Loading the chat…</p>
+          )}
+          <MessageBox value={text} onChange={setText} onSend={sendCase} busy={sending} />
+        </div>
+      ) : o.messages > 0 &&
         canChat &&
         (chat ? (
           <div className="stack-sm">
@@ -103,7 +136,7 @@ export function AdminOrder({ o, canChat = true }) {
             <ChatView
               messages={chat.messages}
               me="admin"
-              names={{ shop: chat.shop, customer: chat.customer }}
+              names={{ shop: chat.shop, customer: chat.customer, shopdesk: 'ShopDesk' }}
             />
           </div>
         ) : asking ? (

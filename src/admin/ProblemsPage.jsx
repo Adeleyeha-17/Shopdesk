@@ -174,6 +174,14 @@ function ProblemCard({ p, load, say, setModal }) {
         Reported {atText(p.created_at)}
         {p.status === 'with_shopdesk' &&
           (p.escalated_by === 'no_reply' ? ' · no answer in 48 hours' : ' · the customer asked you')}
+        {p.status === 'with_shopdesk' && p.decide_by && (
+          <>
+            {' · '}
+            <strong className={new Date(p.decide_by) < new Date() ? 'late-text' : ''}>
+              {new Date(p.decide_by) < new Date() ? 'late: ' : ''}decide by {atText(p.decide_by)}
+            </strong>
+          </>
+        )}
         {p.status === 'open' && ` · the shop has until ${atText(p.reply_by)}`}
       </p>
       <div className="two-col">
@@ -224,7 +232,11 @@ function ProblemCard({ p, load, say, setModal }) {
           </button>
         </div>
       </div>
-      <AdminOrder o={o} canChat={['with_shopdesk', 'decided'].includes(p.status)} />
+      <AdminOrder
+        o={o}
+        canChat={['with_shopdesk', 'decided'].includes(p.status)}
+        caseId={p.status === 'with_shopdesk' ? p.id : null}
+      />
       {p.status === 'decided' && (
         <p className="note">
           <strong>

@@ -9,7 +9,7 @@ import { naira, toInt } from '../lib/money.js';
 import { atText } from '../lib/dates.js';
 import { errText } from '../lib/helpers.js';
 import { uploadOrderPhoto } from '../lib/photos.js';
-import { kindText, problemState, replyBy, replyText } from '../lib/problems.js';
+import { decideBy, kindText, problemState, replyBy, replyText } from '../lib/problems.js';
 import { RefundSent, refundLine } from './RefundSent.jsx';
 import { PhotoStrip, PhotoPicker } from '../shared/OrderPhotos.jsx';
 
@@ -88,7 +88,8 @@ export function ProblemPanel({ o, p, code, run, say }) {
       )}
       {st === 'with_shopdesk' && !p.reply && (
         <p className="note">
-          <strong>ShopDesk is deciding.</strong> You can still give your side.
+          <strong>ShopDesk decides by {atText(decideBy(p))}.</strong> You can still give your side, and ShopDesk may
+          ask you something in the chat.
         </p>
       )}
 
@@ -182,7 +183,8 @@ export function ProblemPanel({ o, p, code, run, say }) {
         <p className="note">
           {p.escalated_by === 'customer'
             ? 'The customer asked ShopDesk to decide.'
-            : 'ShopDesk is deciding (answered after 48 hours).'}
+            : 'ShopDesk is deciding (answered after 48 hours).'}{' '}
+          ShopDesk decides by {atText(decideBy(p))}.
         </p>
       )}
       {st === 'sorted' && (

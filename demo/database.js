@@ -1894,6 +1894,7 @@ const RPC = {
           status: st,
           escalated_by: p.escalated_by || (st === 'with_shopdesk' && p.status === 'open' ? 'no_reply' : null),
           reply_by: iso(Date.parse(p.created_at) + 48 * HOUR),
+          decide_by: iso((p.escalated_at ? Date.parse(p.escalated_at) : Date.parse(p.created_at) + 48 * HOUR) + 48 * HOUR),
         };
       })(),
     };
