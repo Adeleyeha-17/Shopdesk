@@ -63,12 +63,6 @@ reset role; select monthly_goal from shops where id = :'rshop';
 set role authenticated; set request.jwt.claim.sub = 'a2000000-0000-4000-8000-000000000001';
 update shops set monthly_goal = -1 where id = :'rshop';
 
-\echo R7 a plan payment you record shows in the money out of that shop (expect 1|shopdesk|3000|ShopDesk plan · 1 month):
-reset role; insert into admins values ('33333333-3333-3333-3333-333333333333') on conflict do nothing;
-set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-select admin_record_payment(:'rshop', 3000, 1) is not null as recorded \gset
-reset role; select count(*) || '|' || min(kind) || '|' || min(amount) || '|' || min(note) from money_out where shop_id = :'rshop' and kind = 'shopdesk';
-
 \echo R8 a shop messages its own customers inside ShopDesk: no account numbers, only its customers, once a week (expect 3 plain errors, then shop_message|Report Shop|/reportshop, then 2 plain errors):
 set role authenticated; set request.jwt.claim.sub = 'a2000000-0000-4000-8000-000000000001';
 select message_customer('a2100000-0000-4000-8000-000000000001', 'Pay to 0123456789 for a discount');
@@ -85,7 +79,7 @@ select message_customer('a2100000-0000-4000-8000-000000000001', 'I am not a shop
 reset role; reset request.jwt.claim.sub;
 select send_monthly_reports((date_trunc('month', now() at time zone 'Africa/Lagos') + interval '14 days')::date);
 select send_monthly_reports((date_trunc('month', now() at time zone 'Africa/Lagos') + interval '1 month - 1 day')::date) > 0;
-select (title like 'Your % report is ready') || '|' || (body = '₦0 in from 2 orders · -₦48,000 left after money out. Tap to see it.' and url like '/?report=%#sales')
+select (title like 'Your % report is ready') || '|' || (body = '₦0 in from 2 orders · -₦45,000 left after money out. Tap to see it.' and url like '/?report=%#sales')
 from notifications where user_id = 'a2000000-0000-4000-8000-000000000001' and kind = 'monthly_report';
 select send_monthly_reports((date_trunc('month', now() at time zone 'Africa/Lagos') + interval '1 month - 1 day')::date);
 set role authenticated; set request.jwt.claim.sub = 'a2000000-0000-4000-8000-000000000001';

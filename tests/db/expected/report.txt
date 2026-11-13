@@ -20,24 +20,22 @@ psql:report.sql:56: ERROR:  permission denied for table money_out
 R6 the monthly goal: the shop sets it, not below zero (expect 750000, then a plain error):
 750000
 psql:report.sql:64: ERROR:  new row for relation "shops" violates check constraint "shops_monthly_goal_check"
-R7 a plan payment you record shows in the money out of that shop (expect 1|shopdesk|3000|ShopDesk plan · 1 month):
-1|shopdesk|3000|ShopDesk plan · 1 month
 R8 a shop messages its own customers inside ShopDesk: no account numbers, only its customers, once a week (expect 3 plain errors, then shop_message|Report Shop|/reportshop, then 2 plain errors):
-psql:report.sql:74: ERROR:  Send account and phone numbers in an order's chat instead.
+psql:report.sql:68: ERROR:  Send account and phone numbers in an order's chat instead.
 CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
-psql:report.sql:75: ERROR:  You can only message customers who have ordered from you.
+psql:report.sql:69: ERROR:  You can only message customers who have ordered from you.
 CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
-psql:report.sql:76: ERROR:  Write a message.
+psql:report.sql:70: ERROR:  Write a message.
 CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
 
 shop_message|Report Shop|/reportshop
-psql:report.sql:80: ERROR:  You messaged this customer in the last 7 days. Try again later.
+psql:report.sql:74: ERROR:  You messaged this customer in the last 7 days. Try again later.
 CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
-psql:report.sql:82: ERROR:  Not allowed.
+psql:report.sql:76: ERROR:  Not allowed.
 CONTEXT:  PL/pgSQL function message_customer(uuid,text) line N at RAISE
 R9 the month-end report: only on the last day, once per shop, and the app cannot send it (expect 0, then t, then true|true, then 0, then a permission error):
 0
 t
 true|true
 0
-psql:report.sql:92: ERROR:  permission denied for function send_monthly_reports
+psql:report.sql:86: ERROR:  permission denied for function send_monthly_reports

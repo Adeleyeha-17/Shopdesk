@@ -133,10 +133,8 @@ select string_agg(x->>'action', ',') from jsonb_array_elements(admin_audit_log()
 -- ===== running ShopDesk as a business =====
 set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select admin_set_shop_status(:'s1', 'active', 'Report checked, all fine');
-\echo N1 settings start with a 30-day trial, 7 grace days, unpaid shops close (expect 30 7 true):
-select s->>'trial_days', s->>'grace_days', s->>'close_unpaid' from (select admin_billing()->'settings' s) x;
-\echo N2 approval started the free trial for Rose (expect t):
-reset role; select paid_until > now() + interval '29 days' from shops where slug = 'rose';
+\echo N1 ShopDesk is free for shops: settings do not close unpaid shops (expect false):
+reset role; select close_unpaid from settings where id = 1;
 \echo N3 customer taps I have sent the money, it shows on their page; a paid order refuses it (expect t, error):
 set role anon; reset request.jwt.claim.sub;
 set role authenticated; set request.jwt.claim.sub = '66666666-6666-6666-6666-666666666666';
@@ -165,29 +163,16 @@ set role anon; reset request.jwt.claim.sub;
 \echo N7 vendor sees why it is hidden (expect t + reason):
 set role authenticated; set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 select hidden_by_admin, hidden_reason from products where id = :'amouage';
-\echo N8 vendors cannot touch plans, settings or other owner tools (expect Not allowed x3, permission denied):
-select admin_billing(); select admin_record_payment(:'s1', 0, 12); select admin_shop_detail(:'s1');
+\echo N8 vendors cannot touch settings or other owner tools (expect Not allowed, permission denied):
+select admin_shop_detail(:'s1');
 select * from settings;
-\echo N8b with no price set, a run-out plan does not close the shop (expect open):
-reset role; update shops set paid_until = now() - interval '10 days' where slug = 'rose';
+\echo N9 ShopDesk is free for shops: even with a price and closing on, an old plan date never closes a shop or shows in Needs attention (expect open, 0):
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select admin_save_settings('{"monthly_price": 3000, "close_unpaid": true, "pay_bank": "Moniepoint", "pay_account_number": "70 1234 5678", "pay_account_name": "SHOPDESK EDEN", "admin_whatsapp": "08090000000"}') \g /dev/null
+reset role; update shops set paid_until = now() - interval '40 days' where slug = 'rose';
 set role anon; reset request.jwt.claim.sub; select case when get_storefront('rose') is null then 'closed' else 'open' end;
 set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-\echo N9 with no free plan, a plan run out past the grace days: order page closes and it shows in Needs attention (expect closed, plan):
-set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-select admin_save_settings('{"monthly_price": 3000, "free_orders": 0, "pay_bank": "Moniepoint", "pay_account_number": "70 1234 5678", "pay_account_name": "SHOPDESK EDEN", "admin_whatsapp": "08090000000"}');
-reset role; update shops set paid_until = now() - interval '10 days' where slug = 'rose';
-set role anon; reset request.jwt.claim.sub; select coalesce(get_storefront('rose')::text, 'closed');
-set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-select x->>'kind' from jsonb_array_elements(admin_attention()) x where x->>'kind' = 'plan';
-\echo N10 vendor sees their plan and where to pay (expect 3000, SHOPDESK EDEN, 7012345678, f):
-set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-select my_plan()->>'monthly_price', my_plan()->>'pay_account_name', my_plan()->>'pay_account_number', my_plan()->>'open';
-\echo N11 owner records 1 month: shop reopens, paid a month ahead, income counted (expect t, open, 3000, 3000):
-set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-select admin_record_payment(:'s1', 3000, 1, 'Transfer from Rose') > now() + interval '27 days';
-set role anon; reset request.jwt.claim.sub; select case when get_storefront('rose') is null then 'closed' else 'open' end;
-set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-select (select (m->>'income') from jsonb_array_elements(admin_billing()->'months') m order by m->>'month' desc limit 1), (select (s->>'paid_total') from jsonb_array_elements(admin_billing()->'shops') s where s->>'slug' = 'rose');
+select count(*) from jsonb_array_elements(admin_attention()) x where x->>'kind' = 'plan';
 \echo N12 announcements: vendors see live ones; visitors cannot; ending one removes it (expect 1, permission denied, 0):
 select admin_post_announcement('New: bank alerts', 'From Monday ShopDesk can read your OPay alerts.', 7);
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222'; select jsonb_array_length(get_announcements());
@@ -335,7 +320,7 @@ set role anon; reset request.jwt.claim.sub; select admin_delete_shop(:'roseid', 
 \echo R24 delete removes the shop and everything that belongs to it, keeps a note in the log (expect counts, then 0 0 0 0 0 0 0, then a log line, f):
 reset role;
 select (select count(*) from products where shop_id = :'roseid') > 0 as had_products, (select count(*) from orders where shop_id = :'roseid') > 0 as had_orders,
-  (select count(*) from payments where shop_id = :'roseid') > 0 as had_payments, (select count(*) from plan_payments where shop_id = :'roseid') > 0 as had_plan_payments;
+  (select count(*) from payments where shop_id = :'roseid') > 0 as had_payments;
 select count(*) as items_before from order_items i join orders o on o.id = i.order_id where o.shop_id = :'roseid' \gset
 set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select (r->>'orders')::int > 0, (r->>'products')::int > 0, jsonb_typeof(r->'photos') from (select admin_delete_shop(:'roseid', ' ROSE ', 'Vendor asked us to remove the shop') r) x;

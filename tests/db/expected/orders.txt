@@ -93,54 +93,39 @@ t
 T23 audit log actions:
 set_status:suspended,support_view,shop_changed,approve,reject
 
-N1 settings start with a 30-day trial, 7 grace days, unpaid shops close (expect 30 7 true):
-30|7|true
-N2 approval started the free trial for Rose (expect t):
-t
+N1 ShopDesk is free for shops: settings do not close unpaid shops (expect false):
+f
 N3 customer taps I have sent the money, it shows on their page; a paid order refuses it (expect t, error):
 
 true
-psql:orders.sql:146: ERROR:  This order is already paid or closed.
+psql:orders.sql:144: ERROR:  This order is already paid or closed.
 CONTEXT:  PL/pgSQL function customer_says_paid(uuid) line N at RAISE
 N4 a day later with no confirmation, it is in Needs attention with the bank change and the report (expect bank_changed,reports,says_paid):
 bank_changed,reports,says_paid
 N5 vendor tries to unhide or create hidden-flag products itself (expect permission denied twice):
-psql:orders.sql:153: ERROR:  permission denied for table products
-psql:orders.sql:154: ERROR:  permission denied for table products
+psql:orders.sql:151: ERROR:  permission denied for table products
+psql:orders.sql:152: ERROR:  permission denied for table products
 N6 owner hides a product: needs a reason; then it leaves the order page even if the vendor shows it (expect error, 2 then 1, 1, error):
 2
-psql:orders.sql:159: ERROR:  Write why it's hidden (the vendor sees it).
+psql:orders.sql:157: ERROR:  Write why it's hidden (the vendor sees it).
 CONTEXT:  PL/pgSQL function admin_hide_product(uuid,boolean,text) line N at RAISE
 
 1
-psql:orders.sql:163: ERROR:  An item is no longer available.
+psql:orders.sql:161: ERROR:  An item is no longer available.
 CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
 N7 vendor sees why it is hidden (expect t + reason):
 t|Looks counterfeit; send proof of supplier
-N8 vendors cannot touch plans, settings or other owner tools (expect Not allowed x3, permission denied):
-psql:orders.sql:169: ERROR:  Not allowed.
-CONTEXT:  PL/pgSQL function admin_billing() line N at RAISE
-psql:orders.sql:169: ERROR:  Not allowed.
-CONTEXT:  PL/pgSQL function admin_record_payment(uuid,integer,integer,text) line N at RAISE
-psql:orders.sql:169: ERROR:  Not allowed.
+N8 vendors cannot touch settings or other owner tools (expect Not allowed, permission denied):
+psql:orders.sql:167: ERROR:  Not allowed.
 CONTEXT:  PL/pgSQL function admin_shop_detail(uuid) line N at RAISE
-psql:orders.sql:170: ERROR:  permission denied for table settings
-N8b with no price set, a run-out plan does not close the shop (expect open):
+psql:orders.sql:168: ERROR:  permission denied for table settings
+N9 ShopDesk is free for shops: even with a price and closing on, an old plan date never closes a shop or shows in Needs attention (expect open, 0):
 open
-N9 with no free plan, a plan run out past the grace days: order page closes and it shows in Needs attention (expect closed, plan):
-
-closed
-plan
-N10 vendor sees their plan and where to pay (expect 3000, SHOPDESK EDEN, 7012345678, f):
-3000|SHOPDESK EDEN|7012345678|false
-N11 owner records 1 month: shop reopens, paid a month ahead, income counted (expect t, open, 3000, 3000):
-t
-open
-3000|3000
+0
 N12 announcements: vendors see live ones; visitors cannot; ending one removes it (expect 1, permission denied, 0):
 
 1
-psql:orders.sql:194: ERROR:  permission denied for function get_announcements
+psql:orders.sql:179: ERROR:  permission denied for function get_announcements
 
 0
 N13 growth: 12 weeks, Rose is a top shop (expect 12, t):
@@ -148,7 +133,7 @@ N13 growth: 12 weeks, Rose is a top shop (expect 12, t):
 N14 shop page: products and history, no customer names or addresses from orders (expect 2, t, f, f):
 2|t|f|f
 N15 visitors cannot open owner tools (expect permission denied):
-psql:orders.sql:204: ERROR:  permission denied for function admin_attention
+psql:orders.sql:189: ERROR:  permission denied for function admin_attention
 R1 order page and storefront no longer carry the shop WhatsApp (expect f f):
 f|f
 R2 a signed-in customer orders: saved to their account and their details remembered (expect t, Bisi Ade, 1):
@@ -159,17 +144,17 @@ R3 nobody else sees that customer details: other customer, vendor (expect 0 0):
 0
 0
 R4 vendor confirms: customer pays delivery so the fee is needed first (expect error, then confirmed t):
-psql:orders.sql:223: ERROR:  Set the delivery fee first.
+psql:orders.sql:208: ERROR:  Set the delivery fee first.
 CONTEXT:  PL/pgSQL function confirm_order(bigint) line N at RAISE
 
 t
 R5 hand to rider before payment, without a number, with a past time (expect 3 errors):
-psql:orders.sql:227: ERROR:  Only paid orders can go out.
+psql:orders.sql:212: ERROR:  Only paid orders can go out.
 CONTEXT:  PL/pgSQL function hand_to_rider(bigint,text,text,timestamp with time zone) line N at RAISE
 {"left": 0, "paid": 16500}
-psql:orders.sql:232: ERROR:  Check the rider's number, like 0803 123 4567.
+psql:orders.sql:217: ERROR:  Check the rider's number, like 0803 123 4567.
 CONTEXT:  PL/pgSQL function hand_to_rider(bigint,text,text,timestamp with time zone) line N at RAISE
-psql:orders.sql:233: ERROR:  Pick a delivery time within 14 days.
+psql:orders.sql:218: ERROR:  Pick a delivery time within 14 days.
 CONTEXT:  PL/pgSQL function hand_to_rider(bigint,text,text,timestamp with time zone) line N at RAISE
 R6 with the rider: customer sees rider, number and promised time; the shop cannot skip to delivered without a rider on other orders (expect out Musa 08031234567 t):
 
@@ -182,7 +167,7 @@ late
 R9 customer confirms they got it; it cannot be confirmed twice (expect delivered customer, error):
 
 delivered|customer
-psql:orders.sql:249: ERROR:  This order can't be marked received yet.
+psql:orders.sql:234: ERROR:  This order can't be marked received yet.
 CONTEXT:  PL/pgSQL function customer_received(uuid) line N at RAISE
 R10 shop marks delivered, then the customer confirms too (expect shop, customer):
 {"left": 0, "paid": 15000}
@@ -196,28 +181,28 @@ R11 every order already belongs to the account that placed it; nobody else can t
 0
 1
 R12 visitors cannot list orders or claim them; customers can forget their saved details (expect permission denied x2, 0):
-psql:orders.sql:268: ERROR:  permission denied for function my_orders
-psql:orders.sql:268: ERROR:  permission denied for function claim_orders
+psql:orders.sql:253: ERROR:  permission denied for function my_orders
+psql:orders.sql:253: ERROR:  permission denied for function claim_orders
 0
 R13 a shop cannot take a ShopDesk page name as its link (expect check violation):
-psql:orders.sql:272: ERROR:  new row for relation "shops" violates check constraint "shops_slug_reserved"
+psql:orders.sql:257: ERROR:  new row for relation "shops" violates check constraint "shops_slug_reserved"
 R14 visitors who are not signed in cannot place an order (expect permission denied):
-psql:orders.sql:275: ERROR:  permission denied for function place_order
+psql:orders.sql:260: ERROR:  permission denied for function place_order
 R15 shop accounts cannot order, whether their shop is open (Rose) or turned down (Tunde) (expect 2 errors):
-psql:orders.sql:278: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:263: ERROR:  This email runs a shop. Use another email to order.
 CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
-psql:orders.sql:280: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:265: ERROR:  This email runs a shop. Use another email to order.
 CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
 R16 shop accounts cannot claim orders or save customer details (expect 2 errors, then 0 saved):
-psql:orders.sql:283: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:268: ERROR:  This email runs a shop. Use another email to order.
 CONTEXT:  PL/pgSQL function claim_orders(uuid[]) line N at RAISE
-psql:orders.sql:284: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:269: ERROR:  This email runs a shop. Use another email to order.
 CONTEXT:  PL/pgSQL function customers_one_role() line N at RAISE
 0
 R17 emails that have shopped cannot open a shop: one with orders, one with only saved details (expect 2 errors):
-psql:orders.sql:288: ERROR:  This email is a customer account. Use another email for your shop.
+psql:orders.sql:273: ERROR:  This email is a customer account. Use another email for your shop.
 CONTEXT:  PL/pgSQL function shops_one_role() line N at RAISE
-psql:orders.sql:291: ERROR:  This email is a customer account. Use another email for your shop.
+psql:orders.sql:276: ERROR:  This email is a customer account. Use another email for your shop.
 CONTEXT:  PL/pgSQL function shops_one_role() line N at RAISE
 R18 the app can ask what the account is: shop, customer (expect vendor t customer f, then vendor f customer t):
 true|false
@@ -225,33 +210,33 @@ false|true
 R19 a brand-new email can still open a shop, and then it cannot order (expect f f, pending, error):
 false|false
 pending
-psql:orders.sql:300: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:285: ERROR:  This email runs a shop. Use another email to order.
 CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
 R20 nobody can call the role checks directly, and visitors cannot ask what an account is (expect permission denied x3):
-psql:orders.sql:302: ERROR:  permission denied for function has_shop
-psql:orders.sql:302: ERROR:  permission denied for function has_shopped
-psql:orders.sql:303: ERROR:  permission denied for function my_account
+psql:orders.sql:287: ERROR:  permission denied for function has_shop
+psql:orders.sql:287: ERROR:  permission denied for function has_shopped
+psql:orders.sql:288: ERROR:  permission denied for function my_account
 R21 only the customer who placed an order can say they paid or got it: not a visitor with the link, not the shop, not another customer (expect 6 errors, then t, delivered customer):
-psql:orders.sql:307: ERROR:  Sign in with the email you ordered with.
+psql:orders.sql:292: ERROR:  Sign in with the email you ordered with.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_says_paid(uuid) line N during statement block local variable initialization
-psql:orders.sql:308: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:293: ERROR:  This email runs a shop. Use another email to order.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_says_paid(uuid) line N during statement block local variable initialization
-psql:orders.sql:309: ERROR:  Sign in with the email you ordered with.
+psql:orders.sql:294: ERROR:  Sign in with the email you ordered with.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_says_paid(uuid) line N during statement block local variable initialization
 
 true
 t
 
-psql:orders.sql:317: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:302: ERROR:  This email runs a shop. Use another email to order.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_received(uuid) line N during statement block local variable initialization
-psql:orders.sql:318: ERROR:  Sign in with the email you ordered with.
+psql:orders.sql:303: ERROR:  Sign in with the email you ordered with.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_received(uuid) line N during statement block local variable initialization
-psql:orders.sql:319: ERROR:  Sign in with the email you ordered with.
+psql:orders.sql:304: ERROR:  Sign in with the email you ordered with.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_received(uuid) line N during statement block local variable initialization
 
@@ -260,18 +245,18 @@ R22 close for good: the shop page closes, and that email still cannot shop (expe
 
 banned|f
 
-psql:orders.sql:328: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:313: ERROR:  This email runs a shop. Use another email to order.
 CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
 R23 delete is only for you, and only with the link name typed and a reason (expect 4 errors):
-psql:orders.sql:330: ERROR:  Not allowed.
+psql:orders.sql:315: ERROR:  Not allowed.
 CONTEXT:  PL/pgSQL function admin_delete_shop(uuid,text,text) line N at RAISE
-psql:orders.sql:332: ERROR:  Type the shop's link name exactly to confirm.
+psql:orders.sql:317: ERROR:  Type the shop's link name exactly to confirm.
 CONTEXT:  PL/pgSQL function admin_delete_shop(uuid,text,text) line N at RAISE
-psql:orders.sql:333: ERROR:  Write the reason (it goes in the audit log).
+psql:orders.sql:318: ERROR:  Write the reason (it goes in the audit log).
 CONTEXT:  PL/pgSQL function admin_delete_shop(uuid,text,text) line N at RAISE
-psql:orders.sql:334: ERROR:  permission denied for function admin_delete_shop
+psql:orders.sql:319: ERROR:  permission denied for function admin_delete_shop
 R24 delete removes the shop and everything that belongs to it, keeps a note in the log (expect counts, then 0 0 0 0 0 0 0, then a log line, f):
-t|t|t|t
+t|t|t
 t|t|array
 0|0|0|0|0|0|0
 delete_shop|t

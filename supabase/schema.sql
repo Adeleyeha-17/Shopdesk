@@ -142,7 +142,7 @@ create table if not exists public.settings (
   monthly_price integer not null default 0 check (monthly_price between 0 and 10000000),
   trial_days integer not null default 30 check (trial_days between 0 and 365),
   grace_days integer not null default 7 check (grace_days between 0 and 60),
-  close_unpaid boolean not null default true,
+  close_unpaid boolean not null default false,
   pay_bank text not null default '' check (char_length(pay_bank) <= 30),
   pay_account_number text not null default '' check (char_length(pay_account_number) <= 20),
   pay_account_name text not null default '' check (char_length(pay_account_name) <= 60),
@@ -420,7 +420,6 @@ alter table public.order_items add column if not exists was_price integer check 
 alter table public.customers add column if not exists area text not null default '' check (char_length(area) <= 40);
 alter table public.shops add column if not exists monthly_goal integer not null default 0 check (monthly_goal between 0 and 2000000000);
 -- Money out: what a shop spends to run (restock, packaging, transport...), so Sales shows what's left.
--- ShopDesk plan payments are added here automatically (money_out_from_plan below).
 create table if not exists public.money_out (
   id bigint generated always as identity primary key,
   shop_id uuid not null references public.shops(id) on delete cascade,
@@ -462,26 +461,10 @@ language sql stable security definer set search_path = public as $$
   select jsonb_build_object('vendor', public.has_shop(auth.uid()), 'customer', public.has_shopped(auth.uid()));
 $$;
 
--- A shop's orders this month (Lagos time, not counting cancelled ones), and when it passed the free orders (the first order
--- over the limit), if it has.
-create or replace function public.shop_month(p_shop uuid) returns table (orders int, passed_at timestamptz)
-language sql stable security definer set search_path = public as $$
-  with m as (
-    select o.created_at from public.orders o
-    where o.shop_id = p_shop and o.status <> 'cancelled'
-      and o.created_at >= (date_trunc('month', now() at time zone 'Africa/Lagos') at time zone 'Africa/Lagos'))
-  select (select count(*)::int from m),
-    (select created_at from m order by created_at offset (select free_orders from public.settings where id = 1) limit 1);
-$$;
-
--- A shop takes orders when you've approved it and (once you charge a price and close unpaid shops) either its plan hasn't run
--- out past the grace days, or it's on the free plan: up to the free orders this month, and for the grace days after it passes them.
+-- A shop takes orders once you've approved it. ShopDesk is free for shops: there's no plan to run out.
 create or replace function public.shop_open(s public.shops) returns boolean
 language sql stable security definer set search_path = public as $$
-  select s.status = 'active' and coalesce((select not st.close_unpaid or st.monthly_price = 0 or s.paid_until is null
-      or s.paid_until + make_interval(days => st.grace_days) > now()
-      or (st.free_orders > 0 and (m.orders <= st.free_orders or m.passed_at + make_interval(days => st.grace_days) > now()))
-    from public.settings st cross join public.shop_month(s.id) m where st.id = 1), true);
+  select s.status = 'active';
 $$;
 
 -- An order's code, as customers and the shop see it (BB-1043).
@@ -1947,16 +1930,6 @@ begin
       'text', count(*) || ' cancelled orders in the last 30 days')
     from public.orders o join public.shops s on s.id = o.shop_id where o.status = 'cancelled' and o.created_at > now() - interval '30 days' group by s.id having count(*) >= 5
     union all
-    select jsonb_build_object('kind', 'plan', 'level', 2, 'shop_id', s.id, 'shop', s.name, 'slug', s.slug, 'whatsapp', s.whatsapp,
-      'since', case when st.free_orders > 0 then m.passed_at else s.paid_until end,
-      'text', case when st.free_orders > 0 then
-          case when public.shop_open(s) then 'Passed the ' || st.free_orders || ' free orders this month. The shop closes on ' || to_char(m.passed_at + make_interval(days => st.grace_days), 'Dy DD Mon') || ' unless they pay'
-            else 'Passed the ' || st.free_orders || ' free orders this month and closed for not paying' end
-        when public.shop_open(s) then 'Plan ran out. The shop closes on ' || to_char(s.paid_until + make_interval(days => st.grace_days), 'Dy DD Mon') || ' unless they pay'
-        else 'Closed for not paying since ' || to_char(s.paid_until + make_interval(days => st.grace_days), 'Dy DD Mon') end)
-    from public.shops s cross join public.shop_month(s.id) m
-    where st.close_unpaid and st.monthly_price > 0 and s.status = 'active' and s.paid_until < now() and (st.free_orders = 0 or m.orders > st.free_orders)
-    union all
     select jsonb_build_object('kind', 'quiet', 'level', 3, 'shop_id', s.id, 'shop', s.name, 'slug', s.slug, 'whatsapp', s.whatsapp, 'since', s.last_active_at,
       'text', 'Hasn''t opened ShopDesk in ' || extract(day from now() - s.last_active_at)::int || ' days'
         || case when not exists (select 1 from public.products p where p.shop_id = s.id and p.active) then ', and has no products' else '' end)
@@ -2155,23 +2128,6 @@ begin
   insert into public.audit_log (actor, action, shop_id, detail) values (auth.uid(), case when p_hide then 'hide_product' else 'show_product' end, v.shop_id, left(v.name || case when p_hide then ': ' || v_reason else '' end, 300));
 end $$;
 
--- Plans and payments: your settings, every shop's plan, recent payments and income by month.
-create or replace function public.admin_billing() returns jsonb
-language plpgsql stable security definer set search_path = public as $$
-begin
-  if not public.is_admin() then raise exception 'Not allowed.'; end if;
-  return jsonb_build_object(
-    'settings', (select to_jsonb(st) - 'id' from public.settings st where id = 1),
-    'shops', (select coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'slug', s.slug, 'status', s.status, 'whatsapp', s.whatsapp, 'paid_until', s.paid_until, 'open', public.shop_open(s),
-        'month_orders', (select orders from public.shop_month(s.id)), 'passed_at', (select passed_at from public.shop_month(s.id)),
-        'last_paid', (select max(created_at) from public.plan_payments pp where pp.shop_id = s.id), 'paid_total', (select coalesce(sum(amount), 0) from public.plan_payments pp where pp.shop_id = s.id))
-        order by s.paid_until nulls last), '[]'::jsonb) from public.shops s where s.status in ('active', 'suspended')),
-    'payments', (select coalesce(jsonb_agg(jsonb_build_object('shop', s.name, 'amount', pp.amount, 'months', pp.months, 'note', pp.note, 'paid_until', pp.paid_until, 'created_at', pp.created_at)
-        order by pp.created_at desc), '[]'::jsonb) from (select * from public.plan_payments order by created_at desc limit 50) pp join public.shops s on s.id = pp.shop_id),
-    'months', (select jsonb_agg(jsonb_build_object('month', m::date, 'income', (select coalesce(sum(amount), 0) from public.plan_payments pp where pp.created_at >= m and pp.created_at < m + interval '1 month')) order by m)
-      from generate_series(date_trunc('month', now()) - interval '11 months', date_trunc('month', now()), interval '1 month') m));
-end $$;
-
 create or replace function public.admin_save_settings(p jsonb) returns void
 language plpgsql security definer set search_path = public as $$
 begin
@@ -2193,117 +2149,6 @@ begin
     raise exception 'ShopDesk Delivery is paid online, so Pay online has to be on while it''s on.'; end if;
   insert into public.audit_log (actor, action, detail) values (auth.uid(), 'settings', left(p::text, 300));
 end $$;
-
--- You record a plan payment a vendor sent you; their plan runs on from today or from its current end, whichever is later.
-create or replace function public.admin_record_payment(p_shop uuid, p_amount int, p_months int, p_note text default null) returns timestamptz
-language plpgsql security definer set search_path = public as $$
-declare v_until timestamptz;
-begin
-  if not public.is_admin() then raise exception 'Not allowed.'; end if;
-  if p_months is null or p_months < 1 or p_months > 24 then raise exception 'Months must be between 1 and 24.'; end if;
-  if p_amount is null or p_amount < 0 then raise exception 'Enter the amount they paid.'; end if;
-  update public.shops set paid_until = greatest(coalesce(paid_until, now()), now()) + make_interval(months => p_months) where id = p_shop returning paid_until into v_until;
-  if v_until is null then raise exception 'Shop not found.'; end if;
-  insert into public.plan_payments (shop_id, amount, months, note, paid_until, created_by) values (p_shop, p_amount, p_months, left(trim(coalesce(p_note, '')), 200), v_until, auth.uid());
-  insert into public.audit_log (actor, action, shop_id, detail) values (auth.uid(), 'plan_payment', p_shop, p_amount || ' for ' || p_months || ' month(s), now paid until ' || to_char(v_until, 'DD Mon YYYY'));
-  return v_until;
-end $$;
-
--- Each plan payment you record is added to that shop's money out, so its report shows what ShopDesk costs.
-create or replace function public.money_out_from_plan() returns trigger
-language plpgsql security definer set search_path = public as $$
-begin
-  if new.amount > 0 then
-    insert into public.money_out (shop_id, amount, kind, note, spent_on, created_at)
-    values (new.shop_id, new.amount, 'shopdesk', 'ShopDesk plan · ' || new.months || ' month' || case when new.months = 1 then '' else 's' end,
-            (new.created_at at time zone 'Africa/Lagos')::date, new.created_at);
-  end if;
-  return new;
-end $$;
-drop trigger if exists plan_payments_money_out on public.plan_payments;
-create trigger plan_payments_money_out after insert on public.plan_payments for each row execute function public.money_out_from_plan();
-revoke all on function public.money_out_from_plan() from public, anon, authenticated;
-
--- ---------- invites ----------
--- A new shop (not yet reviewed, set up in the last two days) says which shop's invite link brought it.
-create or replace function public.claim_invite(p_slug text) returns boolean
-language plpgsql security definer set search_path = public as $$
-declare me public.shops; inv public.shops; st public.settings;
-begin
-  select * into me from public.shops where owner_id = auth.uid();
-  if not found or me.invited_by is not null or me.reviewed_at is not null or me.created_at < now() - interval '2 days' then return false; end if;
-  select * into inv from public.shops where slug = lower(trim(coalesce(p_slug, ''))) and status = 'active' and id <> me.id;
-  if not found then return false; end if;
-  update public.shops set invited_by = inv.id where id = me.id;
-  select * into st from public.settings where id = 1;
-  if st.invites_on then
-    perform public.notify(inv.owner_id, null, 'invite_joined', me.name || ' joined from your invite',
-      case when st.invite_months > 0 then 'You get ' || st.invite_months || ' free month' || case when st.invite_months = 1 then '' else 's' end ||
-        ' when they pay for their first month.' else 'Thanks for bringing them to ShopDesk.' end, '/#shop');
-  end if;
-  return true;
-end $$;
-
--- The first paid month of an invited shop gives both shops their free months (once), while invites are on.
-create or replace function public.invite_reward() returns trigger
-language plpgsql security definer set search_path = public as $$
-declare s public.shops; inv public.shops; st public.settings; v_until timestamptz;
-begin
-  select * into st from public.settings where id = 1;
-  select * into s from public.shops where id = new.shop_id;
-  if not st.invites_on or new.amount <= 0 or s.invited_by is null or s.invite_rewarded_at is not null then return new; end if;
-  select * into inv from public.shops where id = s.invited_by;
-  update public.shops set invite_rewarded_at = now(),
-    paid_until = case when st.invited_months > 0 then greatest(coalesce(paid_until, now()), now()) + make_interval(months => st.invited_months) else paid_until end
-  where id = s.id returning paid_until into v_until;
-  if st.invited_months > 0 then
-    perform public.notify(s.owner_id, null, 'invite_reward', 'A free month from your invite',
-      'Your plan now runs to ' || to_char(v_until at time zone 'Africa/Lagos', 'FMDD FMMonth YYYY') || '.', '/#shop');
-  end if;
-  if inv.id is not null and st.invite_months > 0 then
-    update public.shops set paid_until = greatest(coalesce(paid_until, now()), now()) + make_interval(months => st.invite_months)
-    where id = inv.id returning paid_until into v_until;
-    perform public.notify(inv.owner_id, null, 'invite_reward', 'You''ve earned ' || st.invite_months || ' free month' || case when st.invite_months = 1 then '' else 's' end,
-      s.name || ' paid for their first month. Your plan now runs to ' || to_char(v_until at time zone 'Africa/Lagos', 'FMDD FMMonth YYYY') || '.', '/#shop');
-  end if;
-  insert into public.audit_log (actor, action, shop_id, detail)
-  values (auth.uid(), 'invite_reward', s.id, left('Invited by ' || coalesce(inv.name, '?') || ': ' || st.invited_months || ' month(s) to ' || s.name || ', ' || st.invite_months || ' to ' || coalesce(inv.name, '?'), 300));
-  return new;
-end $$;
-drop trigger if exists plan_payments_invite on public.plan_payments;
-create trigger plan_payments_invite after insert on public.plan_payments for each row execute function public.invite_reward();
-
--- The Shop tab: is it on, the shop's link name, the reward, and the shops it brought in.
-create or replace function public.my_invites() returns jsonb
-language sql stable security definer set search_path = public as $$
-  select jsonb_build_object('on', st.invites_on, 'slug', s.slug, 'months', st.invite_months, 'new_months', st.invited_months,
-    'rewarded', (select count(*) from public.shops x where x.invited_by = s.id and x.invite_rewarded_at is not null),
-    'shops', coalesce((select jsonb_agg(jsonb_build_object('name', x.name, 'joined', x.created_at,
-        'state', case when x.invite_rewarded_at is not null then 'rewarded' when x.status = 'active' then 'approved' when x.status = 'pending' then 'pending' else 'closed' end)
-        order by x.created_at desc) from public.shops x where x.invited_by = s.id), '[]'::jsonb))
-  from public.shops s cross join public.settings st where s.owner_id = auth.uid() and st.id = 1 and st.invites_on;
-$$;
-
--- Admin > Invites: the settings and every invite.
-create or replace function public.admin_invites() returns jsonb
-language plpgsql stable security definer set search_path = public as $$
-begin
-  if not public.is_admin() then raise exception 'Not allowed.'; end if;
-  return jsonb_build_object(
-    'settings', (select jsonb_build_object('invites_on', invites_on, 'invite_months', invite_months, 'invited_months', invited_months) from public.settings where id = 1),
-    'rows', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'name', x.name, 'by', i.name, 'by_id', i.id, 'joined', x.created_at, 'status', x.status,
-        'rewarded_at', x.invite_rewarded_at, 'paid', exists (select 1 from public.plan_payments pp where pp.shop_id = x.id and pp.amount > 0))
-        order by x.created_at desc) from public.shops x join public.shops i on i.id = x.invited_by), '[]'::jsonb));
-end $$;
-
--- What a vendor sees about their own plan, and where to pay you.
-create or replace function public.my_plan() returns jsonb
-language sql stable security definer set search_path = public as $$
-  select jsonb_build_object('paid_until', s.paid_until, 'open', public.shop_open(s), 'monthly_price', st.monthly_price, 'grace_days', st.grace_days, 'close_unpaid', st.close_unpaid,
-    'free_orders', st.free_orders, 'month_orders', (select orders from public.shop_month(s.id)), 'passed_at', (select passed_at from public.shop_month(s.id)),
-    'pay_bank', st.pay_bank, 'pay_account_number', st.pay_account_number, 'pay_account_name', st.pay_account_name, 'admin_whatsapp', st.admin_whatsapp)
-  from public.shops s cross join public.settings st where s.owner_id = auth.uid() and st.id = 1;
-$$;
 
 -- Announcements: a notice shown in every vendor's app until it ends.
 create or replace function public.admin_post_announcement(p_title text, p_body text, p_days int default 7) returns void
@@ -2613,7 +2458,7 @@ grant execute on function public.is_admin(), public.my_shop_id(), public.set_del
   public.advance_order(bigint), public.add_stock(uuid, int), public.add_option_stock(uuid, int), public.save_product(uuid, jsonb), public.delete_product(uuid), public.touch_shop(), public.admin_overview(), public.admin_reports(),
   public.admin_resolve_report(bigint, text), public.admin_set_shop_status(uuid, text, text), public.admin_delete_shop(uuid, text, text), public.admin_review_shop(uuid, boolean, text), public.admin_support_view(uuid, text), public.admin_audit_log(),
   public.purge_customer_details(int), public.admin_attention(), public.admin_growth(), public.admin_shop_detail(uuid), public.admin_hide_product(uuid, boolean, text),
-  public.admin_billing(), public.admin_save_settings(jsonb), public.admin_record_payment(uuid, int, int, text), public.my_plan(),
+  public.admin_save_settings(jsonb),
   public.admin_post_announcement(text, text, int), public.admin_end_announcement(bigint), public.admin_announcements(), public.get_announcements(),
   public.my_orders(), public.claim_orders(uuid[]), public.confirm_order(bigint), public.hand_to_rider(bigint, text, text, timestamptz), public.mark_ready(bigint, timestamptz),
   public.my_account(), public.pack_item(bigint, boolean), public.set_packing_photo(bigint, text), public.answer_problem(bigint, text, text, int, text[]),
@@ -2628,7 +2473,6 @@ grant execute on function public.email_by_token(uuid, boolean) to anon, authenti
 revoke execute on function public.owned_order(bigint) from authenticated;
 revoke execute on function public.shops_watch_changes() from authenticated;
 revoke execute on function public.shop_open(public.shops) from authenticated;
-revoke all on function public.shop_month(uuid) from public, anon, authenticated;
 revoke execute on function public.has_shop(uuid), public.has_shopped(uuid), public.shops_one_role(), public.customers_one_role(), public.customer_order(uuid) from authenticated;
 revoke execute on function public.order_prefix_for(text), public.order_code(text, bigint), public.problem_status(public.problems), public.can_report(public.orders),
   public.shops_set_prefix() from authenticated;
@@ -2638,7 +2482,7 @@ revoke execute on function public.naira(int), public.lagos_time(timestamptz), pu
   public.is_blocked(uuid), public.report_block(uuid), public.cancel_text(text), public.tidy(uuid),
   public.admin_chat_free(public.orders), public.shop_snapshot(uuid), public.shops_archive(), public.email_claim(int), public.email_unclaim(uuid, bigint[]) from authenticated;
 revoke execute on function public.restock(bigint[]), public.product_options_sync(), public.json_int(jsonb) from authenticated;
-revoke execute on function public.send_monthly_reports(date), public.money_out_from_plan() from authenticated;
+revoke execute on function public.send_monthly_reports(date) from authenticated;
 
 -- Who may see or add a photo in an order's folder (order-photos/<order number>/...): the shop, the customer who placed it, and you.
 -- Shops add packing photos (pack-...), answer photos (v-...) and refund receipts (r-...); customers add problem photos (c-...);
@@ -2761,8 +2605,6 @@ grant execute on function public.shop_reviews(text), public.shops_near() to anon
 grant execute on function public.rate_shop(uuid, int, text), public.my_shop_rating(uuid) to authenticated;
 
 -- Invites: shops see their own; Admin sees them all.
-revoke all on function public.claim_invite(text), public.invite_reward(), public.my_invites(), public.admin_invites() from public, anon, authenticated;
-grant execute on function public.claim_invite(text), public.my_invites(), public.admin_invites() to authenticated;
 
 -- ---------- Pay online (Paystack) and ShopDesk Delivery (Shipbubble), off until switched on in Admin ----------
 alter table public.settings add column if not exists online_pay_on boolean not null default false;
