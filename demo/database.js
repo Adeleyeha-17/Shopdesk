@@ -734,7 +734,7 @@ export function resetDemo() {
 
 // ---------- rules the real database keeps ----------
 const myShop = () => S.shops.find((s) => s.owner_id === uid()) || null;
-const deskJson = (m) => ({ id: m.id, sender: m.sender, body: m.body, photo: m.photo, created_at: m.created_at });
+const deskJson = (m) => ({ id: m.id, sender: m.sender, body: m.body, photo: m.photo, video: m.video || null, created_at: m.created_at });
 const hasShop = (u) => S.shops.some((s) => s.owner_id === u);
 const hasShopped = (u) =>
   S.orders.some((o) => o.customer_id === u) || S.customers.some((c) => c.user_id === u);
@@ -1741,12 +1741,12 @@ const RPC = {
     const s = myShop();
     return s ? S.shop_messages.filter((m) => m.shop_id === s.id && m.sender === 'shopdesk' && !m.read_at).length : 0;
   },
-  shopdesk_send: ({ p_body, p_photo = null }) => {
+  shopdesk_send: ({ p_body, p_photo = null, p_video = null }) => {
     const s = myShop();
     if (!s) fail('Set up your shop first.');
     const body = String(p_body || '').trim().slice(0, 2000);
-    if (!body && !p_photo) fail('Write a message.');
-    const m = { id: Math.max(0, ...S.shop_messages.map((x) => x.id)) + 1, shop_id: s.id, sender: 'shop', body, photo: p_photo, read_at: null, created_at: nowIso() };
+    if (!body && !p_photo && !p_video) fail('Write a message.');
+    const m = { id: Math.max(0, ...S.shop_messages.map((x) => x.id)) + 1, shop_id: s.id, sender: 'shop', body, photo: p_photo, video: p_video, read_at: null, created_at: nowIso() };
     S.shop_messages.push(m);
     return deskJson(m);
   },
@@ -2496,9 +2496,15 @@ function readAsDataUrl(blob) {
     r.readAsDataURL(blob);
   });
 }
+const VIDEOS = {};
 const storage = {
   from: () => ({
     upload: async (path, blob) => {
+      // videos are too big to keep in the demo's saved state: they play until the page is closed
+      if (/^video\//.test(blob.type || '')) {
+        VIDEOS[path] = URL.createObjectURL(blob);
+        return { data: { path }, error: null };
+      }
       S.photos[path] = await readAsDataUrl(blob);
       save();
       return { data: { path }, error: null };
@@ -2525,8 +2531,8 @@ const storage = {
     createSignedUrls: async (paths) => ({
       data: (paths || []).map((p) => ({
         path: p,
-        signedUrl: S.photos[p] || null,
-        error: S.photos[p] ? null : 'not found',
+        signedUrl: S.photos[p] || VIDEOS[p] || null,
+        error: S.photos[p] || VIDEOS[p] ? null : 'not found',
       })),
       error: null,
     }),

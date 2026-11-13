@@ -63,6 +63,25 @@ export async function uploadShopPhoto(shopId, file) {
   return path;
 }
 
+// A video in a shop's ShopDesk chat (chat-videos/shop-<shop id>/m-...): only the shop and ShopDesk see it. Up to 50 MB,
+// which is about 30 seconds from most phone cameras.
+export const VIDEO_MAX = 50 * 1024 * 1024;
+const VIDEO_TYPES = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'video/3gpp': '3gp', 'video/x-matroska': 'mkv' };
+export async function uploadShopVideo(shopId, file) {
+  if (file.size > VIDEO_MAX) throw new Error('That video is over 50 MB. Record a shorter one, about 30 seconds.');
+  const type = VIDEO_TYPES[file.type] ? file.type : 'video/mp4';
+  const path = `shop-${shopId}/m-${newId()}.${VIDEO_TYPES[type]}`;
+  const { error } = await supabase.storage.from('chat-videos').upload(path, file, { contentType: type });
+  if (error) throw error;
+  return path;
+}
+
+// A short-lived link to play a chat video (it stops working after an hour).
+export async function videoLink(path) {
+  const { data, error } = await supabase.storage.from('chat-videos').createSignedUrls([path], 3600);
+  return error || !data || !data[0] ? null : data[0].signedUrl;
+}
+
 // Short-lived links to view order photos (they stop working after an hour).
 export async function orderPhotoLinks(paths) {
   const list = [...new Set((paths || []).filter(Boolean))];

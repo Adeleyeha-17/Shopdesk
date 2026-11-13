@@ -85,3 +85,17 @@ reset role;
 update settings set online_pay_on = true where id = 1;
 select count(*) || '|' || min(title) || '|' || min(url) from notifications where kind = 'feature';
 update settings set online_pay_on = false where id = 1;
+
+\echo S9 a shop sends a video from its own folder; a video elsewhere or of another kind is refused; the alert and the list say Video (expect the video, 2 errors, Video, Video):
+set role authenticated; set request.jwt.claim.sub = 'c6000000-0000-4000-8000-000000000001';
+select sender || '|' || (video is not null) from jsonb_to_record(shopdesk_send('', null, 'shop-' || :'chat_shop' || '/m-11111111-2222-4333-8444-666666666666.mp4')) as x(sender text, video text);
+select shopdesk_send('', null, 'shop-' || :'other_shop' || '/m-11111111-2222-4333-8444-666666666666.mp4');
+select shopdesk_send('', null, 'shop-' || :'chat_shop' || '/m-11111111-2222-4333-8444-666666666666.exe');
+reset role; select body from notifications where user_id = 'c6000000-0000-4000-8000-000000000009' and kind = 'admin_message' order by id desc limit 1;
+set role authenticated; set request.jwt.claim.sub = 'c6000000-0000-4000-8000-000000000009';
+select t->>'last' from jsonb_array_elements(admin_shop_threads()) t where t->>'slug' = 'chatfabrics';
+\echo S10 ShopDesk can send a video too, and the shop sees it in its chat (expect t, then t):
+select (admin_shop_send(:'chat_shop', '', null, 'shop-' || :'chat_shop' || '/m-11111111-2222-4333-8444-777777777777.mov')->>'video') is not null;
+set request.jwt.claim.sub = 'c6000000-0000-4000-8000-000000000001';
+select shopdesk_thread()::text like '%777777777777.mov%';
+reset role;

@@ -12,6 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../demo/dist');
 const out = path.join(here, 'out');
 const photo = path.join(here, 'fixtures/product.jpg');
+const video = path.join(here, 'fixtures/clip.mp4');
 const KEY = 'shopdesk-demo-v9';
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.json': 'application/json' };
 
@@ -535,20 +536,27 @@ await step('while Pay online and ShopDesk Delivery are off, the Shop tab shows t
   expect((await soon.filter({ hasText: 'Customers pay online' }).locator('button:has-text("I want this")').count()) === 1, 'Pay online lost its button');
 });
 
-await step('the shop messages ShopDesk inside the app: the chat opens from the Shop tab, keeps the message, and shows no names', async () => {
+await step('the shop messages ShopDesk inside the app: a full-screen chat that keeps the message, sends a video, and shows no names', async () => {
   await p.locator('.desk-row:has-text("Message ShopDesk")').click();
   const sheet = p.locator('.desk-sheet');
   await sheet.waitFor();
+  const box = await sheet.boundingBox();
+  expect(box.width >= 389 && box.height >= 800, 'the chat does not fill the phone screen');
   await sheet.locator('.msg.theirs:has-text("Welcome to ShopDesk")').waitFor();
   await sheet.locator('textarea').fill('Hi, when does delivery start?');
   await sheet.locator('button:has-text("Send")').click();
   await sheet.locator('.msg.mine:has-text("when does delivery start")').waitFor();
-  await sheet.locator('.msg.mine:not(.pending)').waitFor();
-  await sheet.locator('button:has-text("Close")').click();
+  await sheet.locator('.msg.mine:not(.pending)').first().waitFor();
+  await sheet.locator('.attach-btn').click();
+  expect((await sheet.locator('.attach-opt').allInnerTexts()).join('|') === 'Photo|Record a video|Video from phone', 'the photo and video choices are missing');
+  await sheet.locator('.attach-opt:has-text("Video from phone") input').setInputFiles(video);
+  await sheet.locator('.msg.mine:not(.pending) video.chat-video').waitFor();
+  await sheet.locator('.back-btn').click();
   await sheet.waitFor({ state: 'detached' });
   await p.locator('.desk-row').click();
   await p.locator('.desk-sheet .msg.mine:has-text("when does delivery start")').waitFor();
-  await p.locator('.desk-sheet button:has-text("Close")').click();
+  await p.locator('.desk-sheet .msg.mine video.chat-video').waitFor();
+  await p.locator('.desk-sheet .back-btn').click();
 });
 
 // ---------------- a new shop owner signs up ----------------

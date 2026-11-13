@@ -8,7 +8,7 @@ import { atText } from '../lib/dates.js';
 import { errText } from '../lib/helpers.js';
 import { uploadOrderPhoto } from '../lib/photos.js';
 import { channelName, kick } from '../lib/alerts.js';
-import { PhotoStrip } from './OrderPhotos.jsx';
+import { PhotoStrip, ChatVideo } from './OrderPhotos.jsx';
 
 // Nigerian account numbers have 10 digits (phone numbers have 11, so they don't count).
 const otherAccount = (t, mine) =>
@@ -83,6 +83,7 @@ export function ChatView({
             >
               {me === 'admin' && <span className="msg-who">{names[m.sender] || m.sender}</span>}
               {m.photo && <PhotoStrip paths={[m.photo]} label="Photo" />}
+              {(m.video || m.localVideo) && <ChatVideo path={m.video} local={m.localVideo} />}
               {m.body && <p>{m.body}</p>}
               <span className="msg-time">{m.pending ? 'Sending…' : atText(m.created_at)}</span>
               {warnPay && !mine && otherAccount(m.body, payAccount) && (

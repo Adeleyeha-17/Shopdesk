@@ -8,8 +8,8 @@ t|1
 t
 S3 the shop replies with a photo in its own folder; a photo from another folder is refused; Admin hears (expect the reply, the error, the admin alert):
 shop|Here they are|true
-psql:shopdesk_chat.sql:32: ERROR:  That photo can't be sent. Try again.
-CONTEXT:  PL/pgSQL function shopdesk_send(text,text) line N at RAISE
+psql:shopdesk_chat.sql:32: ERROR:  That file can't be sent. Try again.
+CONTEXT:  PL/pgSQL function shopdesk_send(text,text,text) line N at RAISE
 admin_message|Chat Fabrics|Here they are|/admin#messages
 S4 who may add and see photos in a shop folder: the shop and admins only (expect t, t, f, t, f):
 t
@@ -26,7 +26,7 @@ S6 nobody else reads the chat: another shop sees only its own (empty), a shop ca
 psql:shopdesk_chat.sql:53: ERROR:  Not allowed.
 CONTEXT:  PL/pgSQL function admin_shop_threads() line N at RAISE
 psql:shopdesk_chat.sql:54: ERROR:  Not allowed.
-CONTEXT:  PL/pgSQL function admin_shop_send(uuid,text,text) line N at RAISE
+CONTEXT:  PL/pgSQL function admin_shop_send(uuid,text,text,text) line N at RAISE
 psql:shopdesk_chat.sql:55: ERROR:  permission denied for table shop_messages
 S7 approving tells the shop in its chat; suspending and reopening too, without your private reason (expect 3 messages):
 
@@ -53,3 +53,14 @@ pay_online
 2|1
 F2 switching Pay online on tells the shops that asked, and only them (expect 2 alerts with the shop tab link):
 2|Pay online is here|/#shop
+S9 a shop sends a video from its own folder; a video elsewhere or of another kind is refused; the alert and the list say Video (expect the video, 2 errors, Video, Video):
+shop|true
+psql:shopdesk_chat.sql:92: ERROR:  That file can't be sent. Try again.
+CONTEXT:  PL/pgSQL function shopdesk_send(text,text,text) line N at RAISE
+psql:shopdesk_chat.sql:93: ERROR:  That file can't be sent. Try again.
+CONTEXT:  PL/pgSQL function shopdesk_send(text,text,text) line N at RAISE
+Video
+Video
+S10 ShopDesk can send a video too, and the shop sees it in its chat (expect t, then t):
+t
+t

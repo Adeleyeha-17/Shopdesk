@@ -1,18 +1,32 @@
 // The ShopDesk chat: one shop and ShopDesk, inside the app. The shop sees every message from ShopDesk as "ShopDesk",
-// never who wrote it. Used in the shop's app (me = 'shop') and in Admin (me = 'shopdesk'). New messages arrive by
-// themselves; opening the chat marks the other side's messages read.
+// never who wrote it. Used in the shop's app (me = 'shop') and in Admin (me = 'shopdesk'). Text, photos and videos
+// (recorded there and then, or picked from the phone). New messages arrive by themselves; opening the chat marks the
+// other side's messages read.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { errText } from '../lib/helpers.js';
-import { uploadShopPhoto } from '../lib/photos.js';
+import { uploadShopPhoto, uploadShopVideo } from '../lib/photos.js';
 import { kick } from '../lib/alerts.js';
 import { ChatView } from './Chat.jsx';
+
+const ICONS = {
+  plus: <path d="M12 5v14M5 12h14" />,
+  photo: <path d="M4 7h3l2-2h6l2 2h3v12H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />,
+  record: <path d="M3 7h12v10H3zM15 10.5l6-3.5v10l-6-3.5" />,
+  video: <path d="M4 4h16v16H4zM10 9v6l5-3z" />,
+};
+const Icon = ({ name }) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    {ICONS[name]}
+  </svg>
+);
 
 export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, empty }) {
   const [msgs, setMsgs] = useState(null);
   const [text, setText] = useState(draft);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [attach, setAttach] = useState(false);
   const listRef = useRef(null);
   const read = useRef(onRead);
   read.current = onRead;
@@ -25,7 +39,9 @@ export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, e
       setErr(errText(r.error));
       return;
     }
-    setMsgs(me === 'shop' ? r.data || [] : (r.data && r.data.messages) || []);
+    const rows = me === 'shop' ? r.data || [] : (r.data && r.data.messages) || [];
+    // keep messages still sending on screen
+    setMsgs((cur) => [...rows, ...(cur || []).filter((x) => x.pending)]);
     if (read.current) read.current();
   }, [me, shopId]);
   useEffect(() => {
@@ -40,23 +56,32 @@ export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, e
   }, [count]);
   useEffect(() => setText(draft), [draft]);
 
-  async function send(body, photo = null) {
-    if (!body.trim() && !photo) return false;
+  // temp: what shows while it sends; media: { photo } or { video }
+  async function send(body, media = {}, temp = {}) {
     setErr('');
-    const temp = { id: Number.MAX_SAFE_INTEGER - Date.now(), sender: me, body: body.trim(), photo, pending: true };
-    setMsgs((cur) => [...(cur || []), temp]);
-    const r =
-      me === 'shop'
-        ? await supabase.rpc('shopdesk_send', { p_body: body, p_photo: photo })
-        : await supabase.rpc('admin_shop_send', { p_shop: shopId, p_body: body, p_photo: photo });
-    if (r.error) {
-      setMsgs((cur) => (cur || []).filter((x) => x !== temp));
-      setErr(errText(r.error));
+    const t = { id: Number.MAX_SAFE_INTEGER - Date.now(), sender: me, body: body.trim(), pending: true, ...temp };
+    setMsgs((cur) => [...(cur || []), t]);
+    try {
+      let photo = media.photo || null;
+      let video = null;
+      if (media.photoFile) photo = await uploadShopPhoto(shopId, media.photoFile);
+      if (media.videoFile) video = await uploadShopVideo(shopId, media.videoFile);
+      const args = { p_body: body, p_photo: photo, p_video: video };
+      const r =
+        me === 'shop'
+          ? await supabase.rpc('shopdesk_send', args)
+          : await supabase.rpc('admin_shop_send', { p_shop: shopId, ...args });
+      if (r.error) throw r.error;
+      setMsgs((cur) => [...(cur || []).filter((x) => x !== t), r.data]);
+      kick();
+      return true;
+    } catch (e) {
+      setMsgs((cur) => (cur || []).filter((x) => x !== t));
+      setErr(errText(e));
       return false;
+    } finally {
+      if (temp.localVideo) setTimeout(() => URL.revokeObjectURL(temp.localVideo), 60000);
     }
-    setMsgs((cur) => [...(cur || []).filter((x) => x !== temp), r.data]);
-    kick();
-    return true;
   }
   async function sendText(e) {
     if (e) e.preventDefault();
@@ -67,17 +92,30 @@ export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, e
     if (!(await send(t))) setText(t);
     setBusy(false);
   }
-  async function sendPhoto(file) {
+  async function sendFile(file, kind) {
+    setAttach(false);
     if (!file) return;
     setBusy(true);
-    try {
-      await send('', await uploadShopPhoto(shopId, file));
-    } catch (e) {
-      setErr(errText(e));
-    }
+    if (kind === 'video') await send('', { videoFile: file }, { localVideo: URL.createObjectURL(file) });
+    else await send('', { photoFile: file }, { body: 'Photo' });
     setBusy(false);
   }
-  const inputId = 'sdp-' + me;
+  const pick = (kind, capture) => (
+    <label className="attach-opt">
+      <Icon name={capture ? 'record' : kind} />
+      <span>{kind === 'photo' ? 'Photo' : capture ? 'Record a video' : 'Video from phone'}</span>
+      <input
+        type="file"
+        accept={kind === 'photo' ? 'image/*' : 'video/*'}
+        capture={capture ? 'environment' : undefined}
+        className="visually-hidden"
+        onChange={(e) => {
+          sendFile(e.target.files && e.target.files[0], kind);
+          e.target.value = '';
+        }}
+      />
+    </label>
+  );
   return (
     <div className="chat desk-chat">
       {msgs === null ? (
@@ -87,47 +125,51 @@ export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, e
       ) : (
         <ChatView messages={msgs} me={me} listRef={listRef} />
       )}
-      {chips && (
-        <div className="filters desk-chips">
-          {chips.map(([label, t]) => (
-            <button key={label} type="button" className="filter" onClick={() => setText(t)}>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-      <form className="chat-send" onSubmit={sendText}>
-        <label className="chat-photo" htmlFor={inputId} aria-label="Send a photo">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 7h3l2-2h6l2 2h3v12H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-          </svg>
-        </label>
-        <input
-          id={inputId}
-          type="file"
-          accept="image/*"
-          className="visually-hidden"
-          onChange={(e) => {
-            sendPhoto(e.target.files && e.target.files[0]);
-            e.target.value = '';
-          }}
-        />
-        <textarea
-          rows={me === 'shopdesk' && text.length > 60 ? 4 : 1}
-          value={text}
-          maxLength={2000}
-          placeholder="Message"
-          aria-label="Message"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) sendText(e);
-          }}
-        />
-        <button className="btn small" disabled={busy || !text.trim()}>
-          Send
-        </button>
-      </form>
-      {err && <p className="err">{err}</p>}
+      <div className="desk-compose">
+        {chips && (
+          <div className="filters desk-chips">
+            {chips.map(([label, t]) => (
+              <button key={label} type="button" className="filter" onClick={() => setText(t)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {attach && (
+          <div className="attach-row">
+            {pick('photo')}
+            {pick('video', true)}
+            {pick('video')}
+          </div>
+        )}
+        {err && <p className="err">{err}</p>}
+        <form className="chat-send" onSubmit={sendText}>
+          <button
+            type="button"
+            className={'chat-photo attach-btn' + (attach ? ' on' : '')}
+            aria-label={attach ? 'Close' : 'Send a photo or video'}
+            aria-expanded={attach}
+            onClick={() => setAttach(!attach)}
+          >
+            <Icon name="plus" />
+          </button>
+          <textarea
+            rows={me === 'shopdesk' && text.length > 60 ? 4 : 1}
+            value={text}
+            maxLength={2000}
+            placeholder="Message"
+            aria-label="Message"
+            onFocus={() => setAttach(false)}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) sendText(e);
+            }}
+          />
+          <button className="btn small" disabled={busy || !text.trim()}>
+            Send
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

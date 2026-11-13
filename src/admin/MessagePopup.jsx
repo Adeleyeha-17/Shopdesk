@@ -29,7 +29,7 @@ export function MessagePopup({ m, close }) {
         if (e.target === e.currentTarget) close();
       }}
     >
-      <div className="modal">
+      <div className="modal desk-admin">
         <div className="panel-head">
           <div>
             <h3>{s.name}</h3>

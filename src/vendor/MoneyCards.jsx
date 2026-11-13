@@ -23,7 +23,7 @@ function ComingSoon({ feature, wanted, want }) {
       {wanted ? (
         <span className="soon-ok">✓ We'll tell you when it's here</span>
       ) : (
-        <button className="btn small ghost" onClick={() => want(feature)}>
+        <button className="btn small" onClick={() => want(feature)}>
           I want this
         </button>
       )}

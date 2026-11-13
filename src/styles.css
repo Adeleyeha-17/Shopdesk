@@ -120,7 +120,8 @@ article.card { border: 1px solid var(--line); border-radius: 14px; padding: 14px
 .field input, .field select { font: 400 16px var(--body); padding: 12px 14px; border-radius: 12px; border: 0; background: var(--soft); color: var(--ink); }
 .wa { background: var(--soft); border-radius: 14px 14px 14px 4px; padding: 12px 14px; font-size: 14px; white-space: pre-wrap; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(78px + env(safe-area-inset-bottom, 0px)); z-index: 9; background: var(--btn); color: var(--on-btn);
-  padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 500; max-width: min(440px, calc(100% - 32px)); }
+  box-sizing: border-box; width: max-content; max-width: min(440px, calc(100vw - 32px)); padding: 12px 18px; border-radius: 14px; font-size: 14px; font-weight: 500; line-height: 1.35;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
 .note { margin: 0; font-size: 14px; color: var(--muted); }
 .note strong { color: var(--ink); }
 .inline { display: flex; gap: 8px; }
@@ -487,7 +488,7 @@ a.orow { text-decoration: none; color: inherit; }
 /* ---------- pop-ups with a button, and the My orders count ---------- */
 .toast { display: flex; align-items: center; gap: 12px; }
 .toast.low { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
-.toast.has-action { width: min(440px, calc(100% - 32px)); padding: 10px 8px 10px 14px; }
+.toast.has-action { width: min(440px, calc(100vw - 32px)); padding: 10px 8px 10px 16px; }
 .toast-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .toast-text strong { font-size: 13px; }
 .toast-text span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 400; }
@@ -1125,13 +1126,46 @@ svg.star { width: 14px; height: 14px; fill: var(--wait); flex: none; }
 .step-box .ask { font-weight: 600; }
 .step-box .btns { margin: 0; }
 /* the ShopDesk chat (shop and Admin) */
-.desk-sheet { max-height: 88vh; }
 .desk-head { display: flex; align-items: center; gap: 10px; }
 .desk-head > div { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
 .desk-head .desk-mark, .desk-row .desk-mark { width: 30px; height: 30px; border-radius: 9px; }
 .desk-chat .chat-list { max-height: 58vh; }
 .desk-chat .chat-empty { padding: 18px 0; }
 .desk-chips { flex-wrap: wrap; }
+.desk-compose { display: flex; flex-direction: column; gap: 8px; }
+/* the shop's chat fills the phone screen like its own page; on a laptop it's a roomy panel */
+body.desk-open { overflow: hidden; }
+.overlay.desk-overlay { padding: 0; place-items: stretch; z-index: 30; }
+.modal.desk-sheet { width: 100%; height: 100%; height: 100dvh; max-height: none; border-radius: 0; padding: 0; gap: 0; box-shadow: none; overflow: hidden; }
+.desk-sheet .desk-head { padding: max(10px, env(safe-area-inset-top)) 16px 10px; border-bottom: 1px solid var(--line); }
+.desk-sheet .desk-head .back-btn { margin-left: -8px; }
+.desk-sheet .desk-chat { flex: 1; min-height: 0; gap: 0; }
+.desk-sheet .chat-list { flex: 1; max-height: none; padding: 16px; gap: 8px; }
+.desk-sheet .chat-empty { flex: 1; display: grid; place-items: center; padding: 24px 32px; line-height: 1.5; }
+.desk-sheet .desk-compose { border-top: 1px solid var(--line); padding: 10px 12px max(10px, env(safe-area-inset-bottom)); }
+@media (min-width: 700px) {
+  .overlay.desk-overlay { padding: 24px; place-items: center; }
+  .modal.desk-sheet { width: min(680px, 100%); height: min(820px, calc(100dvh - 48px)); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
+}
+@media (max-width: 699px) { .modal.desk-sheet { animation: desk-in .26s var(--ease); } }
+@keyframes desk-in { from { transform: translateX(100%); } }
+/* photo and video in the chat */
+.attach-btn { appearance: none; border: 0; padding: 0; color: var(--ink); }
+.attach-btn svg { stroke-width: 2.2; stroke-linecap: round; transition: transform .18s var(--ease); }
+.attach-btn.on svg { transform: rotate(45deg); }
+.attach-btn.chat-photo:focus-within { outline: none; }
+.attach-btn.chat-photo:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.desk-sheet .msg, .desk-admin .msg { max-width: min(82%, 480px); }
+.msg:has(> .chat-video) { padding: 4px; }
+.msg:has(> .chat-video) .msg-time { padding: 0 6px 2px; }
+.attach-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.attach-opt { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; border-radius: 14px; background: var(--soft); font-size: 12px; font-weight: 600; text-align: center; cursor: pointer; }
+.attach-opt svg { width: 22px; height: 22px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.attach-opt:focus-within { outline: 2px solid var(--info); outline-offset: 2px; }
+.chat-video { display: block; width: min(260px, 62vw); max-height: 340px; border-radius: 12px; background: #000; }
+.chat-video.wait { height: 150px; background: var(--line); }
+/* Admin: the chat pop-up is a little wider */
+.modal.desk-admin { width: min(640px, 100%); }
 .desk-row { gap: 10px; }
 .desk-row strong { font-weight: 700; }
 /* features that are coming: "I want this" */

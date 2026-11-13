@@ -1,6 +1,6 @@
 // Order photos on screen: a strip of thumbnails (tap one to open it), and a picker for adding up to 3.
 import React, { useEffect, useState } from 'react';
-import { orderPhotoLinks } from '../lib/photos.js';
+import { orderPhotoLinks, videoLink } from '../lib/photos.js';
 
 // Thumbnails of private order photos. paths: ['1043/c-....jpg', ...]
 export function PhotoStrip({ paths, label }) {
@@ -74,5 +74,23 @@ export function PhotoPicker({ id, files, setFiles, max = 3, label = 'Add photos 
         }}
       />
     </div>
+  );
+}
+
+// A video in a chat. local: the file being sent, shown from the phone while it uploads.
+export function ChatVideo({ path, local }) {
+  const [src, setSrc] = useState(local || null);
+  useEffect(() => {
+    if (local || !path) return undefined;
+    let on = true;
+    videoLink(path).then((u) => on && setSrc(u));
+    return () => {
+      on = false;
+    };
+  }, [path, local]);
+  return src ? (
+    <video className="chat-video" src={src} controls playsInline preload="metadata" />
+  ) : (
+    <span className="chat-video wait" aria-label="Video loading" />
   );
 }

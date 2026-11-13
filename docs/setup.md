@@ -76,7 +76,7 @@ Both are off until switched on in **Admin → Payments & delivery**, and the app
 
 Setup:
 
-1. Run the updates in order, `supabase/updates/016.sql` to `022.sql` (020 removes the monthly plan and invites; 021 makes every payment full and adds visitor alerts; 022 adds the ShopDesk chat and "I want this"), or the full `schema.sql`.
+1. Run the updates in order, `supabase/updates/016.sql` to `023.sql` (020 removes the monthly plan and invites; 021 makes every payment full and adds visitor alerts; 022 adds the ShopDesk chat and "I want this"; 023 adds videos to the ShopDesk chat, in a private `chat-videos` bucket), or the full `schema.sql`.
 2. **Edge Functions → Deploy a new function**, named `money`, with the contents of `supabase/functions/money/index.ts`. Turn **Enforce JWT verification** off: the function checks who is asking itself, and the webhooks carry no sign-in.
 3. Set these secrets under **Edge Functions → Secrets**. Use test keys while testing and swap in live keys once the accounts are approved:
 
