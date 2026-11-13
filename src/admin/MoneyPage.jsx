@@ -170,6 +170,7 @@ export function MoneyPage({ say, go }) {
                 value={st.paystack_fee_by}
                 onChange={(e) => save({ paystack_fee_by: e.target.value }, 'Saved.')}
               >
+                <option value="customer">The customer, added when they pay online</option>
                 <option value="shop">The shop</option>
                 <option value="shopdesk">ShopDesk, when delivery is in it</option>
               </select>
@@ -200,7 +201,9 @@ export function MoneyPage({ say, go }) {
         <div className="tile">
           <span className="label">Paid online</span>
           <span className="big num">{naira(d.online.amount)}</span>
-          <span className="sub">{d.online.count} payments</span>
+          <span className="sub">
+            {d.online.count} payments{d.online.fees > 0 ? ` · ${naira(d.online.fees)} card fees paid by customers` : ''}
+          </span>
         </div>
         <div className="tile">
           <span className="label">Delivery money in online</span>

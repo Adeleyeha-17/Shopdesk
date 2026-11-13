@@ -1,6 +1,8 @@
 -- 016: Pay online (Paystack) and ShopDesk Delivery (Shipbubble). Both are off until you switch them on in Admin > Payments & delivery.
 --   * Pay online: the customer pays once through Paystack. The goods money goes to the shop's bank (a Paystack subaccount made
 --     from the bank details the shop already gave); the ShopDesk Delivery fee comes to ShopDesk. ShopDesk never holds the shop's money.
+--     Paystack's fee is added on top for the customer who chooses to pay online, so the shop gets the full amount. Paying the
+--     shop by transfer stays free.
 --   * ShopDesk Delivery: the shop gets courier prices on a new order, picks one, and books the pickup once it's paid and packed.
 --     ShopDesk pays the courier from its own courier wallet; the customer and the shop follow the delivery on the order.
 --     If the delivery fee didn't come to ShopDesk online (the customer paid the shop by transfer), it goes on the shop's delivery bill.
@@ -10,7 +12,12 @@
 alter table public.settings add column if not exists online_pay_on boolean not null default false;
 alter table public.settings add column if not exists delivery_on boolean not null default false;
 alter table public.settings add column if not exists delivery_margin integer not null default 0 check (delivery_margin between 0 and 20000);
-alter table public.settings add column if not exists paystack_fee_by text not null default 'shop' check (paystack_fee_by in ('shop', 'shopdesk'));
+-- who pays Paystack's fee: the customer (added on top when they choose to pay online, so the shop gets the full amount),
+-- the shop (taken from its share), or ShopDesk (when the delivery fee is in the payment)
+alter table public.settings add column if not exists paystack_fee_by text not null default 'customer';
+alter table public.settings drop constraint if exists settings_paystack_fee_by_check;
+alter table public.settings add constraint settings_paystack_fee_by_check check (paystack_fee_by in ('customer', 'shop', 'shopdesk'));
+alter table public.settings alter column paystack_fee_by set default 'customer';
 
 alter table public.shops add column if not exists pickup_address text not null default '' check (char_length(pickup_address) <= 200);
 alter table public.shops add column if not exists pickup_code bigint;
@@ -42,6 +49,7 @@ create table if not exists public.online_payments (
   shop_id uuid not null references public.shops(id) on delete cascade,
   amount integer not null check (amount > 0),
   delivery_part integer not null default 0 check (delivery_part >= 0),
+  fee integer not null default 0 check (fee >= 0), -- Paystack's fee, paid by the customer on top of amount
   status text not null default 'started' check (status in ('started', 'paid')),
   created_at timestamptz not null default now(),
   paid_at timestamptz
@@ -151,7 +159,7 @@ end $$;
 -- The customer starts paying online: records the attempt and returns what Paystack needs.
 create or replace function public.money_start_payment(p_token uuid, p_ref text) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare v public.orders; s public.shops; st public.settings; v_due int; v_delivery int;
+declare v public.orders; s public.shops; st public.settings; v_due int; v_delivery int; v_fee int;
 begin
   select * into st from public.settings where id = 1;
   if not st.online_pay_on then raise exception 'Paying online isn''t on yet. Pay by transfer for now.'; end if;
@@ -165,8 +173,9 @@ begin
   v_due := v.items_total + case when v.delivery_paid_by = 'customer' then coalesce(v.delivery_fee, 0) else 0 end - v.amount_paid;
   if v_due <= 0 then raise exception 'Nothing is left to pay.'; end if;
   v_delivery := case when v.delivery_by = 'shopdesk' and v.delivery_paid_by = 'customer' and v.amount_paid = 0 then coalesce(v.delivery_fee, 0) else 0 end;
-  insert into public.online_payments (reference, order_id, shop_id, amount, delivery_part) values (p_ref, v.id, v.shop_id, v_due, v_delivery);
-  return jsonb_build_object('amount', v_due, 'delivery_part', v_delivery, 'fee_by', st.paystack_fee_by, 'order_id', v.id,
+  v_fee := case when st.paystack_fee_by = 'customer' then public.online_fee(v_due) else 0 end;
+  insert into public.online_payments (reference, order_id, shop_id, amount, delivery_part, fee) values (p_ref, v.id, v.shop_id, v_due, v_delivery, v_fee);
+  return jsonb_build_object('amount', v_due, 'delivery_part', v_delivery, 'fee', v_fee, 'fee_by', st.paystack_fee_by, 'order_id', v.id,
     'email', coalesce((select email from auth.users where id = v.customer_id), 'order' || v.id || '@shopdesk.com.ng'),
     'shop', jsonb_build_object('id', s.id, 'name', s.name, 'slug', s.slug, 'bank', s.bank, 'account_number', s.account_number,
       'subaccount', s.paystack_subaccount, 'subaccount_for', s.paystack_for));
@@ -180,7 +189,7 @@ begin
   select * into p from public.online_payments where reference = p_ref for update;
   if not found then raise exception 'Unknown payment.'; end if;
   if p.status = 'paid' then return jsonb_build_object('order_id', p.order_id, 'already', true); end if;
-  if coalesce(p_kobo, 0) < p.amount::bigint * 100 then raise exception 'The amount paid doesn''t match.'; end if;
+  if coalesce(p_kobo, 0) < (p.amount + p.fee)::bigint * 100 then raise exception 'The amount paid doesn''t match.'; end if;
   select * into v from public.orders where id = p.order_id for update;
   v_due := v.items_total + case when v.delivery_paid_by = 'customer' then coalesce(v.delivery_fee, 0) else 0 end - v.amount_paid;
   v_amt := least(p.amount, greatest(v_due, 0));
@@ -264,12 +273,23 @@ begin
   return jsonb_build_object('found', true, 'status', st);
 end $$;
 
--- The order page: can it be paid online, and how its ShopDesk Delivery is going.
+-- Paystack's fee, added on top so that what's left after the fee is p_base (naira): 1.5% + ₦100, the ₦100 waived under
+-- ₦2,500, at most ₦2,000. Rounded up, so the shop always gets the full amount.
+create or replace function public.online_fee(p_base int) returns int
+language sql immutable set search_path = public as $$
+  select case when coalesce(p_base, 0) <= 0 then 0
+    when ceil(p_base / 0.985) < 2500 then ceil(p_base / 0.985)::int - p_base
+    else least(ceil((p_base + 100) / 0.985)::int - p_base, 2000) end;
+$$;
+
+-- The order page: can it be paid online (and the card fee the customer pays on top), and how its ShopDesk Delivery is going.
 create or replace function public.order_money(p_token uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'online', st.online_pay_on and s.status = 'active' and s.bank in ('OPay', 'Moniepoint', 'Kuda', 'PalmPay') and s.account_number <> ''
       and o.status in ('awaiting', 'part') and not (o.mode = 'delivery' and o.delivery_paid_by = 'customer' and o.delivery_fee is null),
+    'fee', case when st.paystack_fee_by = 'customer' then public.online_fee(
+      o.items_total + case when o.delivery_paid_by = 'customer' then coalesce(o.delivery_fee, 0) else 0 end - o.amount_paid) else 0 end,
     'delivery_by', o.delivery_by,
     'courier', o.delivery_quote->>'name',
     'shipment', (select jsonb_build_object('courier', sh.courier, 'status', sh.status, 'tracking_url', sh.tracking_url, 'tracking_code', sh.tracking_code,
@@ -285,7 +305,7 @@ begin
   return jsonb_build_object(
     'settings', (select jsonb_build_object('online_pay_on', online_pay_on, 'delivery_on', delivery_on, 'delivery_margin', delivery_margin,
       'paystack_fee_by', paystack_fee_by) from public.settings where id = 1),
-    'online', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(amount), 0), 'delivery', coalesce(sum(delivery_part), 0))
+    'online', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(amount), 0), 'delivery', coalesce(sum(delivery_part), 0), 'fees', coalesce(sum(fee), 0))
       from public.online_payments where status = 'paid'),
     'shipments', coalesce((select jsonb_agg(x order by x.created_at desc) from (
       select sh.order_id, sh.created_at, sh.courier, sh.status, sh.cost, sh.price, sh.paid_online, sh.billed_at, sh.tracking_url,
@@ -329,6 +349,6 @@ end $$;
 revoke all on function public.money_switches(), public.money_quote_info(bigint), public.money_save_quotes(bigint, jsonb), public.money_pick_quote(bigint, text, text),
   public.money_own_rider(bigint), public.money_start_payment(uuid, text), public.money_paid(text, bigint), public.money_book_info(bigint),
   public.money_quote_info_paid(bigint), public.money_save_shipment(bigint, jsonb), public.money_ship_update(text, jsonb), public.order_money(uuid),
-  public.admin_money(), public.admin_delivery_paid(uuid), public.shops_pickup_reset() from public, anon, authenticated;
+  public.admin_money(), public.admin_delivery_paid(uuid), public.shops_pickup_reset(), public.online_fee(int) from public, anon, authenticated;
 grant execute on function public.money_switches(), public.order_money(uuid) to anon, authenticated;
 grant execute on function public.money_own_rider(bigint), public.admin_money(), public.admin_delivery_paid(uuid) to authenticated;

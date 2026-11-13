@@ -66,7 +66,11 @@ export function MoneyCards({ shop, reloadShop, say }) {
             <p className="note">
               Customers can pay with card, transfer or USSD on their order page, and the order is marked paid by itself.
               The money goes straight to your {shop.bank} account through Paystack, usually by the next working day.
-              {sw.fee_by === 'shop' ? ' Paystack keeps its fee (1.5% + ₦100, at most ₦2,000) from each payment.' : ''}
+              {sw.fee_by === 'customer'
+                ? ' Customers who pay online also pay the card fee, so you get the full amount. Transfers to you stay free.'
+                : sw.fee_by === 'shop'
+                  ? ' Paystack keeps its fee (1.5% + ₦100, at most ₦2,000) from each payment.'
+                  : ''}
             </p>
           ) : (
             <p className="note">

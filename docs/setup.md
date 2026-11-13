@@ -71,7 +71,7 @@ The sending domain should have valid SPF and DKIM records.
 
 Both are off until switched on in **Admin → Payments & delivery**, and the app hides them while they are off.
 
-- **Pay online (Paystack).** The customer pays once on the order page. The goods money settles to the shop's own bank account through a Paystack subaccount, created from the bank details the shop already gave (OPay, Moniepoint, Kuda or PalmPay). When the order goes with ShopDesk Delivery, the delivery fee goes to ShopDesk's Paystack balance in the same payment. ShopDesk never holds a shop's money.
+- **Pay online (Paystack).** The customer pays once on the order page. The goods money settles to the shop's own bank account through a Paystack subaccount, created from the bank details the shop already gave (OPay, Moniepoint, Kuda or PalmPay). When the order goes with ShopDesk Delivery, the delivery fee goes to ShopDesk's Paystack balance in the same payment. ShopDesk never holds a shop's money. Paystack's fee (1.5% + ₦100, the ₦100 waived under ₦2,500, at most ₦2,000) is added on top for the customer who chooses to pay online, so the shop gets the full amount; paying the shop by transfer stays free. Admin can change who pays the fee.
 - **ShopDesk Delivery (Shipbubble).** ShopDesk has the one courier account and pays couriers from its Shipbubble wallet. A shop gets courier prices on a new order, picks one (its price becomes the delivery fee, plus the margin set in Admin), and books the pickup once the order is paid and packed. The shop and the customer follow the delivery on the order. When the customer paid the shop by transfer, the delivery fee goes on the shop's delivery bill in Admin.
 
 Setup:
@@ -88,7 +88,8 @@ Setup:
 4. Set the webhook URLs:
    - Paystack (**Settings → API Keys & Webhooks**): `https://<project>.supabase.co/functions/v1/money?hook=paystack`
    - Shipbubble (**Settings → Webhooks**): `https://<project>.supabase.co/functions/v1/money?hook=shipbubble`
-5. Top up the Shipbubble wallet, then switch each one on in **Admin → Payments & delivery**. The page shows whether the keys are test or live and the wallet balance.
+5. In Paystack, leave **Settings → Preferences → Pass fees to customers** off: the money function already adds the fee.
+6. Top up the Shipbubble wallet, then switch each one on in **Admin → Payments & delivery**. The page shows whether the keys are test or live and the wallet balance.
 
 The money function's checks run in `tests/functions/money.mjs` (after `tests/db/run.sh`), with Paystack, Shipbubble and sign-in faked.
 

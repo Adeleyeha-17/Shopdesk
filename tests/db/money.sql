@@ -38,17 +38,18 @@ select money_save_quotes(:oid, '[{"courier_id":"dellyman","service_code":"dellym
 select money_pick_quote(:oid, 'madeup', 'madeup');
 select money_pick_quote(:oid, 'dellyman', 'dellyman')->>'name';
 reset role; select delivery_fee, delivery_by, confirmed_at is not null from orders where id = :oid;
-\echo M5 the order page: it can be paid online, with ShopDesk Delivery:
-set role anon; select m->>'online', m->>'delivery_by', m->>'courier', coalesce(m->>'shipment', 'none') from order_money(:'tok') m;
-\echo M6 only the customer can start paying; they pay goods and delivery, and the delivery part goes to ShopDesk (expect an error, then 22200 and 2200):
+\echo M5 the order page: it can be paid online, with ShopDesk Delivery, and the customer sees the card fee on top (expect 440):
+set role anon; select m->>'online', m->>'delivery_by', m->>'courier', coalesce(m->>'shipment', 'none'), m->>'fee' from order_money(:'tok') m;
+\echo M6 only the customer can start paying; they pay goods and delivery plus the card fee, and the delivery part goes to ShopDesk (expect an error, then 22200, 2200 and 440):
 reset role; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000003';
 select money_start_payment(:'tok', 'SDTEST-0001');
 set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
-select r->>'amount', r->>'delivery_part', r->>'email', r->'shop'->>'bank' from money_start_payment(:'tok', 'SDTEST-0002') r;
-\echo M7 too little is refused; the right amount marks the order paid, once (expect an error, then 22200, then already):
+select r->>'amount', r->>'delivery_part', r->>'fee', r->>'email', r->'shop'->>'bank' from money_start_payment(:'tok', 'SDTEST-0002') r;
+\echo M7 too little is refused, and so is the amount without the card fee; the right amount marks the order paid with what was due, once (expect two errors, then 22200, then already):
 select money_paid('SDTEST-0002', 100);
-select money_paid('SDTEST-0002', 2220000)->>'credited';
-select money_paid('SDTEST-0002', 2220000)->>'already';
+select money_paid('SDTEST-0002', 2220000);
+select money_paid('SDTEST-0002', 2264000)->>'credited';
+select money_paid('SDTEST-0002', 2264000)->>'already';
 reset role; select status, amount_paid, (select method from payments where order_id = :oid) from orders where id = :oid;
 \echo M8 booking needs every item packed; then the order goes out with the courier:
 set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
@@ -103,12 +104,12 @@ set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
 select money_pick_quote(:oid3, 'gig', 'gig-std')->>'price';
 set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
 select money_start_payment(:'tok3', 'SDTEST-0003')->>'delivery_part';
-select money_paid('SDTEST-0003', 1340000)->>'credited';
+select money_paid('SDTEST-0003', 1370600)->>'credited';
 set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000001';
 select money_own_rider(:oid3);
 \echo M14 nobody calls the payment steps from the app directly (expect permission denied):
 set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
-select money_paid('SDTEST-0002', 2220000);
+select money_paid('SDTEST-0002', 2264000);
 select * from online_payments;
 reset role;
 select admin_save_settings('{"online_pay_on": false, "delivery_on": false}') from (select set_config('request.jwt.claim.sub', 'c9000000-0000-4000-8000-000000000009', false)) x;

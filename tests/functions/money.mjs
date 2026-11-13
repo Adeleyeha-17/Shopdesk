@@ -102,18 +102,22 @@ check('only the customer can pay', /Sign in with the account/.test(r.error || ''
 r = await post({ action: 'pay', token: tok }, 'cust');
 const init = calls.filter((c) => c.url.endsWith('/transaction/initialize')).pop()?.body;
 check('paying returns the Paystack page', r.url === 'https://checkout.paystack.com/abc' && /^SD/.test(r.reference), r);
-check('goods to the shop subaccount, delivery to ShopDesk', init.subaccount === 'ACCT_shop1' && init.amount === 1725000 && init.transaction_charge === 225000 && init.bearer === 'subaccount', init);
+// 17,250 due: the customer pays Paystack's fee on top (₦365), ShopDesk's share is delivery plus that fee, and Paystack takes
+// its fee from ShopDesk's share, so the shop gets its 15,000 in full
+check('goods to the shop subaccount, delivery and the card fee to ShopDesk', init.subaccount === 'ACCT_shop1' && init.amount === 1761500 && init.transaction_charge === 261500 && init.bearer === 'account', init);
+const psFee = Math.min(Math.ceil(init.amount * 0.015) + 10000, 200000);
+check('after Paystack takes its fee, ShopDesk still has the delivery fee', init.transaction_charge - psFee >= 225000, psFee);
 const sub = calls.find((c) => c.url.endsWith('/subaccount'));
 check('the subaccount uses the shop bank details', sub.body.settlement_bank === '999992' && sub.body.account_number === '0123456780', sub.body);
 
-paidKobo = 1725000;
+paidKobo = 1761500;
 const ev = JSON.stringify({ event: 'charge.success', data: { reference: r.reference, amount: paidKobo } });
 let h = await post(ev, null, 'paystack', { 'x-paystack-signature': 'nope' });
 check('a webhook with a bad signature is refused', h.status === 401, h);
 const sig = crypto.createHmac('sha512', ENV.PAYSTACK_SECRET_KEY).update(ev).digest('hex');
 h = await post(ev, null, 'paystack', { 'x-paystack-signature': sig });
 let [o] = await sql`select status, amount_paid from orders where id = ${ord.id}`;
-check('the Paystack webhook marks the order paid', h.ok && o.status === 'paid' && o.amount_paid === 17250, o);
+check('the Paystack webhook marks the order paid with what was due, not the card fee', h.ok && o.status === 'paid' && o.amount_paid === 17250, o);
 r = await post({ action: 'check', reference: init.reference }, null);
 check('checking again says paid', r.paid === true, r);
 

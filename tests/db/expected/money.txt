@@ -16,26 +16,28 @@ psql:money.sql:38: ERROR:  Get the courier prices again.
 CONTEXT:  PL/pgSQL function money_pick_quote(bigint,text,text) line N at RAISE
 Dellyman
 2200|shopdesk|t
-M5 the order page: it can be paid online, with ShopDesk Delivery:
-true|shopdesk|Dellyman|none
-M6 only the customer can start paying; they pay goods and delivery, and the delivery part goes to ShopDesk (expect an error, then 22200 and 2200):
+M5 the order page: it can be paid online, with ShopDesk Delivery, and the customer sees the card fee on top (expect 440):
+true|shopdesk|Dellyman|none|440
+M6 only the customer can start paying; they pay goods and delivery plus the card fee, and the delivery part goes to ShopDesk (expect an error, then 22200, 2200 and 440):
 psql:money.sql:45: ERROR:  Sign in with the account that placed this order.
 CONTEXT:  PL/pgSQL function money_start_payment(uuid,text) line N at RAISE
-22200|2200|payer@example.com|OPay
-M7 too little is refused; the right amount marks the order paid, once (expect an error, then 22200, then already):
+22200|2200|440|payer@example.com|OPay
+M7 too little is refused, and so is the amount without the card fee; the right amount marks the order paid with what was due, once (expect two errors, then 22200, then already):
 psql:money.sql:49: ERROR:  The amount paid doesn't match.
+CONTEXT:  PL/pgSQL function money_paid(text,bigint) line N at RAISE
+psql:money.sql:50: ERROR:  The amount paid doesn't match.
 CONTEXT:  PL/pgSQL function money_paid(text,bigint) line N at RAISE
 22200
 true
 paid|22200|online
 M8 booking needs every item packed; then the order goes out with the courier:
-psql:money.sql:55: ERROR:  Tick every item as packed first.
+psql:money.sql:56: ERROR:  Tick every item as packed first.
 CONTEXT:  PL/pgSQL function money_book_info(bigint) line N at RAISE
 dellyman
 
 out|Dellyman|t|2200|1800
 M9 booking twice is refused:
-psql:money.sql:63: ERROR:  Only paid orders can be booked.
+psql:money.sql:64: ERROR:  Only paid orders can be booked.
 CONTEXT:  PL/pgSQL function money_book_info(bigint) line N at RAISE
 M10 the courier picks it up, then delivers it; the order is delivered and the customer is asked to confirm:
 picked_up
@@ -64,9 +66,9 @@ M15 typing a fee means the shop rider takes it; once the customer paid ShopDesk 
 3400
 3400
 13400
-psql:money.sql:108: ERROR:  The customer paid ShopDesk for this delivery, so it goes with ShopDesk Delivery.
+psql:money.sql:109: ERROR:  The customer paid ShopDesk for this delivery, so it goes with ShopDesk Delivery.
 CONTEXT:  PL/pgSQL function money_own_rider(bigint) line N at RAISE
 M14 nobody calls the payment steps from the app directly (expect permission denied):
-psql:money.sql:111: ERROR:  permission denied for function money_paid
-psql:money.sql:112: ERROR:  permission denied for table online_payments
+psql:money.sql:112: ERROR:  permission denied for function money_paid
+psql:money.sql:113: ERROR:  permission denied for table online_payments
 

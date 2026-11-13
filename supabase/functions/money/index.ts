@@ -4,7 +4,9 @@
 //
 // Paying online: the customer pays once. The goods money settles straight into the shop's own bank account (a Paystack
 // subaccount made from the bank details the shop already gave), and when the order goes with ShopDesk Delivery, the delivery
-// fee goes to ShopDesk's account in the same payment. ShopDesk never holds a shop's money.
+// fee goes to ShopDesk's account in the same payment. ShopDesk never holds a shop's money. Paystack's fee is added on top for
+// the customer (Admin can change who pays it), so the shop gets the full amount.
+// Leave Paystack's own "pass fees to customers" setting off: the fee is already added here.
 // ShopDesk Delivery: ShopDesk has the one courier account (Shipbubble) and pays couriers from its wallet there.
 //
 //   POST {"action":"quote", "order":id}                      shop: courier prices for a new order
@@ -285,17 +287,20 @@ export async function ensureSubaccount(sql, api, shop) {
 
 export async function startPayment(sql, api, r, token, ref) {
   const sub = await ensureSubaccount(sql, api, r.shop);
+  // The customer pays the goods (and delivery) plus Paystack's fee when fee > 0. ShopDesk's share is the delivery fee plus
+  // that fee, and Paystack takes its fee from ShopDesk's share, so the shop's share is exactly what the shop is owed.
+  const fee = Number(r.fee || 0);
   const body = {
     email: r.email,
-    amount: r.amount * 100,
+    amount: (r.amount + fee) * 100,
     currency: 'NGN',
     reference: ref,
     subaccount: sub,
-    bearer: r.delivery_part > 0 && r.fee_by === 'shopdesk' ? 'account' : 'subaccount',
+    bearer: fee > 0 || (r.delivery_part > 0 && r.fee_by === 'shopdesk') ? 'account' : 'subaccount',
     callback_url: SITE + '/o/' + token,
     metadata: { order_id: r.order_id, shop: r.shop.slug, delivery_part: r.delivery_part, cancel_action: SITE + '/o/' + token },
   };
-  if (r.delivery_part > 0) body.transaction_charge = r.delivery_part * 100;
+  if (r.delivery_part + fee > 0) body.transaction_charge = (r.delivery_part + fee) * 100;
   try {
     const d = await api.paystack('/transaction/initialize', body);
     return { url: d.authorization_url, reference: ref };

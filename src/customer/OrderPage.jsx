@@ -378,11 +378,14 @@ export function OrderPage({ token }) {
             {pay && pay.online && canAct && (
               <div className="pay-online">
                 <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
-                  {paying ? 'Opening Paystack…' : `Pay ${naira(left)} online`}
+                  {paying ? 'Opening Paystack…' : `Pay ${naira(left + (pay.fee || 0))} online`}
                 </button>
-                <span className="sub">Card, bank transfer or USSD with Paystack. Your order is marked paid at once.</span>
+                <span className="sub">
+                  {pay.fee > 0 ? `Includes ${naira(pay.fee)} card fee. ` : ''}Card, bank transfer or USSD with Paystack.
+                  Your order is marked paid at once.
+                </span>
                 <div className="or">
-                  <span>or pay the shop by transfer</span>
+                  <span>{pay.fee > 0 ? 'or transfer to the shop, no fee' : 'or pay the shop by transfer'}</span>
                 </div>
               </div>
             )}
