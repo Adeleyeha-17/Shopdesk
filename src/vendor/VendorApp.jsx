@@ -250,7 +250,15 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
   }, [shop.status, reloadShop]);
   const run = useCallback(
     async (fn, args, done) => {
-      const { data: out, error } = await supabase.rpc(fn, args);
+      // fn is a database function's name, or a function that calls the money server function
+      let out, error;
+      if (typeof fn === 'function') {
+        try {
+          out = await fn();
+        } catch (e) {
+          error = e;
+        }
+      } else ({ data: out, error } = await supabase.rpc(fn, args));
       if (error) {
         say(errText(error));
         return false;

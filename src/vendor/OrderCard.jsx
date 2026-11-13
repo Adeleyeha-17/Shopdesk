@@ -4,6 +4,8 @@
 //                   reason the customer sees; not within a day of the customer saying they've paid)
 //   paid         -> tick each item as you pack it (with an optional packing photo), then
 //                   Hand to rider (name, phone, delivery time), or Ready for pick-up
+//   ShopDesk Delivery (when switched on): courier prices on a new order, book the courier once paid and packed,
+//                   and follow the delivery (see Courier.jsx)
 //   with rider   -> Mark delivered, or change the rider or time
 //   delivered    -> shows whether the customer confirmed they got it
 //   problem      -> the customer reported one: answer within 48 hours (see ProblemPanel)
@@ -32,6 +34,8 @@ import {
 import { copyText, telLink, errText, orderCode, ngMobile } from '../lib/helpers.js';
 import { payMessage } from './orderText.js';
 import { hasPin, mapLink } from '../lib/products.js';
+import { useMoneySwitches } from '../lib/moneyApi.js';
+import { CourierPrices, CourierBook, CourierTrack } from './Courier.jsx';
 
 // Why a shop cancels. The customer sees it on their order.
 const CANCEL_REASONS = [
@@ -56,9 +60,11 @@ function statusChip(o, due, pickup) {
     return ['owe', 'Not paid'];
   }
   if (o.status === 'part') return ['warn', 'Owes ' + naira(due)];
-  if (o.status === 'paid') return ['paid', pickup ? 'Paid · get it ready' : 'Paid · hand to rider'];
+  const courier = !pickup && o.delivery_by === 'shopdesk';
+  if (o.status === 'paid')
+    return ['paid', pickup ? 'Paid · get it ready' : courier ? 'Paid · pack and book' : 'Paid · hand to rider'];
   if (o.status === 'out')
-    return ['new', (pickup ? 'Ready · ' : 'With rider · due ') + whenText(o.deliver_by)];
+    return ['new', (pickup ? 'Ready · ' : courier ? 'With courier · due ' : 'With rider · due ') + whenText(o.deliver_by)];
   if (o.status === 'cancelled')
     return [
       'done',
@@ -141,6 +147,7 @@ export function OrderCard({
   shop,
   run,
   say,
+  goShop,
   products,
   problem,
   unreadChat = 0,
@@ -157,6 +164,7 @@ export function OrderCard({
     if (focused && cardRef.current) cardRef.current.scrollIntoView({ block: 'start' });
   }, [focused]);
   const [fee, setFee] = useState('');
+  const sw = useMoneySwitches();
   const [sure, setSure] = useState(null); // cancelling: { reason, note }
   const [rider, setRider] = useState(null); // the hand-over form: { name, phone, date, hour }
   const [ticks, setTicks] = useState({}); // packing ticks saved a moment ago (shown at once)
@@ -190,6 +198,8 @@ export function OrderCard({
   const pickup = o.mode === 'pickup';
   const chip = statusChip(o, due, pickup);
   const where = whereText(o);
+  // booked with ShopDesk Delivery, or set up for it (the customer is paying the courier's price)
+  const courier = !pickup && o.delivery_by === 'shopdesk';
   const openRider = () => {
     const f = firstSlot(pickup ? 1 : 2);
     setRider({
@@ -254,7 +264,8 @@ export function OrderCard({
       </div>
       {o.status === 'awaiting' && needsFee(o) && (
         <div className="slip">
-          <span className="label">Delivery fee</span>
+          {sw.delivery && <CourierPrices o={o} shop={shop} code={code} run={run} say={say} goShop={goShop} />}
+          <span className="label">{sw.delivery ? 'Or your own rider' : 'Delivery fee'}</span>
           <span className="sub">
             Ask your rider the price to {o.address}.
             <MapPin o={o} />
@@ -393,7 +404,8 @@ export function OrderCard({
             </button>
           </div>
         ))}
-      {o.status === 'out' && !pickup && (
+      {courier && (o.status === 'out' || o.status === 'delivered') && <CourierTrack o={o} />}
+      {o.status === 'out' && !pickup && !courier && (
         <div className="slip">
           <span className="label">With {o.rider_name}</span>
           <span className="sub">
@@ -431,7 +443,8 @@ export function OrderCard({
         </div>
       )}
       {o.packing_photo && <PhotoStrip paths={[o.packing_photo]} label="Packing photo" />}
-      {(o.status === 'paid' || o.status === 'out') && !rider && (
+      {courier && o.status === 'paid' && <CourierBook o={o} code={code} run={run} allPacked={allPacked} />}
+      {(o.status === 'paid' || o.status === 'out') && !rider && !courier && (
         <div className="btns">
           {o.status === 'paid' && (
             <button className="btn small" onClick={openRider} disabled={!allPacked}>

@@ -36,6 +36,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: bash tests/db/run.sh
+      # the money server function, against the database the step above left behind
+      - run: npm ci --ignore-scripts
+      - run: node tests/functions/money.mjs
       - if: failure()
         uses: actions/upload-artifact@v7
         with:

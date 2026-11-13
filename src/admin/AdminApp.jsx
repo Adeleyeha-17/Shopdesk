@@ -16,6 +16,7 @@ import { ShopsPage } from './ShopsPage.jsx';
 import { ShopDetailPage } from './ShopDetailPage.jsx';
 import { PlansPage } from './PlansPage.jsx';
 import { InvitesPage } from './InvitesPage.jsx';
+import { MoneyPage } from './MoneyPage.jsx';
 import { AnnouncementsPage } from './AnnouncementsPage.jsx';
 import { ReportsPage, LogPage } from './ReportsLogPage.jsx';
 import { useLive } from '../lib/alerts.js';
@@ -115,6 +116,7 @@ const NAV = [
   ['shops', 'Shops'],
   ['plans', 'Plans & payments'],
   ['invites', 'Invites'],
+  ['money', 'Payments & delivery'],
   ['notices', 'Announcements'],
   ['reports', 'Reports'],
   ['records', 'Records'],
@@ -229,6 +231,8 @@ function AdminLayout({ out, email, userId }) {
             <PlansPage {...ctx} />
           ) : page === 'invites' ? (
             <InvitesPage {...ctx} />
+          ) : page === 'money' ? (
+            <MoneyPage {...ctx} />
           ) : page === 'notices' ? (
             <AnnouncementsPage {...ctx} />
           ) : page === 'reports' ? (

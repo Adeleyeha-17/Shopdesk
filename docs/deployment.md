@@ -76,4 +76,4 @@ Database updates are never applied automatically. Run them from the SQL Editor b
 
 - Open a shop page, the vendor app and `/admin`, and confirm each loads.
 - Place a test order if the release touched ordering or stock.
-- If the Edge Function changed, redeploy `supabase/functions/push/index.ts` and confirm JWT verification is still off.
+- If an Edge Function changed, redeploy it (`supabase/functions/push/index.ts` or `supabase/functions/money/index.ts`) and confirm JWT verification is still off.

@@ -17,6 +17,8 @@ const FIXES = [
   ['src/lib/motion.js', 'window.location.pathname', 'window.__demo.path', 1],
   ['src/lib/helpers.js', "window.history.pushState({ k, from }, '', path);", 'window.__demo.go(path);', 1],
   ['src/lib/helpers.js', "window.history.replaceState({ k }, '', path);", 'window.__demo.go(path);', 1],
+  // Pay online opens a pretend checkout instead of Paystack's page
+  ['src/customer/OrderPage.jsx', 'window.location.assign(r.url);', 'window.__demoPay(r.url, () => (setPaying(false), load()));', 1],
   [
     'src/vendor/VendorApp.jsx',
     "window.history.replaceState(window.history.state, '', '#' + tab);",

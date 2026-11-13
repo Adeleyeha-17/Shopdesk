@@ -4,6 +4,8 @@
 // (see ProblemBox.jsx). Only the customer who placed the order can do these. The page updates itself the moment
 // the shop does anything, and has a chat with the shop (/o/<link>#chat opens it; it also opens by itself when the shop
 // has written). An unpaid order can be cancelled by the customer, and cancels itself if it isn't paid in 48 hours.
+// When Admin has switched them on: Pay online (Paystack; back on this page with ?reference=...) and ShopDesk Delivery
+// tracking.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -24,6 +26,8 @@ import { Chat } from '../shared/Chat.jsx';
 import { myTokens } from './savedOrders.js';
 import { ReportProblemForm, CustomerProblem } from './ProblemBox.jsx';
 import { RateShop } from './RateShop.jsx';
+import { money } from '../lib/moneyApi.js';
+import { useShipment, ShipmentView } from '../shared/Shipment.jsx';
 
 // Why an order was cancelled, in the customer's words.
 const CANCELLED = {
@@ -149,6 +153,51 @@ export function OrderPage({ token }) {
       load();
     }
   }
+  // Pay online and ShopDesk Delivery: what this order can do (nothing, until Admin switches them on)
+  const [pay, setPay] = useState(null);
+  const [paying, setPaying] = useState(false);
+  const [sh, setSh, refreshShip, shipBusy] = useShipment({ token });
+  const status = o && o.status;
+  useEffect(() => {
+    if (!status) return;
+    supabase.rpc('order_money', { p_token: token }).then(({ data, error }) => {
+      if (error || !data) return;
+      setPay(data);
+      if (data.shipment) setSh(data.shipment);
+    });
+  }, [token, status, o && o.amount_paid, o && o.delivery_fee, setSh]);
+  // the courier's latest, when the delivery is on its way
+  const shipping = !!sh && status === 'out';
+  useEffect(() => {
+    if (shipping) refreshShip();
+  }, [shipping, refreshShip]);
+  // back from Paystack: check the payment, then tidy the address bar
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const ref = q.get('reference') || q.get('trxref');
+    if (!ref) return;
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.hash);
+    money('check', { reference: ref })
+      .then((r) => {
+        if (r.paid) {
+          setMsg('Payment received. The shop is packing your order.');
+          kick();
+        } else setErr("We couldn't see that payment yet. If money left your account, it shows here shortly.");
+        load();
+      })
+      .catch((e) => setErr(e.message));
+  }, [load]);
+  async function payOnline() {
+    setPaying(true);
+    setErr('');
+    try {
+      const r = await money('pay', { token });
+      window.location.assign(r.url);
+    } catch (e) {
+      setErr(e.message);
+      setPaying(false);
+    }
+  }
   useBusy(o === undefined && !loadErr);
   // the Shop and Cart tabs go to this order's shop
   const shopOf = o && o.shop;
@@ -233,9 +282,18 @@ export function OrderPage({ token }) {
           </p>
         )}
         <p className="note">{items}</p>
+        {pay && pay.delivery_by === 'shopdesk' && pay.courier && !sh && o.status !== 'cancelled' && (
+          <p className="note">Delivered by {pay.courier} with ShopDesk Delivery.</p>
+        )}
       </section>
 
-      {o.status === 'out' && !pickup && (
+      {sh && (o.status === 'out' || o.status === 'delivered') && (
+        <section className="card boxed">
+          <ShipmentView sh={sh} busy={shipBusy} refresh={refreshShip} who="customer" />
+          {o.status === 'out' && <p className="note">Promised {whenText(o.deliver_by)}.</p>}
+        </section>
+      )}
+      {o.status === 'out' && !pickup && !sh && (
         <section className="card boxed">
           <div className="label">Your rider</div>
           <div className="row">
@@ -317,6 +375,17 @@ export function OrderPage({ token }) {
           <p className="note">The shop is setting your delivery fee. This page updates by itself.</p>
         ) : (
           <section className="card">
+            {pay && pay.online && canAct && (
+              <div className="pay-online">
+                <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
+                  {paying ? 'Opening Paystack…' : `Pay ${naira(left)} online`}
+                </button>
+                <span className="sub">Card, bank transfer or USSD with Paystack. Your order is marked paid at once.</span>
+                <div className="or">
+                  <span>or pay the shop by transfer</span>
+                </div>
+              </div>
+            )}
             <p className="note">
               Pay <strong>{naira(left)}</strong> in one transfer to:
             </p>

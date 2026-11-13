@@ -190,6 +190,7 @@ function seed() {
     delivery_paid_by: 'customer',
     sells: 'Shea butter, black soap, oils and skin care',
     location: 'Yaba, Lagos',
+    pickup_address: '14 Herbert Macaulay Way, Yaba, Lagos',
     social: '@bimpesbeauty',
     status: 'active',
     reviewed_at: iso(opened + DAY),
@@ -603,7 +604,7 @@ function seed() {
   msg(says, 'customer', "I've sent the money. Please check and send it today 🙏", ago(1.4));
   notifications[notifications.length - 1].read_at = null;
   return {
-    v: 11,
+    v: 12,
     day: t0,
     uid: VENDOR.id,
     path: '/',
@@ -666,7 +667,7 @@ try {
   S = null;
 }
 // A fresh sample each day, so "today" always has orders in it.
-if (!S || S.v !== 11 || S.day !== startOfDay(Date.now())) S = seed();
+if (!S || S.v !== 12 || S.day !== startOfDay(Date.now())) S = seed();
 demo.go(S.path || '/');
 let saveTimer = null;
 function save() {
@@ -940,6 +941,59 @@ function orderMoved(o, b) {
     );
 }
 
+// ---------- ShopDesk Delivery in the demo ----------
+const COURIERS = [
+  { id: 'kwik', name: 'Kwik', extra: 0, eta: 'Same day, by bike', fast: true },
+  { id: 'dellyman', name: 'Dellyman', extra: 350, eta: 'Same day' },
+  { id: 'gig', name: 'GIG Logistics', extra: 900, eta: '1 to 2 days' },
+];
+const SHIP_STEPS = [
+  ['pending', 'Booked'],
+  ['picked_up', 'Picked up from the shop'],
+  ['in_transit', 'On the way'],
+  ['completed', 'Delivered'],
+];
+const shipmentOf = (o) => (S.shipments || []).find((x) => x.order_id === o.id) || null;
+const shipView = (sh) => ({
+  courier: sh.courier,
+  status: sh.status,
+  tracking_url: sh.tracking_url,
+  tracking_code: sh.tracking_code,
+  steps: sh.steps,
+  rider: sh.rider,
+});
+
+// Paystack's page, in the demo: a pretend checkout sheet instead of leaving the page.
+function demoPaystack(ref, done) {
+  const p = (S.online || []).find((x) => x.reference === ref);
+  if (!p) return done && done();
+  const o = S.orders.find((x) => x.id === p.order_id);
+  const s = shopOf(o);
+  const wrap = document.createElement('div');
+  wrap.className = 'demo-paystack';
+  wrap.innerHTML = `<div class="dp-sheet" role="dialog" aria-modal="true" aria-label="Pay online">
+    <div class="dp-top"><span class="dp-brand">paystack</span><span class="dp-test">Demo checkout</span></div>
+    <div class="dp-shop"></div><div class="dp-amt"></div>
+    <div class="dp-ways"><span class="on">Card</span><span>Transfer</span><span>USSD</span></div>
+    <button class="btn dp-pay"></button><button class="btn ghost dp-cancel">Cancel</button>
+    <p class="note dp-note">In the real app this is Paystack's own page. Nothing is charged in the demo.</p></div>`;
+  wrap.querySelector('.dp-shop').textContent = s.name;
+  wrap.querySelector('.dp-amt').textContent = naira(p.amount);
+  wrap.querySelector('.dp-pay').textContent = 'Pay ' + naira(p.amount);
+  const close = () => {
+    wrap.remove();
+    if (done) done();
+  };
+  wrap.querySelector('.dp-cancel').onclick = close;
+  wrap.querySelector('.dp-pay').onclick = async () => {
+    wrap.querySelector('.dp-pay').textContent = 'Paying…';
+    await rpc('customer_paid_online', { p_ref: ref });
+    close();
+  };
+  document.body.appendChild(wrap);
+}
+if (typeof window !== 'undefined') window.__demoPay = demoPaystack;
+
 // ---------- the database functions the app calls ----------
 const RPC = {
   is_admin: () => false,
@@ -970,6 +1024,8 @@ const RPC = {
     if (!['awaiting', 'part'].includes(o.status)) fail('The fee is locked once paid.');
     if (p_fee == null || p_fee < 0 || p_fee > 1000000) fail('Enter a delivery fee in naira.');
     o.delivery_fee = p_fee;
+    o.delivery_by = 'shop';
+    o.delivery_quote = null;
     o.confirmed_at = o.confirmed_at || nowIso();
     return null;
   },
@@ -1529,6 +1585,147 @@ const RPC = {
       delivery_pending: mode === 'delivery' && s.delivery_paid_by === 'customer',
     };
   },
+  // ---------- Pay online and ShopDesk Delivery (switched on in the demo; the real ones are off until Admin turns them on) ----------
+  money_switches: () => ({ online: true, delivery: true, fee_by: 'shop' }),
+  order_money: ({ p_token }) => {
+    const o = S.orders.find((x) => x.public_token === p_token);
+    if (!o) return null;
+    const s = shopOf(o);
+    const sh = shipmentOf(o);
+    return {
+      online:
+        ['OPay', 'Moniepoint', 'Kuda', 'PalmPay'].includes(s.bank) &&
+        ['awaiting', 'part'].includes(o.status) &&
+        !(o.mode === 'delivery' && o.delivery_paid_by === 'customer' && o.delivery_fee == null),
+      delivery_by: o.delivery_by || 'shop',
+      courier: o.delivery_quote ? o.delivery_quote.name : null,
+      shipment: sh ? shipView(sh) : null,
+    };
+  },
+  save_courier_quotes: ({ p_order }) => {
+    const o = ownedOrder(p_order);
+    if (o.mode !== 'delivery') fail('This order is a pick-up.');
+    if (o.status !== 'awaiting' || o.amount_paid > 0) fail('The fee is locked once paid.');
+    if (!(myShop().pickup_address || '').trim()) fail('Add your pickup address on the Shop tab first.');
+    const base = 1400 + (o.id % 7) * 250;
+    const list = COURIERS.map((c, i) => ({
+      courier_id: c.id,
+      service_code: c.id + '_std',
+      name: c.name,
+      image: null,
+      cost: base + c.extra,
+      price: Math.ceil((base + c.extra + 200) / 50) * 50,
+      eta: null,
+      eta_text: c.eta,
+      token: 'demo',
+      ...(i === 0 ? { cheapest: true } : {}),
+      ...(c.fast ? { fastest: true } : {}),
+    }));
+    o.delivery_quotes = { at: nowIso(), list };
+    return { list: list.map(({ cost, token, ...q }) => q) };
+  },
+  set_courier: ({ p_order, p_courier, p_service }) => {
+    const o = ownedOrder(p_order);
+    if (o.status !== 'awaiting' || o.amount_paid > 0) fail('The fee is locked once paid.');
+    const q = ((o.delivery_quotes && o.delivery_quotes.list) || []).find(
+      (x) => x.courier_id === p_courier && x.service_code === p_service,
+    );
+    if (!q) fail('Get the courier prices again.');
+    Object.assign(o, { delivery_fee: q.price, delivery_by: 'shopdesk', delivery_quote: q, confirmed_at: o.confirmed_at || nowIso() });
+    return { name: q.name, price: q.price, eta: q.eta, eta_text: q.eta_text };
+  },
+  money_own_rider: ({ p_order }) => {
+    const o = ownedOrder(p_order);
+    if (shipmentOf(o)) fail('This order is already booked with a courier.');
+    if ((S.online || []).some((p) => p.order_id === o.id && p.paid && p.delivery_part > 0))
+      fail('The customer paid ShopDesk for this delivery, so it goes with ShopDesk Delivery.');
+    o.delivery_by = 'shop';
+    return null;
+  },
+  hand_to_courier: ({ p_order }) => {
+    const o = ownedOrder(p_order);
+    if (o.delivery_by !== 'shopdesk' || !o.delivery_quote) fail("This order isn't set up for ShopDesk Delivery.");
+    if (o.status !== 'paid') fail('Only paid orders can be booked.');
+    if (unpacked(o)) fail('Tick every item as packed first.');
+    if (shipmentOf(o)) fail('This order is already booked.');
+    const q = o.delivery_quote;
+    S.shipments = S.shipments || [];
+    S.shipments.push({
+      order_id: o.id,
+      shop_id: o.shop_id,
+      sb_order: 'SB-' + o.id,
+      courier: q.name,
+      status: 'pending',
+      tracking_url: null,
+      tracking_code: 'SDX' + (40000 + o.id),
+      rider: null,
+      steps: [{ status: 'Booked with ' + q.name, at: nowIso() }],
+      cost: q.cost,
+      price: q.price,
+      paid_online: (S.online || []).some((p) => p.order_id === o.id && p.paid && p.delivery_part > 0),
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    });
+    Object.assign(o, {
+      status: 'out',
+      out_at: nowIso(),
+      rider_name: q.name,
+      rider_phone: '0201 888 0000',
+      deliver_by: iso(Date.now() + (q.courier_id === 'kwik' ? 5 : 26) * HOUR),
+    });
+    return { courier: q.name, tracking_url: null, status: 'pending' };
+  },
+  // Each refresh moves a demo delivery one step on (at most every few seconds): picked up, on the way, delivered.
+  set_courier_progress: ({ p_order, p_token }) => {
+    const o = p_token ? S.orders.find((x) => x.public_token === p_token) : ownedOrder(p_order);
+    const sh = o && shipmentOf(o);
+    if (!sh) return { shipment: null };
+    const step = SHIP_STEPS.findIndex((x) => x[0] === sh.status);
+    if (step >= 0 && step < SHIP_STEPS.length - 1 && Date.now() - Date.parse(sh.updated_at) > 6000) {
+      const [status, words] = SHIP_STEPS[step + 1];
+      sh.status = status;
+      sh.steps = [...sh.steps, { status: words, at: nowIso() }];
+      sh.updated_at = nowIso();
+      if (status === 'picked_up') sh.rider = { name: 'Musa Bello', phone: '0803 555 0199' };
+      if (status === 'completed' && o.status === 'out')
+        Object.assign(o, { status: 'delivered', done_at: nowIso(), received_by: 'shop' });
+    }
+    return { shipment: shipView(sh) };
+  },
+  customer_pay_online: ({ p_token }) => {
+    const o = customerOrder(p_token);
+    if (!['awaiting', 'part'].includes(o.status)) fail('This order is already paid or closed.');
+    if (o.mode === 'delivery' && o.delivery_paid_by === 'customer' && o.delivery_fee == null)
+      fail('Wait for the shop to confirm your order and its delivery fee.');
+    const due = toPay(o) - o.amount_paid;
+    const ref = 'SDDEMO-' + o.id + '-' + Date.now().toString(36).toUpperCase();
+    S.online = S.online || [];
+    S.online.push({
+      reference: ref,
+      order_id: o.id,
+      amount: due,
+      delivery_part: o.delivery_by === 'shopdesk' && o.amount_paid === 0 ? o.delivery_fee || 0 : 0,
+      paid: false,
+    });
+    return { url: ref, amount: due, shop: shopOf(o).name };
+  },
+  customer_paid_online: ({ p_ref }) => {
+    const p = (S.online || []).find((x) => x.reference === p_ref) || fail('Unknown payment.');
+    if (p.paid) return { paid: true };
+    const o = S.orders.find((x) => x.id === p.order_id);
+    const due = toPay(o) - o.amount_paid;
+    p.paid = true;
+    if (due > 0 && ['awaiting', 'part'].includes(o.status)) {
+      const amt = Math.min(p.amount, due);
+      S.payments.push({ id: S.payments.length + 1, order_id: o.id, shop_id: o.shop_id, amount: amt, method: 'online', created_at: nowIso() });
+      o.amount_paid += amt;
+      o.customer_says_paid = false;
+      o.confirmed_at = o.confirmed_at || nowIso();
+      o.status = amt >= due ? 'paid' : 'part';
+      if (amt >= due) o.paid_at = nowIso();
+    }
+    return { paid: true };
+  },
   get_order_public: ({ p_token }) => {
     const o = S.orders.find((x) => x.public_token === p_token);
     if (!o) return null;
@@ -1958,6 +2155,7 @@ function visible(table) {
   if (table === 'products') return S.products.filter((x) => x.shop_id === s.id);
   if (table === 'product_options') return S.product_options.filter((x) => x.shop_id === s.id);
   if (table === 'orders') return S.orders.filter((x) => x.shop_id === s.id);
+  if (table === 'shipments') return (S.shipments || []).filter((x) => x.shop_id === s.id);
   if (table === 'payments') return S.payments.filter((x) => x.shop_id === s.id);
   if (table === 'money_out') return S.money_out.filter((x) => x.shop_id === s.id);
   if (table === 'problems') return S.problems.filter((x) => x.shop_id === s.id);
@@ -2284,11 +2482,25 @@ const channel = (name) => {
   };
   return ch;
 };
+// The money server function, in the demo: each action runs one of the demo database functions above.
+const MONEY = {
+  quote: (b) => ['save_courier_quotes', { p_order: b.order }],
+  pick: (b) => ['set_courier', { p_order: b.order, p_courier: b.courier_id, p_service: b.service_code }],
+  book: (b) => ['hand_to_courier', { p_order: b.order }],
+  track: (b) => ['set_courier_progress', { p_order: b.order, p_token: b.token }],
+  pay: (b) => ['customer_pay_online', { p_token: b.token }],
+  check: (b) => ['customer_paid_online', { p_ref: b.reference }],
+};
 const functions = {
-  invoke: async (fn, { body } = {}) => ({
-    data: body && body.action === 'key' ? { key: 'demo' } : { alerts: 0, sent: 0 },
-    error: null,
-  }),
+  invoke: async (fn, { body } = {}) => {
+    if (fn === 'money') {
+      const m = MONEY[body && body.action];
+      if (!m) return { data: { error: "This part of ShopDesk isn't in the demo." }, error: null };
+      const { data, error } = await rpc(...m(body));
+      return { data: error ? { error: error.message } : data, error: null };
+    }
+    return { data: body && body.action === 'key' ? { key: 'demo' } : { alerts: 0, sent: 0 }, error: null };
+  },
 };
 
 export const supabase = {

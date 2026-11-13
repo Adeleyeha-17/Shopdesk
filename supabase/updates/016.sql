@@ -1,0 +1,334 @@
+-- 016: Pay online (Paystack) and ShopDesk Delivery (Shipbubble). Both are off until you switch them on in Admin > Payments & delivery.
+--   * Pay online: the customer pays once through Paystack. The goods money goes to the shop's bank (a Paystack subaccount made
+--     from the bank details the shop already gave); the ShopDesk Delivery fee comes to ShopDesk. ShopDesk never holds the shop's money.
+--   * ShopDesk Delivery: the shop gets courier prices on a new order, picks one, and books the pickup once it's paid and packed.
+--     ShopDesk pays the courier from its own courier wallet; the customer and the shop follow the delivery on the order.
+--     If the delivery fee didn't come to ShopDesk online (the customer paid the shop by transfer), it goes on the shop's delivery bill.
+--   * The money server function ("money") talks to Paystack and Shipbubble with keys kept only in Supabase, and calls these functions.
+-- Safe to run more than once.
+
+alter table public.settings add column if not exists online_pay_on boolean not null default false;
+alter table public.settings add column if not exists delivery_on boolean not null default false;
+alter table public.settings add column if not exists delivery_margin integer not null default 0 check (delivery_margin between 0 and 20000);
+alter table public.settings add column if not exists paystack_fee_by text not null default 'shop' check (paystack_fee_by in ('shop', 'shopdesk'));
+
+alter table public.shops add column if not exists pickup_address text not null default '' check (char_length(pickup_address) <= 200);
+alter table public.shops add column if not exists pickup_code bigint;
+alter table public.shops add column if not exists paystack_subaccount text;
+alter table public.shops add column if not exists paystack_for text;
+grant update (pickup_address) on public.shops to authenticated;
+
+-- a new pickup address has to be checked by the courier service again
+create or replace function public.shops_pickup_reset() returns trigger
+language plpgsql as $$
+begin
+  if new.pickup_address is distinct from old.pickup_address then new.pickup_code := null; end if;
+  return new;
+end $$;
+drop trigger if exists shops_pickup_reset on public.shops;
+create trigger shops_pickup_reset before update on public.shops for each row execute function public.shops_pickup_reset();
+
+alter table public.orders add column if not exists delivery_by text not null default 'shop' check (delivery_by in ('shop', 'shopdesk'));
+alter table public.orders add column if not exists delivery_quotes jsonb;
+alter table public.orders add column if not exists delivery_quote jsonb;
+
+alter table public.payments drop constraint if exists payments_method_check;
+alter table public.payments add constraint payments_method_check check (method in ('tap', 'alert', 'notification', 'online'));
+
+-- Each time a customer starts paying online. amount and delivery_part are in naira.
+create table if not exists public.online_payments (
+  reference text primary key check (char_length(reference) between 8 and 60),
+  order_id bigint not null references public.orders(id) on delete cascade,
+  shop_id uuid not null references public.shops(id) on delete cascade,
+  amount integer not null check (amount > 0),
+  delivery_part integer not null default 0 check (delivery_part >= 0),
+  status text not null default 'started' check (status in ('started', 'paid')),
+  created_at timestamptz not null default now(),
+  paid_at timestamptz
+);
+create index if not exists online_payments_order on public.online_payments (order_id);
+alter table public.online_payments enable row level security;
+revoke all on public.online_payments from anon, authenticated;
+
+-- ShopDesk Delivery bookings. cost: what the courier took from ShopDesk's wallet; price: what the customer paid for delivery.
+-- When the customer paid the shop by transfer, the shop owes ShopDesk the price (the delivery fee it collected).
+create table if not exists public.shipments (
+  order_id bigint primary key references public.orders(id) on delete cascade,
+  shop_id uuid not null references public.shops(id) on delete cascade,
+  sb_order text unique,
+  courier text not null default '' check (char_length(courier) <= 80),
+  status text not null default 'pending' check (char_length(status) <= 40),
+  tracking_url text check (char_length(tracking_url) <= 300),
+  tracking_code text check (char_length(tracking_code) <= 80),
+  rider jsonb,
+  steps jsonb not null default '[]'::jsonb,
+  cost integer not null default 0 check (cost >= 0),
+  price integer not null default 0 check (price >= 0),
+  paid_online boolean not null default false,
+  billed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists shipments_shop on public.shipments (shop_id, created_at desc);
+alter table public.shipments enable row level security;
+drop policy if exists shipments_own on public.shipments;
+create policy shipments_own on public.shipments for select to authenticated using (shop_id = public.my_shop_id());
+revoke all on public.shipments from anon, authenticated;
+grant select on public.shipments to authenticated;
+
+-- What the apps need to know: is Pay online on, is ShopDesk Delivery on.
+create or replace function public.money_switches() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('online', online_pay_on, 'delivery', delivery_on, 'fee_by', paystack_fee_by) from public.settings where id = 1;
+$$;
+
+-- Everything the money function needs to get courier prices for a new order (the shop's own order, unpaid, delivery the customer pays).
+create or replace function public.money_quote_info(p_order bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v public.orders := public.owned_order(p_order); s public.shops; st public.settings;
+begin
+  select * into st from public.settings where id = 1;
+  if not st.delivery_on then raise exception 'ShopDesk Delivery isn''t on yet.'; end if;
+  if v.mode <> 'delivery' then raise exception 'This order is a pick-up.'; end if;
+  if v.delivery_paid_by <> 'customer' then raise exception 'ShopDesk Delivery is for orders where the customer pays delivery.'; end if;
+  if v.status <> 'awaiting' or v.amount_paid > 0 then raise exception 'The fee is locked once paid.'; end if;
+  if char_length(trim(v.address)) < 5 then raise exception 'This order has no delivery address.'; end if;
+  select * into s from public.shops where id = v.shop_id;
+  if char_length(trim(s.pickup_address)) < 5 then raise exception 'Add your pickup address on the Shop tab first.'; end if;
+  return jsonb_build_object(
+    'order', jsonb_build_object('id', v.id, 'name', v.customer_name, 'phone', v.customer_phone, 'address', v.address, 'area', v.area,
+      'lat', v.delivery_lat, 'lng', v.delivery_lng, 'email', (select email from auth.users where id = v.customer_id)),
+    'shop', jsonb_build_object('id', s.id, 'name', s.name, 'phone', s.whatsapp, 'pickup_address', s.pickup_address, 'pickup_code', s.pickup_code,
+      'sells', s.sells, 'email', (select email from auth.users where id = s.owner_id)),
+    'items', (select jsonb_agg(jsonb_build_object('name', i.name, 'price', i.price, 'qty', i.qty) order by i.id) from public.order_items i where i.order_id = v.id),
+    'margin', st.delivery_margin);
+end $$;
+
+-- The courier prices the money function got, kept on the order so the shop can only pick one of them.
+create or replace function public.money_save_quotes(p_order bigint, p_quotes jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare v public.orders := public.owned_order(p_order);
+begin
+  if v.status <> 'awaiting' or v.amount_paid > 0 then raise exception 'The fee is locked once paid.'; end if;
+  update public.orders set delivery_quotes = jsonb_build_object('at', now(), 'list', coalesce(p_quotes, '[]'::jsonb)) where id = v.id;
+end $$;
+
+-- The shop picks a courier: the delivery fee is set to that price and the order is confirmed.
+create or replace function public.money_pick_quote(p_order bigint, p_courier text, p_service text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v public.orders := public.owned_order(p_order); q jsonb;
+begin
+  if v.status <> 'awaiting' or v.amount_paid > 0 then raise exception 'The fee is locked once paid.'; end if;
+  if v.delivery_quotes is null or (v.delivery_quotes->>'at')::timestamptz < now() - interval '6 days' then raise exception 'Get the courier prices again.'; end if;
+  select x into q from jsonb_array_elements(v.delivery_quotes->'list') x where x->>'courier_id' = p_courier and x->>'service_code' = p_service limit 1;
+  if q is null then raise exception 'Get the courier prices again.'; end if;
+  update public.orders set delivery_fee = (q->>'price')::int, delivery_by = 'shopdesk', delivery_quote = q, confirmed_at = coalesce(confirmed_at, now()) where id = v.id;
+  return q;
+end $$;
+
+-- The shop types its own fee instead (its own rider): ShopDesk Delivery is no longer the plan for this order.
+create or replace function public.money_own_rider(p_order bigint) returns void
+language plpgsql security definer set search_path = public as $$
+declare v public.orders := public.owned_order(p_order);
+begin
+  if exists (select 1 from public.shipments where order_id = v.id) then raise exception 'This order is already booked with a courier.'; end if;
+  if exists (select 1 from public.online_payments where order_id = v.id and status = 'paid' and delivery_part > 0) then
+    raise exception 'The customer paid ShopDesk for this delivery, so it goes with ShopDesk Delivery.'; end if;
+  update public.orders set delivery_by = 'shop' where id = v.id;
+end $$;
+
+-- Typing a delivery fee means the shop's own rider takes it.
+create or replace function public.set_delivery_fee(p_order bigint, p_fee int) returns void
+language plpgsql security definer set search_path = public as $$
+declare v public.orders := public.owned_order(p_order);
+begin
+  if v.mode <> 'delivery' then raise exception 'This order is a pick-up.'; end if;
+  if v.status not in ('awaiting', 'part') then raise exception 'The fee is locked once paid.'; end if;
+  if p_fee is null or p_fee < 0 or p_fee > 1000000 then raise exception 'Enter a delivery fee in naira.'; end if;
+  update public.orders set delivery_fee = p_fee, delivery_by = 'shop', delivery_quote = null, confirmed_at = coalesce(confirmed_at, now()) where id = v.id;
+end $$;
+
+-- The customer starts paying online: records the attempt and returns what Paystack needs.
+create or replace function public.money_start_payment(p_token uuid, p_ref text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v public.orders; s public.shops; st public.settings; v_due int; v_delivery int;
+begin
+  select * into st from public.settings where id = 1;
+  if not st.online_pay_on then raise exception 'Paying online isn''t on yet. Pay by transfer for now.'; end if;
+  select * into v from public.orders where public_token = p_token for update;
+  if not found then raise exception 'Order not found.'; end if;
+  if v.customer_id is not null and v.customer_id is distinct from auth.uid() then raise exception 'Sign in with the account that placed this order.'; end if;
+  if v.status not in ('awaiting', 'part') then raise exception 'This order is already paid or closed.'; end if;
+  if v.mode = 'delivery' and v.delivery_paid_by = 'customer' and v.delivery_fee is null then raise exception 'Wait for the shop to confirm your order and its delivery fee.'; end if;
+  select * into s from public.shops where id = v.shop_id;
+  if s.status <> 'active' then raise exception 'This shop isn''t taking orders.'; end if;
+  v_due := v.items_total + case when v.delivery_paid_by = 'customer' then coalesce(v.delivery_fee, 0) else 0 end - v.amount_paid;
+  if v_due <= 0 then raise exception 'Nothing is left to pay.'; end if;
+  v_delivery := case when v.delivery_by = 'shopdesk' and v.delivery_paid_by = 'customer' and v.amount_paid = 0 then coalesce(v.delivery_fee, 0) else 0 end;
+  insert into public.online_payments (reference, order_id, shop_id, amount, delivery_part) values (p_ref, v.id, v.shop_id, v_due, v_delivery);
+  return jsonb_build_object('amount', v_due, 'delivery_part', v_delivery, 'fee_by', st.paystack_fee_by, 'order_id', v.id,
+    'email', coalesce((select email from auth.users where id = v.customer_id), 'order' || v.id || '@shopdesk.com.ng'),
+    'shop', jsonb_build_object('id', s.id, 'name', s.name, 'slug', s.slug, 'bank', s.bank, 'account_number', s.account_number,
+      'subaccount', s.paystack_subaccount, 'subaccount_for', s.paystack_for));
+end $$;
+
+-- Paystack confirmed the payment (the money function checked it with Paystack first). Safe to call twice for the same payment.
+create or replace function public.money_paid(p_ref text, p_kobo bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.online_payments; v public.orders; v_due int; v_amt int;
+begin
+  select * into p from public.online_payments where reference = p_ref for update;
+  if not found then raise exception 'Unknown payment.'; end if;
+  if p.status = 'paid' then return jsonb_build_object('order_id', p.order_id, 'already', true); end if;
+  if coalesce(p_kobo, 0) < p.amount::bigint * 100 then raise exception 'The amount paid doesn''t match.'; end if;
+  select * into v from public.orders where id = p.order_id for update;
+  v_due := v.items_total + case when v.delivery_paid_by = 'customer' then coalesce(v.delivery_fee, 0) else 0 end - v.amount_paid;
+  v_amt := least(p.amount, greatest(v_due, 0));
+  update public.online_payments set status = 'paid', paid_at = now() where reference = p.reference;
+  if v_amt > 0 and v.status in ('awaiting', 'part') then
+    insert into public.payments (order_id, shop_id, amount, method) values (v.id, v.shop_id, v_amt, 'online');
+    update public.orders set amount_paid = amount_paid + v_amt, customer_says_paid = false, confirmed_at = coalesce(confirmed_at, now()),
+      status = case when v_amt >= v_due then 'paid' else 'part' end, paid_at = case when v_amt >= v_due then now() else paid_at end
+    where id = v.id;
+  else
+    v_amt := 0;
+  end if;
+  if v_amt < p.amount then
+    insert into public.audit_log (actor, action, shop_id, detail) values (null, 'online_overpaid', p.shop_id,
+      'Order #' || p.order_id || ': paid ' || public.naira(p.amount) || ' online, ' || public.naira(p.amount - v_amt) || ' more than was due. Refund it in Paystack.');
+  end if;
+  return jsonb_build_object('order_id', p.order_id, 'credited', v_amt);
+end $$;
+
+-- Everything the money function needs to book the courier for a paid, packed order.
+create or replace function public.money_book_info(p_order bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v public.orders := public.owned_order(p_order);
+begin
+  if not (select delivery_on from public.settings where id = 1) then raise exception 'ShopDesk Delivery isn''t on yet.'; end if;
+  if v.delivery_by <> 'shopdesk' or v.delivery_quote is null then raise exception 'This order isn''t set up for ShopDesk Delivery.'; end if;
+  if v.status <> 'paid' then raise exception 'Only paid orders can be booked.'; end if;
+  if exists (select 1 from public.order_items where order_id = v.id and not packed) then raise exception 'Tick every item as packed first.'; end if;
+  if exists (select 1 from public.shipments where order_id = v.id) then raise exception 'This order is already booked.'; end if;
+  return jsonb_build_object('quote', v.delivery_quote, 'info', public.money_quote_info_paid(v.id));
+end $$;
+
+-- Same as money_quote_info, for an order that's already paid (used to get fresh prices when the old ones have expired).
+create or replace function public.money_quote_info_paid(p_order bigint) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'order', jsonb_build_object('id', o.id, 'name', o.customer_name, 'phone', o.customer_phone, 'address', o.address, 'area', o.area,
+      'lat', o.delivery_lat, 'lng', o.delivery_lng, 'email', (select email from auth.users where id = o.customer_id)),
+    'shop', jsonb_build_object('id', s.id, 'name', s.name, 'phone', s.whatsapp, 'pickup_address', s.pickup_address, 'pickup_code', s.pickup_code,
+      'sells', s.sells, 'email', (select email from auth.users where id = s.owner_id)),
+    'items', (select jsonb_agg(jsonb_build_object('name', i.name, 'price', i.price, 'qty', i.qty) order by i.id) from public.order_items i where i.order_id = o.id),
+    'margin', (select delivery_margin from public.settings where id = 1))
+  from public.orders o join public.shops s on s.id = o.shop_id where o.id = p_order;
+$$;
+
+-- The courier is booked: save it, and the order goes out with the courier.
+create or replace function public.money_save_shipment(p_order bigint, p jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare v public.orders := public.owned_order(p_order); v_eta timestamptz;
+begin
+  if v.status <> 'paid' then raise exception 'Only paid orders can be booked.'; end if;
+  v_eta := least(greatest(coalesce((p->>'eta')::timestamptz, now() + interval '2 days'), now() + interval '1 hour'), now() + interval '14 days');
+  insert into public.shipments (order_id, shop_id, sb_order, courier, status, tracking_url, tracking_code, cost, price, paid_online)
+  values (v.id, v.shop_id, p->>'sb_order', left(coalesce(p->>'courier', ''), 80), left(coalesce(p->>'status', 'pending'), 40),
+    left(p->>'tracking_url', 300), left(p->>'tracking_code', 80), greatest(coalesce((p->>'cost')::int, 0), 0), coalesce(v.delivery_fee, 0),
+    exists (select 1 from public.online_payments op where op.order_id = v.id and op.status = 'paid' and op.delivery_part > 0));
+  update public.orders set status = 'out', out_at = now(), rider_name = left(coalesce(p->>'courier', 'Courier'), 60),
+    rider_phone = left(coalesce(p->>'courier_phone', ''), 20), deliver_by = v_eta, confirmed_at = coalesce(confirmed_at, now())
+  where id = v.id;
+end $$;
+
+-- A status update from the courier service (the money function checked it came from Shipbubble).
+create or replace function public.money_ship_update(p_sb_order text, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare sh public.shipments; v public.orders; st text := lower(coalesce(p->>'status', ''));
+begin
+  update public.shipments set status = left(coalesce(nullif(st, ''), status), 40), steps = coalesce(p->'steps', steps),
+    tracking_url = coalesce(left(p->>'tracking_url', 300), tracking_url), tracking_code = coalesce(left(p->>'tracking_code', 80), tracking_code),
+    rider = coalesce(p->'rider', rider), updated_at = now()
+  where sb_order = p_sb_order returning * into sh;
+  if not found then return jsonb_build_object('found', false); end if;
+  select * into v from public.orders where id = sh.order_id for update;
+  if st in ('completed', 'delivered') and v.status = 'out' then
+    update public.orders set status = 'delivered', done_at = now(), received_by = 'shop' where id = v.id;
+  elsif st = 'cancelled' and v.status = 'out' then
+    update public.orders set status = 'paid', out_at = null, deliver_by = null, rider_name = '', rider_phone = '' where id = v.id;
+    delete from public.shipments where order_id = v.id;
+    perform public.notify((select owner_id from public.shops where id = v.shop_id), v.id, 'delivery_cancelled', 'Courier cancelled',
+      'The courier cancelled order #' || v.id || '. Book again or use your own rider.', '/#orders');
+  end if;
+  return jsonb_build_object('found', true, 'status', st);
+end $$;
+
+-- The order page: can it be paid online, and how its ShopDesk Delivery is going.
+create or replace function public.order_money(p_token uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'online', st.online_pay_on and s.status = 'active' and s.bank in ('OPay', 'Moniepoint', 'Kuda', 'PalmPay') and s.account_number <> ''
+      and o.status in ('awaiting', 'part') and not (o.mode = 'delivery' and o.delivery_paid_by = 'customer' and o.delivery_fee is null),
+    'delivery_by', o.delivery_by,
+    'courier', o.delivery_quote->>'name',
+    'shipment', (select jsonb_build_object('courier', sh.courier, 'status', sh.status, 'tracking_url', sh.tracking_url, 'tracking_code', sh.tracking_code,
+        'steps', sh.steps, 'rider', sh.rider) from public.shipments sh where sh.order_id = o.id))
+  from public.orders o join public.shops s on s.id = o.shop_id cross join public.settings st where o.public_token = p_token and st.id = 1;
+$$;
+
+-- Admin > Payments & delivery.
+create or replace function public.admin_money() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'Not allowed.'; end if;
+  return jsonb_build_object(
+    'settings', (select jsonb_build_object('online_pay_on', online_pay_on, 'delivery_on', delivery_on, 'delivery_margin', delivery_margin,
+      'paystack_fee_by', paystack_fee_by) from public.settings where id = 1),
+    'online', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(amount), 0), 'delivery', coalesce(sum(delivery_part), 0))
+      from public.online_payments where status = 'paid'),
+    'shipments', coalesce((select jsonb_agg(x order by x.created_at desc) from (
+      select sh.order_id, sh.created_at, sh.courier, sh.status, sh.cost, sh.price, sh.paid_online, sh.billed_at, sh.tracking_url,
+        s.name as shop, s.id as shop_id, public.order_code(s.order_prefix, sh.order_id) as code
+      from public.shipments sh join public.shops s on s.id = sh.shop_id order by sh.created_at desc limit 200) x), '[]'::jsonb),
+    'owed', coalesce((select jsonb_agg(x order by x.owed desc) from (
+      select s.id as shop_id, s.name as shop, sum(sh.price) as owed, count(*) as deliveries
+      from public.shipments sh join public.shops s on s.id = sh.shop_id where not sh.paid_online and sh.billed_at is null group by s.id, s.name) x), '[]'::jsonb));
+end $$;
+
+-- A shop paid its delivery bill.
+create or replace function public.admin_delivery_paid(p_shop uuid) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if not public.is_admin() then raise exception 'Not allowed.'; end if;
+  update public.shipments set billed_at = now() where shop_id = p_shop and not paid_online and billed_at is null;
+  get diagnostics n = row_count;
+  insert into public.audit_log (actor, action, shop_id, detail) values (auth.uid(), 'delivery_bill_paid', p_shop, n || ' deliveries marked paid');
+  return n;
+end $$;
+
+create or replace function public.admin_save_settings(p jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'Not allowed.'; end if;
+  update public.settings set
+    monthly_price = coalesce((p->>'monthly_price')::int, monthly_price), trial_days = coalesce((p->>'trial_days')::int, trial_days),
+    grace_days = coalesce((p->>'grace_days')::int, grace_days), close_unpaid = coalesce((p->>'close_unpaid')::boolean, close_unpaid),
+    pay_bank = left(trim(coalesce(p->>'pay_bank', pay_bank)), 30), pay_account_number = left(regexp_replace(coalesce(p->>'pay_account_number', pay_account_number), '\s', '', 'g'), 20),
+    pay_account_name = left(trim(coalesce(p->>'pay_account_name', pay_account_name)), 60), admin_whatsapp = left(trim(coalesce(p->>'admin_whatsapp', admin_whatsapp)), 20),
+    invites_on = coalesce((p->>'invites_on')::boolean, invites_on), invite_months = coalesce((p->>'invite_months')::int, invite_months),
+    invited_months = coalesce((p->>'invited_months')::int, invited_months),
+    online_pay_on = coalesce((p->>'online_pay_on')::boolean, online_pay_on), delivery_on = coalesce((p->>'delivery_on')::boolean, delivery_on),
+    delivery_margin = coalesce((p->>'delivery_margin')::int, delivery_margin), paystack_fee_by = coalesce(p->>'paystack_fee_by', paystack_fee_by),
+    updated_at = now()
+  where id = 1;
+  insert into public.audit_log (actor, action, detail) values (auth.uid(), 'settings', left(p::text, 300));
+end $$;
+
+revoke all on function public.money_switches(), public.money_quote_info(bigint), public.money_save_quotes(bigint, jsonb), public.money_pick_quote(bigint, text, text),
+  public.money_own_rider(bigint), public.money_start_payment(uuid, text), public.money_paid(text, bigint), public.money_book_info(bigint),
+  public.money_quote_info_paid(bigint), public.money_save_shipment(bigint, jsonb), public.money_ship_update(text, jsonb), public.order_money(uuid),
+  public.admin_money(), public.admin_delivery_paid(uuid), public.shops_pickup_reset() from public, anon, authenticated;
+grant execute on function public.money_switches(), public.order_money(uuid) to anon, authenticated;
+grant execute on function public.money_own_rider(bigint), public.admin_money(), public.admin_delivery_paid(uuid) to authenticated;

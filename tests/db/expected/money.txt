@@ -1,0 +1,72 @@
+M1 the shop sets its pickup address, but not the checked address code (expect permission denied once):
+psql:money.sql:17: ERROR:  permission denied for table shops
+M2 both are off at first, and the shop cannot get courier prices yet (expect f f, then an error):
+false|false
+psql:money.sql:27: ERROR:  ShopDesk Delivery isn't on yet.
+CONTEXT:  PL/pgSQL function money_quote_info(bigint) line N at RAISE
+
+M3 now the shop gets what the courier service needs; someone else cannot (expect Order not found):
+5 Herbert Macaulay Way, Yaba, Lagos|moneyshop@example.com|Victoria Island|1|200
+psql:money.sql:34: ERROR:  Order not found.
+CONTEXT:  PL/pgSQL function owned_order(bigint) line N at RAISE
+PL/pgSQL function money_quote_info(bigint) line N during statement block local variable initialization
+M4 the prices are kept on the order; a courier not on the list is refused, a listed one sets the fee:
+
+psql:money.sql:38: ERROR:  Get the courier prices again.
+CONTEXT:  PL/pgSQL function money_pick_quote(bigint,text,text) line N at RAISE
+Dellyman
+2200|shopdesk|t
+M5 the order page: it can be paid online, with ShopDesk Delivery:
+true|shopdesk|Dellyman|none
+M6 only the customer can start paying; they pay goods and delivery, and the delivery part goes to ShopDesk (expect an error, then 22200 and 2200):
+psql:money.sql:45: ERROR:  Sign in with the account that placed this order.
+CONTEXT:  PL/pgSQL function money_start_payment(uuid,text) line N at RAISE
+22200|2200|payer@example.com|OPay
+M7 too little is refused; the right amount marks the order paid, once (expect an error, then 22200, then already):
+psql:money.sql:49: ERROR:  The amount paid doesn't match.
+CONTEXT:  PL/pgSQL function money_paid(text,bigint) line N at RAISE
+22200
+true
+paid|22200|online
+M8 booking needs every item packed; then the order goes out with the courier:
+psql:money.sql:55: ERROR:  Tick every item as packed first.
+CONTEXT:  PL/pgSQL function money_book_info(bigint) line N at RAISE
+dellyman
+
+out|Dellyman|t|2200|1800
+M9 booking twice is refused:
+psql:money.sql:63: ERROR:  Only paid orders can be booked.
+CONTEXT:  PL/pgSQL function money_book_info(bigint) line N at RAISE
+M10 the courier picks it up, then delivers it; the order is delivered and the customer is asked to confirm:
+picked_up
+completed
+delivered|shop|completed
+false
+M11 the order page shows the delivery:
+Dellyman|completed|https://example.com/t/1|false
+M12 a second order paid to the shop by transfer: the delivery goes on the delivery bill of the shop, until Admin marks it paid:
+
+3400
+t
+
+Money Bags|3400|1
+2200
+1
+0
+M13 a cancelled courier puts the order back to paid so the shop can book again:
+cancelled
+paid|0
+M15 typing a fee means the shop rider takes it; once the customer paid ShopDesk for delivery, the shop cannot switch to its own rider:
+
+3400
+
+1500|shop|none
+3400
+3400
+13400
+psql:money.sql:108: ERROR:  The customer paid ShopDesk for this delivery, so it goes with ShopDesk Delivery.
+CONTEXT:  PL/pgSQL function money_own_rider(bigint) line N at RAISE
+M14 nobody calls the payment steps from the app directly (expect permission denied):
+psql:money.sql:111: ERROR:  permission denied for function money_paid
+psql:money.sql:112: ERROR:  permission denied for table online_payments
+

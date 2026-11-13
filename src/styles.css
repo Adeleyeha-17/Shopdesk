@@ -1082,3 +1082,25 @@ svg.star { width: 14px; height: 14px; fill: var(--wait); flex: none; }
 .gs-steps li.now .gs-dot { border-color: var(--ink); color: var(--ink); background: var(--bg); }
 .gs-foot { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
 .gs-foot .linkbtn { color: var(--muted); font-weight: 500; font-size: 13px; }
+
+/* ---------- ShopDesk Delivery and Pay online ---------- */
+.courier { display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; margin-bottom: 9px; border-bottom: 1px solid var(--line); }
+.courier .choices { margin-top: 4px; }
+.courier-choice { grid-template-columns: 1fr auto auto; align-items: center; }
+.courier-choice strong { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.courier-choice b { grid-row: 1 / span 2; grid-column: 2; font-size: 15px; font-weight: 600; }
+.courier-choice i { grid-column: 3; }
+.tag { font-style: normal; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--soft); border-radius: 999px; padding: 2px 8px; }
+.ship { display: flex; flex-direction: column; gap: 10px; }
+.ship-status { display: block; font-size: 17px; margin-top: 2px; }
+.ship-steps { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.ship-steps li { position: relative; display: flex; flex-direction: column; font-size: 14px; color: var(--muted); }
+.ship-steps li::before { content: ""; position: absolute; left: -20px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.ship-steps li.now { color: var(--ink); font-weight: 600; }
+.ship-steps li.now::before { background: var(--info); }
+.ship-steps li .sub { font-weight: 400; }
+.pay-online { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.pay-online .sub { text-align: center; }
+.or { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.panel > .switch-row + .switch-row { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }

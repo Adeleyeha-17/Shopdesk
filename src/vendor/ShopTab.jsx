@@ -1,4 +1,5 @@
-// The Shop tab: the shop's order link, Invite a shop (once ShopDesk switches invites on), its details,
+// The Shop tab: the shop's order link, Invite a shop (once ShopDesk switches invites on), ShopDesk Delivery and
+// paying online (once switched on), its details,
 // its rules (payment and delivery) and sign out.
 import React, { useState } from 'react';
 import { supabase } from '../lib/database.js';
@@ -8,6 +9,7 @@ import { ThemePicker } from '../shared/ThemePicker.jsx';
 import { errText, copyText } from '../lib/helpers.js';
 import { ShopFields, checkShop, shopRow } from './shopForm.jsx';
 import { InviteCard } from './InviteCard.jsx';
+import { MoneyCards } from './MoneyCards.jsx';
 import { markShared } from './GetStarted.jsx';
 
 export function ShopTab({ shop, reloadShop, say, email }) {
@@ -87,6 +89,7 @@ export function ShopTab({ shop, reloadShop, say, email }) {
         </div>
       </section>
       <InviteCard shop={shop} say={say} />
+      <MoneyCards shop={shop} reloadShop={reloadShop} say={say} />
       <section className="card">
         <h2>Your shop</h2>
         <ShopFields v={v} set={setV} />

@@ -67,7 +67,32 @@ Set these secrets under **Edge Functions → Secrets**:
 
 The sending domain should have valid SPF and DKIM records.
 
-## 8. Hardening checklist
+## 8. Pay online and ShopDesk Delivery
+
+Both are off until switched on in **Admin → Payments & delivery**, and the app hides them while they are off.
+
+- **Pay online (Paystack).** The customer pays once on the order page. The goods money settles to the shop's own bank account through a Paystack subaccount, created from the bank details the shop already gave (OPay, Moniepoint, Kuda or PalmPay). When the order goes with ShopDesk Delivery, the delivery fee goes to ShopDesk's Paystack balance in the same payment. ShopDesk never holds a shop's money.
+- **ShopDesk Delivery (Shipbubble).** ShopDesk has the one courier account and pays couriers from its Shipbubble wallet. A shop gets courier prices on a new order, picks one (its price becomes the delivery fee, plus the margin set in Admin), and books the pickup once the order is paid and packed. The shop and the customer follow the delivery on the order. When the customer paid the shop by transfer, the delivery fee goes on the shop's delivery bill in Admin.
+
+Setup:
+
+1. Run `supabase/updates/016.sql` (or the full `schema.sql`).
+2. **Edge Functions → Deploy a new function**, named `money`, with the contents of `supabase/functions/money/index.ts`. Turn **Enforce JWT verification** off: the function checks who is asking itself, and the webhooks carry no sign-in.
+3. Set these secrets under **Edge Functions → Secrets**. Use test keys while testing and swap in live keys once the accounts are approved:
+
+| Secret | Value |
+|---|---|
+| `PAYSTACK_SECRET_KEY` | Paystack secret key (`sk_test_…`, later `sk_live_…`) |
+| `SHIPBUBBLE_API_KEY` | Shipbubble API key (`sb_sandbox_…`, later `sb_prod_…`) |
+
+4. Set the webhook URLs:
+   - Paystack (**Settings → API Keys & Webhooks**): `https://<project>.supabase.co/functions/v1/money?hook=paystack`
+   - Shipbubble (**Settings → Webhooks**): `https://<project>.supabase.co/functions/v1/money?hook=shipbubble`
+5. Top up the Shipbubble wallet, then switch each one on in **Admin → Payments & delivery**. The page shows whether the keys are test or live and the wallet balance.
+
+The money function's checks run in `tests/functions/money.mjs` (after `tests/db/run.sh`), with Paystack, Shipbubble and sign-in faked.
+
+## 9. Hardening checklist
 
 - Enable two-factor authentication on the Supabase account and on the admin's mailbox.
 - Disable the legacy JWT-based API keys (**Project Settings → API Keys**). ShopDesk uses only the publishable key.

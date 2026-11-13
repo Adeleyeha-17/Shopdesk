@@ -35,6 +35,7 @@ Live at [shopdesk.com.ng](https://shopdesk.com.ng).
 - **Backend:** Supabase (PostgreSQL, Auth, Storage, Realtime)
 - **Server logic:** PostgreSQL functions and row-level security in `supabase/schema.sql`
 - **Notifications:** a Supabase Edge Function (`supabase/functions/push`) for Web Push and SMTP email, scheduled with `pg_cron` and `pg_net`
+- **Pay online and delivery:** a Supabase Edge Function (`supabase/functions/money`) for Paystack split payments and Shipbubble courier bookings, both off until switched on in Admin
 - **Hosting:** any static host. The live site runs on cPanel (Apache); a `vercel.json` rewrite is included as well
 
 ## Getting started
@@ -84,6 +85,7 @@ supabase/
   updates/         incremental updates for databases created from an older schema
   owner-lock.sql   pins the single admin account
   functions/push/  Edge Function: push notifications and email digests
+  functions/money/ Edge Function: Paystack payments and Shipbubble deliveries
   email/           sign-in email templates
 docs/              setup, deployment, architecture and business rules
 ```

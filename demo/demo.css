@@ -16,3 +16,15 @@
 .demo-seg button:last-child { flex: 0 0 auto; padding-left: 14px; padding-right: 14px; } /* New: a short word */
 .demo-seg button { white-space: nowrap; }
 @media (max-width: 380px) { .demo-seg button { font-size: 12px; padding-left: 5px; padding-right: 5px; } .demo-seg button:last-child { padding-left: 10px; padding-right: 10px; } }
+/* the pretend Paystack checkout (Pay online in the demo) */
+.demo-paystack { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .45); display: flex; align-items: flex-end; justify-content: center; }
+.dp-sheet { width: 100%; max-width: 480px; box-sizing: border-box; background: var(--bg); color: var(--ink); border-radius: 20px 20px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 10px; }
+.dp-top { display: flex; justify-content: space-between; align-items: center; }
+.dp-brand { font: 800 18px var(--body); letter-spacing: -.02em; color: #0ba4db; }
+.dp-test { font: 600 11px var(--body); color: var(--muted); background: var(--soft); border-radius: 999px; padding: 3px 9px; }
+.dp-shop { font-size: 14px; color: var(--muted); margin-top: 6px; }
+.dp-amt { font: 700 30px var(--body); font-variant-numeric: tabular-nums; }
+.dp-ways { display: flex; gap: 8px; margin: 4px 0 6px; }
+.dp-ways span { flex: 1; text-align: center; padding: 10px 0; border: 1px solid var(--line); border-radius: 10px; font: 600 13px var(--body); color: var(--muted); }
+.dp-ways span.on { border-color: var(--ink); color: var(--ink); }
+.dp-note { font-size: 12px; text-align: center; }

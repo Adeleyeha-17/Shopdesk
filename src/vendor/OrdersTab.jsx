@@ -31,7 +31,7 @@ function matches(o, q) {
   );
 }
 
-export function OrdersTab({ shop, data, run, say, unread, focus, setFocus }) {
+export function OrdersTab({ shop, data, run, say, unread, focus, setFocus, setTab }) {
   const chats = (unread && unread.chats) || {};
   const [filter, setFilter] = useState(() => (Object.keys(chats).length ? 'messages' : 'owing'));
   // Orders with new messages stay in the Messages list after you read them (until you leave the tab).
@@ -161,6 +161,7 @@ export function OrdersTab({ shop, data, run, say, unread, focus, setFocus }) {
               shop={shop}
               run={run}
               say={say}
+              goShop={setTab ? () => setTab('shop') : undefined}
               products={data.products}
               problem={problemOf[o.id]}
               unreadChat={chats[o.id] || 0}

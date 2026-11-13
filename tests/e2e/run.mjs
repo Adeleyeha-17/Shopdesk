@@ -255,6 +255,89 @@ await step("the order page's back arrow goes to My orders; the Account tab shows
   await see('Past orders');
 });
 
+// ---------------- ShopDesk Delivery and Pay online (switched on in the demo) ----------------
+let code2 = '';
+const card2 = () => p.locator(`article.card:has-text("${code2}")`).first();
+await step('a second order: the shop gets courier prices and confirms with the courier it picks', async () => {
+  await as('Customer');
+  await p.locator('.pcard').first().waitFor();
+  await p.locator('.pcard:not(:has(.pname:text-is("Hair growth oil"))) button[data-inc]').first().click();
+  await tab('Cart').click();
+  await p.locator('button:has-text("Checkout")').click();
+  await see('Place order');
+  await p.locator('button:has-text("Place order")').click();
+  await see('Waiting for the shop');
+  code2 = (await text()).match(/Order ([A-Z]{2,4}-\d+)/)[1];
+  await as('Shop owner');
+  await nav('Orders');
+  await p.locator('.filter:has-text("Not paid")').click();
+  await card2().locator('button:has-text("Get courier prices")').click();
+  await card2().locator('.courier-choice').first().waitFor();
+  expect((await card2().locator('.courier-choice').count()) === 3, 'not 3 couriers');
+  expect((await card2().locator('.courier-choice').first().innerText()).includes('Cheapest'), 'the cheapest is not marked');
+  await card2().locator('.courier-choice:has-text("Dellyman")').click();
+  await card2().locator('button:has-text("Confirm with Dellyman")').click();
+  await see('confirmed with Dellyman');
+});
+
+await step('the customer pays online, and the order is paid at once', async () => {
+  await as('Customer');
+  await tab('Orders').click();
+  await p.locator(`a:has-text("${code2}")`).click();
+  await see('Delivered by Dellyman with ShopDesk Delivery');
+  await pause(500);
+  await p.locator('button:has-text("online")').click();
+  await p.locator('.demo-paystack .dp-pay').click();
+  await p.locator('h2:text-is("Paid · being packed")').waitFor();
+});
+
+await step('the shop packs it and books the courier; "Use my own rider" is refused once delivery was paid to ShopDesk', async () => {
+  await as('Shop owner');
+  await nav('Orders');
+  await p.locator('.filter:has-text("To send")').click();
+  const c = card2();
+  await c.waitFor();
+  expect((await c.locator('.chip').innerText()).includes('pack and book'), 'the label does not say pack and book');
+  expect((await c.locator('button:has-text("Hand to rider")').count()) === 0, 'Hand to rider still shows');
+  await c.locator('button:has-text("Use my own rider")').click();
+  await see('paid ShopDesk for this delivery');
+  const ticks = c.locator('label:has-text("Packed")');
+  for (let i = 0; i < (await ticks.count()); i++) await ticks.nth(i).click();
+  await c.locator('button:has-text("Book Dellyman")').click();
+  await see('Dellyman is booked');
+});
+
+await step('the delivery moves on with each refresh, for the shop and the customer, until it is delivered', async () => {
+  await p.locator('.filter:has-text("With rider")').click().catch(() => {});
+  const c = card2();
+  await c.locator('.ship').waitFor();
+  await pause(6200);
+  await c.locator('.ship button:has-text("Refresh")').click();
+  await c.locator('.ship-status:text-is("Picked up")').waitFor();
+  expect((await c.locator('.ship').innerText()).includes('Musa Bello'), 'the rider is not shown');
+  await as('Customer');
+  await tab('Orders').click();
+  await p.locator(`a:has-text("${code2}")`).click();
+  await p.locator('.ship').waitFor();
+  await pause(6200);
+  await p.locator('.ship button:has-text("Refresh")').click();
+  await p.locator('.ship-status:text-is("On the way")').waitFor();
+  await pause(6200);
+  await p.locator('.ship button:has-text("Refresh")').click();
+  await p.locator('.ship-status:text-is("Delivered")').waitFor();
+});
+
+await step('with ShopDesk Delivery on, the Shop tab has the pickup address and Pay online', async () => {
+  await as('Shop owner');
+  await nav('Shop');
+  await see('ShopDesk Delivery');
+  expect((await p.locator('#pickup').inputValue()).includes('Herbert Macaulay'), 'the pickup address is not shown');
+  await see('Customers pay online');
+  await as('Customer');
+  await tab('Orders').click();
+  await see('Past orders');
+});
+
 const theme = () => p.evaluate(() => document.documentElement.getAttribute('data-theme'));
 await step('the app opens in light; Account switches it to Dark, Same as phone and back to Light', async () => {
   expect((await theme()) === 'light', 'did not open in light');
