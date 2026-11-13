@@ -1,5 +1,5 @@
 // One pop-up for every admin action: approve, don't approve, suspend, close for good, reactivate, delete a shop,
-// support view, close a report, hide/show a product, record a plan payment, and the WhatsApp message to send afterwards.
+// support view, close a report, hide/show a product, and the WhatsApp message to send afterwards.
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
