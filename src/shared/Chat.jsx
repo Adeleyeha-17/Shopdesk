@@ -9,6 +9,7 @@ import { errText } from '../lib/helpers.js';
 import { uploadOrderPhoto } from '../lib/photos.js';
 import { channelName, kick } from '../lib/alerts.js';
 import { PhotoStrip, ChatVideo } from './OrderPhotos.jsx';
+import { MessageBox } from './MessageBox.jsx';
 
 // Nigerian account numbers have 10 digits (phone numbers have 11, so they don't count).
 const otherAccount = (t, mine) =>
@@ -230,38 +231,30 @@ export function Chat({ orderId, me, open, onSeen, autoFocus = false, payAccount 
         />
       )}
       {open ? (
-        <form className="chat-send" onSubmit={sendText}>
-          <label className="chat-photo" htmlFor={'cp' + orderId} aria-label="Send a photo">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h3l2-2h6l2 2h3v12H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-            </svg>
-          </label>
-          <input
-            id={'cp' + orderId}
-            type="file"
-            accept="image/*"
-            className="visually-hidden"
-            onChange={(e) => {
-              sendPhoto(e.target.files && e.target.files[0]);
-              e.target.value = '';
-            }}
-          />
-          <textarea
-            rows={1}
-            value={text}
-            maxLength={1000}
-            placeholder="Message"
-            aria-label="Message"
-            autoFocus={autoFocus}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) sendText(e);
-            }}
-          />
-          <button className="btn small" disabled={busy || !text.trim()}>
-            Send
-          </button>
-        </form>
+        <MessageBox
+          value={text}
+          onChange={setText}
+          onSend={sendText}
+          busy={busy}
+          autoFocus={autoFocus}
+          before={
+            <label className="chat-photo" htmlFor={'cp' + orderId} aria-label="Send a photo">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h3l2-2h6l2 2h3v12H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+              </svg>
+              <input
+                id={'cp' + orderId}
+                type="file"
+                accept="image/*"
+                className="visually-hidden"
+                onChange={(e) => {
+                  sendPhoto(e.target.files && e.target.files[0]);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          }
+        />
       ) : (
         <p className="sub chat-empty">Chat closed.</p>
       )}

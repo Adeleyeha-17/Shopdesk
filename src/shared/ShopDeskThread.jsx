@@ -8,6 +8,7 @@ import { errText } from '../lib/helpers.js';
 import { uploadShopPhoto, uploadShopVideo, VIDEO_SECONDS } from '../lib/photos.js';
 import { kick } from '../lib/alerts.js';
 import { ChatView } from './Chat.jsx';
+import { MessageBox } from './MessageBox.jsx';
 
 const ICONS = {
   plus: <path d="M12 5v14M5 12h14" />,
@@ -146,32 +147,25 @@ export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, e
           </>
         )}
         {err && <p className="err">{err}</p>}
-        <form className="chat-send" onSubmit={sendText}>
-          <button
-            type="button"
-            className={'chat-photo attach-btn' + (attach ? ' on' : '')}
-            aria-label={attach ? 'Close' : 'Send a photo or video'}
-            aria-expanded={attach}
-            onClick={() => setAttach(!attach)}
-          >
-            <Icon name="plus" />
-          </button>
-          <textarea
-            rows={me === 'shopdesk' && text.length > 60 ? 4 : 1}
-            value={text}
-            maxLength={2000}
-            placeholder="Message"
-            aria-label="Message"
-            onFocus={() => setAttach(false)}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) sendText(e);
-            }}
-          />
-          <button className="btn small" disabled={busy || !text.trim()}>
-            Send
-          </button>
-        </form>
+        <MessageBox
+          value={text}
+          onChange={setText}
+          onSend={sendText}
+          busy={busy}
+          maxLength={2000}
+          onFocus={() => setAttach(false)}
+          before={
+            <button
+              type="button"
+              className={'chat-photo attach-btn' + (attach ? ' on' : '')}
+              aria-label={attach ? 'Close' : 'Send a photo or video'}
+              aria-expanded={attach}
+              onClick={() => setAttach(!attach)}
+            >
+              <Icon name="plus" />
+            </button>
+          }
+        />
       </div>
     </div>
   );

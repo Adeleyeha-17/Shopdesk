@@ -468,9 +468,17 @@ a.orow { text-decoration: none; color: inherit; }
 .msg-warn { font-size: 12px; font-weight: 700; color: var(--bad); }
 .msg .photo-strip img { width: 180px; height: auto; max-height: 220px; object-fit: cover; }
 .chat-send { display: flex; gap: 8px; align-items: flex-end; }
-.chat-send textarea { flex: 1; min-height: 40px; max-height: 120px; resize: none; padding: 9px 12px; border-radius: 20px; }
-.chat-send .btn { flex: none; border-radius: 20px; }
-.chat-photo { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--soft); cursor: pointer; }
+/* the message box: grows with the message, then scrolls; the arrow turns solid once there's something to send */
+.msgbox { flex: 1; min-width: 0; display: flex; background: var(--soft); border: 1px solid transparent; border-radius: 22px; transition: border-color .15s ease; }
+.msgbox:focus-within { border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
+.msgbox textarea { flex: 1; width: auto; min-height: 0; height: 42px; max-height: 150px; resize: none; border: 0; border-radius: 22px; background: none; color: var(--ink);
+  padding: 10px 16px; font: 400 16px/1.4 var(--body); box-sizing: border-box; overflow-y: auto; outline: none; }
+.msgbox textarea::placeholder { color: var(--hint); }
+.msg-send { appearance: none; flex: none; width: 42px; height: 42px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; background: var(--soft); color: var(--hint); }
+.msg-send.ready { background: var(--btn); color: var(--on-btn); cursor: pointer; }
+.msg-send svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.msg-send:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.chat-photo { flex: none; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--soft); cursor: pointer; }
 .chat-photo svg { width: 20px; height: 20px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
 .chat-empty { text-align: center; padding: 6px 0; }
 

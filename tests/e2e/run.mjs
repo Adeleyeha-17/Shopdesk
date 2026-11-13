@@ -545,7 +545,7 @@ await step('the shop messages ShopDesk inside the app: a full-screen chat that k
   expect(box.width >= 389 && box.height >= 800, 'the chat does not fill the phone screen');
   await sheet.locator('.msg.theirs:has-text("Welcome to ShopDesk")').waitFor();
   await sheet.locator('textarea').fill('Hi, when does delivery start?');
-  await sheet.locator('button:has-text("Send")').click();
+  await sheet.locator('button.msg-send').click();
   await sheet.locator('.msg.mine:has-text("when does delivery start")').waitFor();
   await sheet.locator('.msg.mine:not(.pending)').first().waitFor();
   await sheet.locator('.attach-btn').click();
