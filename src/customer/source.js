@@ -61,3 +61,17 @@ export function sourceFor(slug) {
   }
   return fromThisVisit() || 'direct';
 }
+
+// A random id for this phone, so a shop's visitors are counted once a day each (nothing personal: just a random code).
+export function visitorId() {
+  try {
+    let v = localStorage.getItem('shopdesk-visitor');
+    if (!v) {
+      v = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 40);
+      localStorage.setItem('shopdesk-visitor', v);
+    }
+    return v;
+  } catch (e) {
+    return 'nostore-' + Math.random().toString(36).slice(2, 14);
+  }
+}

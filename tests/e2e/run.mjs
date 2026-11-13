@@ -130,18 +130,18 @@ await step('with ShopDesk Delivery on, a new delivery order needs a courier: the
   expect((await card2().locator('button:has-text("Money in")').count()) === 0, 'Money in still shows');
 });
 
-await step('the customer pays online only, with the card fee and ShopDesk fee on top, and the order is paid at once', async () => {
+await step('the customer pays online only: one service fee line in the total, no transfer details, and the order is paid at once', async () => {
   await as('Customer');
   await tab('Orders').click();
   await p.locator(`a:has-text("${code2}")`).click();
   await see('Delivered by Dellyman with ShopDesk Delivery');
-  const box = await p.locator('.pay-online').innerText();
-  expect(/Includes ₦\d+ card fee and ₦50 ShopDesk fee/.test(box), 'the card fee and ShopDesk fee are not shown');
-  expect(box.includes('paid online'), 'it does not say the order is paid online');
+  const page = await text();
+  expect(/Service fee\s*₦[\d,]+/.test(page), 'the service fee line is missing');
+  expect(!/card fee|ShopDesk fee|Pay by|Saved to/.test(page), 'the long fee text, pay-by line or saved line still shows');
   expect((await p.locator('text=Account number').count()) === 0, 'transfer details still show');
   expect((await p.locator('button:has-text("sent the money")').count()) === 0, "I've sent the money still shows");
   await pause(500);
-  await p.locator('button:has-text("online")').click();
+  await p.locator('.pay-online button').click();
   await p.locator('.demo-paystack .dp-pay').click();
   await p.locator('h2:text-is("Paid · being packed")').waitFor();
 });
@@ -157,28 +157,36 @@ await step('the shop packs it and books the courier (no own rider)', async () =>
   expect((await c.locator('button:has-text("own rider")').count()) === 0, 'Use my own rider still shows');
   const ticks = c.locator('label:has-text("Packed")');
   for (let i = 0; i < (await ticks.count()); i++) await ticks.nth(i).click();
-  await c.locator('button:has-text("Book Dellyman")').click();
-  await see('Dellyman is booked');
+  expect((await c.innerText()).includes('Delivery is already paid'), 'the booking slip does not say delivery is paid');
+  await c.locator('button:has-text("Book pickup")').click();
+  await see('Dellyman is coming to pick up');
+  await c.locator('.ship-status:has-text("Dellyman is coming to pick it up")').waitFor();
 });
 
-await step('the delivery moves on with each refresh, for the shop and the customer, until it is delivered', async () => {
-  await p.locator('.filter:has-text("With rider")').click().catch(() => {});
-  const c = card2();
-  await c.locator('.ship').waitFor();
+await step('the delivery moves on by itself; the customer sees the courier steps in one Progress list, until it is delivered', async () => {
+  const reopenCard = async () => {
+    await nav('Sales');
+    await nav('Orders');
+    await p.locator('.filter:has-text("To send")').click();
+  };
   await pause(6200);
-  await c.locator('.ship button:has-text("Refresh")').click();
-  await c.locator('.ship-status:text-is("Picked up")').waitFor();
+  await reopenCard();
+  const c = card2();
+  await c.locator('.ship-status:has-text("Picked up")').waitFor();
   expect((await c.locator('.ship').innerText()).includes('Musa Bello'), 'the rider is not shown');
+  expect((await c.locator('.ship button:has-text("Refresh")').count()) === 0, 'Refresh still shows');
   await as('Customer');
   await tab('Orders').click();
+  await pause(6200);
   await p.locator(`a:has-text("${code2}")`).click();
-  await p.locator('.ship').waitFor();
+  await p.locator('.timeline li.done:has-text("On the way")').waitFor();
+  expect((await p.locator('.ship-head').innerText()).includes('Musa Bello'), 'the rider is not at the top of Progress');
+  expect((await p.locator('text=Tracking code').count()) === 0, 'the tracking code still shows');
+  expect((await p.locator('.timeline li:has-text("With the rider")').count()) === 0, 'the old rider step still shows next to the courier steps');
   await pause(6200);
-  await p.locator('.ship button:has-text("Refresh")').click();
-  await p.locator('.ship-status:text-is("On the way")').waitFor();
-  await pause(6200);
-  await p.locator('.ship button:has-text("Refresh")').click();
-  await p.locator('.ship-status:text-is("Delivered")').waitFor();
+  await p.locator('.back-btn').click();
+  await p.locator(`a:has-text("${code2}")`).click();
+  await p.locator('.timeline li.done:has-text("Delivered")').waitFor();
 });
 
 await step('with ShopDesk Delivery on, the Shop tab has the pickup address and Pay online', async () => {

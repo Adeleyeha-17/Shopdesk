@@ -186,7 +186,7 @@ function seed() {
     account_number: '0123456789',
     account_name: 'BIMPE ADEYEMI',
     whatsapp: '0800 000 0000',
-    allow_part_payment: true,
+    allow_part_payment: false,
     delivery_paid_by: 'customer',
     sells: 'Shea butter, black soap, oils and skin care',
     location: 'Yaba, Lagos',
@@ -1713,6 +1713,12 @@ const RPC = {
       return { sharing: true, link: true, lat: 6.5158 + (6.4478 - 6.5158) * f, lng: 3.3796 + (3.4723 - 3.3796) * f, accuracy: 15, at: nowIso(), rider: o.rider_name };
     }
     return { sharing: false, link: !!o.rider_token };
+  },
+  // visitors: in the demo the shop's numbers are made up from the date
+  note_visit: () => false,
+  my_visits: () => {
+    const d = new Date().getDate();
+    return { today: 4 + (d % 9), week: 31 + ((d * 7) % 23) };
   },
   // Which bank an account number is at, and the name on it (Paystack, in the real app). In the demo: numbers that look like
   // phone numbers are at OPay and PalmPay, other numbers at GTBank.

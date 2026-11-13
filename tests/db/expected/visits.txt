@@ -1,0 +1,19 @@
+V1 a visitor at noon: counted, and the shop is told (expect t, then the alert):
+t
+Someone is looking at your shop|Your first visitor today.|/#sales
+V2 the same visitor again, and a second visitor within 2 hours: counted once each, no new alert (expect f, f, 1 alert):
+f
+f
+1
+V3 the owner looking at their own shop does not count; at night nobody is woken (expect f, f):
+f
+f
+V4 a signed-in visitor counts as one person, and in the day the shop is told again with the count (expect t, the alert with 4 people):
+t
+4 people have visited today.
+V5 the shop sees its numbers; others see nothing; nobody reads visits directly (expect 4|4, then 0|0, then permission denied):
+4|4
+0|0
+psql:visits.sql:29: ERROR:  permission denied for table shop_visits
+V6 every order is paid in full: a shop cannot switch part payments on (expect permission denied):
+psql:visits.sql:32: ERROR:  permission denied for table shops

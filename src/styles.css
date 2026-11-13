@@ -1114,3 +1114,7 @@ svg.star { width: 14px; height: 14px; fill: var(--wait); flex: none; }
 .share .btn { width: 100%; }
 .share-state { display: flex; align-items: center; gap: 10px; }
 @media (prefers-reduced-motion: reduce) { .livemap-pin.rider i, .live-dot { animation: none; } }
+.visits { display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 12px 14px; border-radius: 14px; background: var(--soft); }
+.visits svg { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.visits strong { font-weight: 800; }
+.ship-head { margin: 4px 0 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }

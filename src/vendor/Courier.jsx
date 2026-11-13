@@ -61,8 +61,8 @@ export function CourierPrices({ o, shop, code, run, say, goShop }) {
         <>
           <span className="sub">
             {covers
-              ? 'We book the courier and pay them. You cover delivery, so the price comes out of the payment.'
-              : 'We book the courier and pay them. The customer pays the price you pick, online.'}
+              ? `You cover delivery: the price comes out of this order's ${naira(o.items_total)}.`
+              : `The customer pays delivery with their order. You still get your full ${naira(o.items_total)}.`}
           </span>
           <div className="btns">
             <button className={'btn small' + (busy ? ' busy' : '')} onClick={get} disabled={busy}>
@@ -114,24 +114,20 @@ export function CourierBook({ o, code, run, allPacked }) {
   const name = (o.delivery_quote && o.delivery_quote.name) || 'the courier';
   async function book() {
     setBusy(true);
-    await run(
-      () => money('book', { order: o.id }),
-      null,
-      `${name} is booked for ${code}. They will come to pick it up.`,
-    );
+    await run(() => money('book', { order: o.id }), null, `${name} is coming to pick up ${code}.`);
     setBusy(false);
   }
   return (
     <div className="slip">
-      <span className="label">ShopDesk Delivery · {name}</span>
+      <span className="label">Delivery is already paid</span>
       <span className="sub">
         {allPacked
-          ? 'Book it and the courier comes to your pickup address. ShopDesk pays them.'
-          : 'Tick every item as you pack, then book the courier.'}
+          ? `${name} will pick it up from you.`
+          : `Tick every item as you pack, then book ${name} to pick it up.`}
       </span>
       <div className="btns">
         <button className={'btn small' + (busy ? ' busy' : '')} onClick={book} disabled={!allPacked || busy}>
-          {busy ? 'Booking…' : 'Book ' + name}
+          {busy ? 'Booking…' : 'Book pickup'}
         </button>
       </div>
     </div>
@@ -139,7 +135,14 @@ export function CourierBook({ o, code, run, allPacked }) {
 }
 
 export function CourierTrack({ o }) {
-  const [sh, setSh, refresh, busy] = useShipment({ order: o.id });
+  const [sh, setSh, refresh] = useShipment({ order: o.id });
+  // the courier's news, now and every minute while it's on its way
+  useEffect(() => {
+    if (o.status !== 'out') return undefined;
+    refresh();
+    const t = setInterval(refresh, 60000);
+    return () => clearInterval(t);
+  }, [o.status, refresh]);
   useEffect(() => {
     let on = true;
     supabase
@@ -152,5 +155,5 @@ export function CourierTrack({ o }) {
       on = false;
     };
   }, [o.id, o.status, setSh]);
-  return <ShipmentView sh={sh} busy={busy} refresh={refresh} who="shop" />;
+  return <ShipmentView sh={sh} />;
 }

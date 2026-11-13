@@ -27,7 +27,7 @@ import { myTokens } from './savedOrders.js';
 import { ReportProblemForm, CustomerProblem } from './ProblemBox.jsx';
 import { RateShop } from './RateShop.jsx';
 import { money } from '../lib/moneyApi.js';
-import { useShipment, ShipmentView } from '../shared/Shipment.jsx';
+import { useShipment, CourierHead } from '../shared/Shipment.jsx';
 import { useLiveRider, LiveRiderCard } from '../shared/LiveRider.jsx';
 
 // Why an order was cancelled, in the customer's words.
@@ -39,13 +39,8 @@ const CANCELLED = {
   customer_asked: 'Cancelled because you asked.',
 };
 
-// What paying online adds on top: Paystack's card fee and ShopDesk's fee (paying the shop by transfer adds nothing).
-function onlineFees(pay) {
-  const parts = [];
-  if (pay.fee > 0) parts.push(`${naira(pay.fee)} card fee`);
-  if (pay.service > 0) parts.push(`${naira(pay.service)} ShopDesk fee`);
-  return parts.length ? `Includes ${parts.join(' and ')}. ` : '';
-}
+// What paying online adds on top (Paystack's card fee and ShopDesk's fee), shown as one service fee.
+const serviceFee = (pay) => (pay ? (pay.fee || 0) + (pay.service || 0) : 0);
 
 // The big line at the top of the order page: where the order is right now.
 function headlineFor(o, pickup, feeWait) {
@@ -165,7 +160,7 @@ export function OrderPage({ token }) {
   // Pay online and ShopDesk Delivery: what this order can do (nothing, until Admin switches them on)
   const [pay, setPay] = useState(null);
   const [paying, setPaying] = useState(false);
-  const [sh, setSh, refreshShip, shipBusy] = useShipment({ token });
+  const [sh, setSh, refreshShip] = useShipment({ token });
   const status = o && o.status;
   useEffect(() => {
     if (!status) return;
@@ -181,7 +176,10 @@ export function OrderPage({ token }) {
   // the shop's own rider sharing their location
   const [live] = useLiveRider({ token, on: status === 'out' && !sh && !!o && o.mode === 'delivery' });
   useEffect(() => {
-    if (shipping) refreshShip();
+    if (!shipping) return undefined;
+    refreshShip();
+    const t = setInterval(refreshShip, 60000);
+    return () => clearInterval(t);
   }, [shipping, refreshShip]);
   // back from Paystack: check the payment, then tidy the address bar
   useEffect(() => {
@@ -271,7 +269,17 @@ export function OrderPage({ token }) {
         : '',
     ],
   ];
+  // ShopDesk Delivery: the courier's own steps take the place of "With the rider" and "Delivered"
+  if (sh && o.paid_at) {
+    const done = o.status === 'delivered';
+    const courierSteps = (sh.steps || []).map((s) => [s.status, s.at || o.out_at, '']);
+    steps.splice(3, 2, ...(courierSteps.length ? courierSteps : [[`Booked with ${sh.courier}`, o.out_at, '']]));
+    if (!courierSteps.some((s) => /deliver/i.test(s[0])))
+      steps.push(['Delivered', done ? o.received_at || o.done_at : null, done || !o.deliver_by ? '' : `arriving ${whenText(o.deliver_by)}`]);
+  }
   const current = o.status === 'cancelled' ? -1 : steps.findIndex((s) => !s[1]);
+  // the service fee is part of the total when the order can only be paid online, until it's paid
+  const feeOnTop = pay && pay.online_only && pay.online && unpaid ? serviceFee(pay) : 0;
   // Orders from before accounts have no owner; anyone with the link can update those (the database still refuses shop accounts).
   const canAct = o.mine || !o.saved;
   const wantsCustomer =
@@ -299,12 +307,6 @@ export function OrderPage({ token }) {
         )}
       </section>
 
-      {sh && (o.status === 'out' || o.status === 'delivered') && (
-        <section className="card boxed">
-          <ShipmentView sh={sh} busy={shipBusy} refresh={refreshShip} who="customer" />
-          {o.status === 'out' && <p className="note">Promised {whenText(o.deliver_by)}.</p>}
-        </section>
-      )}
       {o.status === 'out' && !pickup && !sh && (
         <section className="card boxed">
           <div className="label">Your rider</div>
@@ -402,17 +404,16 @@ export function OrderPage({ token }) {
             {pay && pay.online && canAct && (
               <div className="pay-online">
                 <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
-                  {paying ? 'Opening Paystack…' : `Pay ${naira(left + (pay.fee || 0) + (pay.service || 0))} online`}
+                  {paying
+                    ? 'Opening Paystack…'
+                    : `Pay ${naira(left + serviceFee(pay))}${onlineOnly ? '' : ' online'}`}
                 </button>
-                <span className="sub">
-                  {onlineFees(pay)}Card, bank transfer or USSD with Paystack.
-                  {onlineOnly
-                    ? ' It comes with ShopDesk Delivery, so it’s paid online.'
-                    : ' Your order is marked paid at once.'}
-                </span>
+                {!onlineOnly && serviceFee(pay) > 0 && (
+                  <span className="sub">Includes {naira(serviceFee(pay))} service fee</span>
+                )}
                 {!onlineOnly && (
                   <div className="or">
-                    <span>{pay.fee > 0 || pay.service > 0 ? 'or transfer to the shop, no fee' : 'or pay the shop by transfer'}</span>
+                    <span>or transfer {naira(left)} to the shop</span>
                   </div>
                 )}
               </div>
@@ -472,11 +473,6 @@ export function OrderPage({ token }) {
               </p>
             )}
               </>
-            )}
-            {o.pay_by && (
-              <p className="note">
-                Pay by <strong>{atText(o.pay_by)}</strong> or it's cancelled.
-              </p>
             )}
             {!onlineOnly &&
               (o.customer_says_paid ? (
@@ -544,6 +540,7 @@ export function OrderPage({ token }) {
 
       <section className="card">
         <h2>Progress</h2>
+        {sh && o.status === 'out' && <CourierHead sh={sh} />}
         <ol className="timeline">
           {steps.map(([title, at, extra], i) => (
             <li key={i} className={at ? 'done' : i === current ? 'now' : ''}>
@@ -572,9 +569,15 @@ export function OrderPage({ token }) {
             </span>
           </div>
         )}
+        {feeOnTop > 0 && (
+          <div className="row">
+            <span className="sub">Service fee</span>
+            <span className="num">{naira(feeOnTop)}</span>
+          </div>
+        )}
         <div className="row">
           <span className="sub">{feeWait ? 'Total so far' : 'Total'}</span>
-          <span className="num">{naira(o.to_pay)}</span>
+          <span className="num">{naira(o.to_pay + feeOnTop)}</span>
         </div>
         {o.amount_paid > 0 && (
           <div className="row">
@@ -584,11 +587,7 @@ export function OrderPage({ token }) {
         )}
       </section>
 
-      {o.mine ? (
-        <p className="note" style={{ fontSize: 12 }}>
-          Saved to <a href="/orders">My orders</a>.
-        </p>
-      ) : who === '' && !gate ? (
+      {!o.mine && who === '' && !gate ? (
         <p className="note" style={{ fontSize: 12 }}>
           <a href="/orders">Sign in</a> to see your orders.
         </p>

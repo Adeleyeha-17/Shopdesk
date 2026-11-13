@@ -99,21 +99,6 @@ export function ShopTab({ shop, reloadShop, say, email }) {
       </section>
       <section className="card">
         <h2>Your rules</h2>
-        <p className="label">Payment</p>
-        <div className="choices" role="radiogroup" aria-label="Payment">
-          <Choice
-            on={!shop.allow_part_payment}
-            title="Full payment, one transfer"
-            sub="Nothing is packed until the whole amount is in."
-            click={() => rule({ allow_part_payment: false })}
-          />
-          <Choice
-            on={shop.allow_part_payment}
-            title="Allow part payment"
-            sub="The customer can pay part now and the rest before delivery."
-            click={() => rule({ allow_part_payment: true })}
-          />
-        </div>
         <p className="label">Delivery fee</p>
         <div className="choices" role="radiogroup" aria-label="Delivery fee">
           <Choice

@@ -147,8 +147,7 @@ export function ShopDetailPage({ id, d, setModal }) {
             </dd>
             <dt>Rules</dt>
             <dd>
-              {s.allow_part_payment ? 'Part payment allowed' : 'Full payment only'} ·{' '}
-              {s.delivery_paid_by === 'vendor' ? 'shop covers delivery' : 'customer pays delivery'}
+              {s.delivery_paid_by === 'vendor' ? 'Shop covers delivery' : 'Customer pays delivery'}
             </dd>
             <dt>Joined</dt>
             <dd>{dayOf(s.created_at)}</dd>

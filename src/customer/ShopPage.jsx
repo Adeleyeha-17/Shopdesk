@@ -20,7 +20,7 @@ import { useBusy } from '../lib/busy.js';
 import { Skeleton } from '../shared/Skeleton.jsx';
 import { AreaPicker } from './AreaPicker.jsx';
 import { areaIn } from './areas.js';
-import { noteSource, sourceFor } from './source.js';
+import { noteSource, sourceFor, visitorId } from './source.js';
 import { PinIcon, Star } from './NearYou.jsx';
 import { useMoneySwitches } from '../lib/moneyApi.js';
 
@@ -185,6 +185,10 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [areaPicked, setAreaPicked] = useState(false); // they chose the area themselves: typing doesn't change it
   // where this customer came from (Instagram, TikTok, a WhatsApp link...), for the shop's report
   useEffect(() => noteSource(slug), [slug]);
+  // the shop hears that someone is looking (the database decides how often)
+  useEffect(() => {
+    supabase.rpc('note_visit', { p_slug: slug, p_visitor: visitorId() }).then(({ data }) => data === true && kick());
+  }, [slug]);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -872,10 +876,8 @@ export function ShopPage({ slug, step = 'shop' }) {
               </svg>
               <span>
                 {sw.delivery && form.mode === 'delivery'
-                  ? 'ShopDesk Delivery brings it to you. Pay online once the shop picks your courier, then follow it to your door.'
-                  : shop.allow_part_payment
-                    ? 'You can pay in parts. The shop shows what’s left after each payment.'
-                    : 'Pay in one transfer. It’s packed once it lands.'}
+                  ? 'Pay once the shop confirms, then track it to your door.'
+                  : 'Pay in one transfer. It’s packed once it lands.'}
               </span>
             </div>
           </section>

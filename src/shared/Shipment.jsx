@@ -22,25 +22,16 @@ export function useShipment({ order, token, initial }) {
   return [sh, setSh, refresh, busy];
 }
 
-export function ShipmentView({ sh, busy, refresh, who }) {
-  if (!sh) return null;
-  const steps = (sh.steps || []).slice().reverse();
-  const rider = sh.rider && (sh.rider.name || sh.rider.phone) ? sh.rider : null;
+const riderOf = (sh) => (sh.rider && (sh.rider.name || sh.rider.phone) ? sh.rider : null);
+
+function TrackRow({ sh }) {
+  const rider = riderOf(sh);
   return (
-    <div className="ship">
-      <div className="row">
-        <div>
-          <span className="label">ShopDesk Delivery · {sh.courier}</span>
-          <strong className="ship-status">{shipStatus(sh.status)}</strong>
-        </div>
-        <button className={'btn small ghost' + (busy ? ' busy' : '')} onClick={refresh} disabled={busy}>
-          {busy ? 'Checking…' : 'Refresh'}
-        </button>
-      </div>
+    <>
       {rider && (
         <div className="row">
           <span className="sub">
-            Rider: <strong>{rider.name || 'Courier rider'}</strong>
+            <strong>{rider.name || 'Rider'}</strong>
             {rider.phone ? ' · ' + rider.phone : ''}
           </span>
           {rider.phone && (
@@ -50,22 +41,47 @@ export function ShipmentView({ sh, busy, refresh, who }) {
           )}
         </div>
       )}
-      {steps.length > 0 && (
-        <ol className="ship-steps">
-          {steps.slice(0, 4).map((s, i) => (
-            <li key={i} className={i === 0 ? 'now' : ''}>
-              <span>{s.status}</span>
-              {s.at && <span className="sub">{atText(s.at)}</span>}
-            </li>
-          ))}
-        </ol>
-      )}
       {sh.tracking_url && (
-        <a className="linkbtn" href={sh.tracking_url} target="_blank" rel="noopener noreferrer">
-          {who === 'customer' ? 'Track it live' : 'Open the courier tracking page'}
+        <a
+          className="btn small ghost"
+          href={sh.tracking_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ textDecoration: 'none', alignSelf: 'flex-start' }}
+        >
+          Track it live
         </a>
       )}
-      {sh.tracking_code && <span className="sub">Tracking code: {sh.tracking_code}</span>}
+    </>
+  );
+}
+
+// The customer's order page: who is bringing it, at the top of Progress (the steps are in the Progress list).
+export function CourierHead({ sh }) {
+  return (
+    <div className="ship ship-head">
+      <span className="label">{sh.courier}</span>
+      <TrackRow sh={sh} />
+    </div>
+  );
+}
+
+// The shop's order card: where the courier is, updated by itself.
+export function ShipmentView({ sh }) {
+  if (!sh) return null;
+  const waiting = /^(pending|confirmed)$/.test(sh.status || 'pending');
+  const last = (sh.steps || []).slice(-1)[0];
+  return (
+    <div className="ship">
+      <strong className="ship-status">
+        {waiting ? `${sh.courier} is coming to pick it up` : `${sh.courier} · ${shipStatus(sh.status)}`}
+      </strong>
+      {!waiting && last && last.at && (
+        <span className="sub">
+          {last.status} · {atText(last.at)}
+        </span>
+      )}
+      <TrackRow sh={sh} />
     </div>
   );
 }

@@ -74,6 +74,27 @@ function Tile({ label, value, now, before }) {
   );
 }
 
+// How many people looked at the shop today and this week.
+function Visitors() {
+  const [v, setV] = useState(null);
+  useEffect(() => {
+    supabase.rpc('my_visits').then(({ data, error }) => !error && setV(data || null));
+  }, []);
+  if (!v) return null;
+  return (
+    <div className="visits">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+      <span>
+        <strong>{v.today}</strong> {v.today === 1 ? 'person' : 'people'} visited your shop today
+        <span className="sub"> · {v.week} this week</span>
+      </span>
+    </div>
+  );
+}
+
 export function SalesTab({ shop, data, say, setTab, setFocus, reloadShop, month, setMonth }) {
   const [key, setKey] = useState(() => {
     try {
@@ -151,6 +172,7 @@ export function SalesTab({ shop, data, say, setTab, setFocus, reloadShop, month,
 
   return (
     <>
+      <Visitors key={reloads} />
       <div className="filters wrap" role="group" aria-label="Period">
         {[...PERIODS, ['custom', 'Pick dates']].map(([k, l]) => (
           <button key={k} className="filter" aria-pressed={key === k} onClick={() => choose(k)}>
