@@ -224,6 +224,7 @@ function kindOf(k, who) {
     refund_sent: ['Refund', C.wait, 'Your refund was sent', 'Check and confirm'],
     refund_ok: ['Refund', C.good, 'Refund confirmed', 'Open the order'],
     refund_missing: ['Refund', C.bad, 'A refund didn’t arrive', 'Open the order'],
+    nudge: ['ShopDesk', C.info, null, 'Open ShopDesk'], // the heading is the nudge's own title
   };
   if (K[k]) return K[k];
   if (String(k).startsWith('admin') || k === 'report') return ['ShopDesk', C.info, 'Something needs you in Admin', 'Open Admin'];
@@ -263,7 +264,7 @@ export function renderEmail(p, cfg = {}, now = new Date()) {
   const unsub = cfg.base ? cfg.base + '/functions/v1/push?unsub=' + p.token : stop;
   let heading, button, target;
   if (one && one.kind === 'message') [heading, button, target] = [nameOf(one) + ' sent you a message', 'Reply to ' + nameOf(one), abs(one.url)];
-  else if (one) { const k = kindOf(one.kind, p.who); [heading, button, target] = [k[2], k[3], abs(one.url)]; }
+  else if (one) { const k = kindOf(one.kind, p.who); [heading, button, target] = [k[2] || one.title, k[3], abs(one.url)]; }
   else if (msgs.length === all.length) [heading, button, target] = ['You have ' + all.length + ' new messages', 'Open ShopDesk', home];
   else [heading, button, target] = ['You missed ' + all.length + ' updates', 'Open ShopDesk', home];
   const subject = subjectFor(p);

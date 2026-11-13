@@ -324,6 +324,17 @@ alter table public.shops add column if not exists paid_until timestamptz;
 alter table public.settings add column if not exists free_orders integer not null default 30 check (free_orders between 0 and 10000);
 update public.shops set paid_until = coalesce(reviewed_at, created_at) + make_interval(days => (select trial_days from public.settings where id = 1))
   where status = 'active' and paid_until is null;
+-- Nudges: alerts (phone and email) that bring a shop back when orders are waiting, it has no products yet, or it has gone quiet.
+-- One row per nudge sent, so each kind goes out at most so often.
+create table if not exists public.shop_nudges (
+  id bigint generated always as identity primary key,
+  shop_id uuid not null references public.shops(id) on delete cascade,
+  kind text not null check (kind in ('orders_waiting', 'no_products', 'quiet')),
+  sent_at timestamptz not null default now()
+);
+create index if not exists shop_nudges_shop on public.shop_nudges (shop_id, kind, sent_at desc);
+alter table public.shop_nudges enable row level security;
+revoke all on public.shop_nudges from anon, authenticated;
 -- Products you hide stay hidden: vendors can't show them again.
 alter table public.products add column if not exists hidden_by_admin boolean not null default false;
 alter table public.products add column if not exists hidden_reason text not null default '' check (char_length(hidden_reason) <= 200);
@@ -1946,6 +1957,11 @@ begin
     from public.shops s cross join public.shop_month(s.id) m
     where st.close_unpaid and st.monthly_price > 0 and s.status = 'active' and s.paid_until < now() and (st.free_orders = 0 or m.orders > st.free_orders)
     union all
+    select jsonb_build_object('kind', 'quiet', 'level', 3, 'shop_id', s.id, 'shop', s.name, 'slug', s.slug, 'whatsapp', s.whatsapp, 'since', s.last_active_at,
+      'text', 'Hasn''t opened ShopDesk in ' || extract(day from now() - s.last_active_at)::int || ' days'
+        || case when not exists (select 1 from public.products p where p.shop_id = s.id and p.active) then ', and has no products' else '' end)
+    from public.shops s where s.status = 'active' and s.last_active_at < now() - interval '7 days'
+    union all
     select jsonb_build_object('kind', 'waiting', 'level', 2, 'shop_id', s.id, 'shop', s.name, 'slug', s.slug, 'whatsapp', s.whatsapp, 'since', s.created_at,
       'text', 'Waiting for approval for ' || extract(day from now() - s.created_at)::int || ' days')
     from public.shops s where s.status = 'pending' and s.created_at < now() - interval '2 days'
@@ -2381,6 +2397,67 @@ begin
   return cardinality(ids) + m;
 end $$;
 
+-- Sends the nudges that are due (the database runs it every hour). p_hour stands in for the Lagos hour, for tests.
+--   orders_waiting: new orders not confirmed, or customers who say they paid, waiting over 3 hours while the shop hasn't
+--                   opened ShopDesk; at most once every 20 hours, from 7am to 9pm
+--   no_products:    approved over a day ago with nothing for sale; up to 3 times, 2 days apart, from 9am to 8pm
+--   quiet:          has products but hasn't opened ShopDesk in 5 days; once a week, up to 4 times until it comes back,
+--                   from 9am to 8pm
+create or replace function public.nudge_shops(p_hour int default null) returns int
+language plpgsql security definer set search_path = public as $$
+declare r record; n int := 0; h int := coalesce(p_hour, extract(hour from now() at time zone 'Africa/Lagos')::int);
+begin
+  perform set_config('shopdesk.system', 'on', true);
+  if h between 7 and 21 then
+    for r in
+      select s.id, s.owner_id, count(*)::int as c from public.shops s join public.orders o on o.shop_id = s.id
+      where s.status = 'active' and o.status = 'awaiting' and (o.confirmed_at is null or o.customer_says_paid)
+        and o.created_at < now() - interval '3 hours' and s.last_active_at < now() - interval '3 hours'
+        and not exists (select 1 from public.shop_nudges sn where sn.shop_id = s.id and sn.kind = 'orders_waiting' and sn.sent_at > now() - interval '20 hours')
+      group by s.id, s.owner_id
+    loop
+      perform public.notify(r.owner_id, null, 'nudge',
+        case when r.c = 1 then '1 order is waiting for you' else r.c || ' orders are waiting for you' end,
+        'Confirm them and check payments, so your customers can get their things. Unpaid orders cancel after 48 hours.', '/#orders');
+      insert into public.shop_nudges (shop_id, kind) values (r.id, 'orders_waiting');
+      n := n + 1;
+    end loop;
+  end if;
+  if h between 9 and 20 then
+    for r in
+      select s.id, s.owner_id from public.shops s
+      where s.status = 'active' and coalesce(s.reviewed_at, s.created_at) < now() - interval '1 day'
+        and not exists (select 1 from public.products p where p.shop_id = s.id and p.active and not p.hidden_by_admin)
+        and (select count(*) from public.shop_nudges sn where sn.shop_id = s.id and sn.kind = 'no_products') < 3
+        and not exists (select 1 from public.shop_nudges sn where sn.shop_id = s.id and sn.kind = 'no_products' and sn.sent_at > now() - interval '2 days')
+    loop
+      perform public.notify(r.owner_id, null, 'nudge', 'Add your first product',
+        'Your shop is open, but customers can''t order until it has something to sell. A photo, a name and a price is all it takes.', '/#stock');
+      insert into public.shop_nudges (shop_id, kind) values (r.id, 'no_products');
+      n := n + 1;
+    end loop;
+    for r in
+      select s.id, s.owner_id, s.slug,
+        (select count(distinct coalesce(o.customer_id::text, o.customer_phone)) from public.orders o where o.shop_id = s.id and o.status in ('paid', 'out', 'delivered'))::int as buyers
+      from public.shops s
+      where s.status = 'active' and s.last_active_at < now() - interval '5 days'
+        and exists (select 1 from public.products p where p.shop_id = s.id and p.active and not p.hidden_by_admin)
+        and (select count(*) from public.shop_nudges sn where sn.shop_id = s.id and sn.kind = 'quiet' and sn.sent_at > s.last_active_at) < 4
+        and not exists (select 1 from public.shop_nudges sn where sn.shop_id = s.id and sn.kind = 'quiet' and sn.sent_at > now() - interval '7 days')
+    loop
+      perform public.notify(r.owner_id, null, 'nudge',
+        case when r.buyers > 0 then 'Your customers are waiting' else 'Share your shop today' end,
+        case when r.buyers > 0 then r.buyers || case when r.buyers = 1 then ' person has' else ' people have' end || ' bought from you on ShopDesk. Add something new and post your link on your status.'
+          else 'Post shopdesk.com.ng/' || r.slug || ' on your WhatsApp status. Customers order straight from it.' end,
+        '/#shop');
+      insert into public.shop_nudges (shop_id, kind) values (r.id, 'quiet');
+      n := n + 1;
+    end loop;
+  end if;
+  return n;
+end $$;
+revoke all on function public.nudge_shops(int) from public, anon, authenticated;
+
 -- ---------- records: your private copies ----------
 -- Everything a shop had, as one copy: the shop, its owner's email, products, every order (with items, payments, the full
 -- chat and the problem), reports and plan payments.
@@ -2667,6 +2744,15 @@ begin
     end if;
   end if;
 end $monthly$;
+-- Nudges every hour (nudge_shops decides what is due), then the push sender sends them straight away. Needs pg_cron and pg_net.
+do $nudge$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') and exists (select 1 from pg_extension where extname = 'pg_net') then
+    perform cron.unschedule(jobid) from cron.job where jobname = 'shopdesk-nudge';
+    perform cron.schedule('shopdesk-nudge', '7 * * * *',
+      $job$select public.nudge_shops(); select net.http_post(url := 'https://buvzjgzoctmpgthelddr.supabase.co/functions/v1/push', body := '{"action":"flush"}'::jsonb)$job$);
+  end if;
+end $nudge$;
 
 -- Ratings and Shops near you: anyone can read them; only customers rate.
 revoke all on function public.short_name(text), public.shop_rating(uuid), public.rate_shop(uuid, int, text), public.my_shop_rating(uuid),

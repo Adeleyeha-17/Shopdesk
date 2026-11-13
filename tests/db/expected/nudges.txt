@@ -1,0 +1,19 @@
+U1 at <clock> nothing goes out (expect 0):
+0
+U2 at noon: the busy shop hears about 2 orders waiting, the empty shop to add a product, the quiet shop to share its link (expect 3 and the three alerts):
+3
+busybags|2 orders are waiting for you|/#orders
+emptywigs|Add your first product|/#stock
+quietshoes|Share your shop today|/#shop
+U3 an hour later, nothing new (expect 0):
+0
+U4 a shop that opens ShopDesk is not nudged about waiting orders (expect 0 waiting nudges after the time limit passes):
+t
+0
+U5 the empty shop is reminded at most 3 times, 2 days apart (expect 3):
+3
+U6 Admin sees the quiet shop in Needs attention, level 3 (expect the text):
+3|Hasn't opened ShopDesk in 9 days
+U7 shops cannot run nudges or read them (expect permission denied twice):
+psql:nudges.sql:47: ERROR:  permission denied for function nudge_shops
+psql:nudges.sql:48: ERROR:  permission denied for table shop_nudges

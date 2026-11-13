@@ -8,6 +8,7 @@ export function AttentionPage({ d }) {
   const groups = [
     [1, 'Act now', 'Money or trust is at risk.'],
     [2, 'Keep an eye on', 'Not urgent, but worth a message.'],
+    [3, 'Gone quiet', 'Approved shops that haven’t opened ShopDesk in a week. They get reminders; a message from you helps more.'],
   ];
   return (
     <>
@@ -27,7 +28,7 @@ export function AttentionPage({ d }) {
           <section className="panel" key={lv}>
             <div className="panel-head">
               <h3>
-                <span className={'dot' + (lv === 1 ? ' bad' : ' wait')} />
+                <span className={'dot' + (lv === 1 ? ' bad' : lv === 2 ? ' wait' : '')} />
                 {title}
               </h3>
               <span className="sub">{sub}</span>
@@ -70,7 +71,12 @@ export function AttentionPage({ d }) {
                           {a.whatsapp && (
                             <a
                               className="btn small ghost"
-                              href={waLink(a.whatsapp, `Hi ${a.shop}, this is ShopDesk. `)}
+                              href={waLink(
+                                a.whatsapp,
+                                a.kind === 'quiet'
+                                  ? `Hi ${a.shop}, this is ShopDesk. We haven't seen you on ShopDesk in a while. Is anything stopping you? We're happy to help you set up or get your first orders.`
+                                  : `Hi ${a.shop}, this is ShopDesk. `,
+                              )}
                               target="_blank"
                               rel="noopener"
                             >
