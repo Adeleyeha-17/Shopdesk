@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { errText } from '../lib/helpers.js';
-import { uploadShopPhoto, uploadShopVideo } from '../lib/photos.js';
+import { uploadShopPhoto, uploadShopVideo, VIDEO_SECONDS } from '../lib/photos.js';
 import { kick } from '../lib/alerts.js';
 import { ChatView } from './Chat.jsx';
 
@@ -136,11 +136,14 @@ export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, e
           </div>
         )}
         {attach && (
-          <div className="attach-row">
-            {pick('photo')}
-            {pick('video', true)}
-            {pick('video')}
-          </div>
+          <>
+            <div className="attach-row">
+              {pick('photo')}
+              {pick('video', true)}
+              {pick('video')}
+            </div>
+            <span className="sub attach-note">Videos can be up to {VIDEO_SECONDS} seconds.</span>
+          </>
         )}
         {err && <p className="err">{err}</p>}
         <form className="chat-send" onSubmit={sendText}>

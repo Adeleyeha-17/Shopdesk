@@ -13,6 +13,7 @@ const root = path.resolve(here, '../../demo/dist');
 const out = path.join(here, 'out');
 const photo = path.join(here, 'fixtures/product.jpg');
 const video = path.join(here, 'fixtures/clip.mp4');
+const longVideo = path.join(here, 'fixtures/long.webm'); // 25 seconds: over the limit
 const KEY = 'shopdesk-demo-v9';
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.json': 'application/json' };
 
@@ -536,7 +537,7 @@ await step('while Pay online and ShopDesk Delivery are off, the Shop tab shows t
   expect((await soon.filter({ hasText: 'Customers pay online' }).locator('button:has-text("I want this")').count()) === 1, 'Pay online lost its button');
 });
 
-await step('the shop messages ShopDesk inside the app: a full-screen chat that keeps the message, sends a video, and shows no names', async () => {
+await step('the shop messages ShopDesk inside the app: a full-screen chat that keeps the message, sends a short video (not one over 20 seconds), and shows no names', async () => {
   await p.locator('.desk-row:has-text("Message ShopDesk")').click();
   const sheet = p.locator('.desk-sheet');
   await sheet.waitFor();
@@ -549,6 +550,10 @@ await step('the shop messages ShopDesk inside the app: a full-screen chat that k
   await sheet.locator('.msg.mine:not(.pending)').first().waitFor();
   await sheet.locator('.attach-btn').click();
   expect((await sheet.locator('.attach-opt').allInnerTexts()).join('|') === 'Photo|Record a video|Video from phone', 'the photo and video choices are missing');
+  await sheet.locator('.attach-opt:has-text("Video from phone") input').setInputFiles(longVideo);
+  await sheet.locator('.err:has-text("up to 20 seconds")').waitFor();
+  expect((await sheet.locator('video.chat-video').count()) === 0, 'a video over 20 seconds was sent');
+  await sheet.locator('.attach-btn').click();
   await sheet.locator('.attach-opt:has-text("Video from phone") input').setInputFiles(video);
   await sheet.locator('.msg.mine:not(.pending) video.chat-video').waitFor();
   await sheet.locator('.back-btn').click();

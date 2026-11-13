@@ -63,12 +63,39 @@ export async function uploadShopPhoto(shopId, file) {
   return path;
 }
 
-// A video in a shop's ShopDesk chat (chat-videos/shop-<shop id>/m-...): only the shop and ShopDesk see it. Up to 50 MB,
-// which is about 30 seconds from most phone cameras.
+// A video in a shop's ShopDesk chat (chat-videos/shop-<shop id>/m-...): only the shop and ShopDesk see it. Up to 20
+// seconds, to keep storage small (and never over 50 MB).
+export const VIDEO_SECONDS = 20;
 export const VIDEO_MAX = 50 * 1024 * 1024;
+const TOO_LONG = `Videos can be up to ${VIDEO_SECONDS} seconds. Record a shorter one.`;
 const VIDEO_TYPES = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'video/3gpp': '3gp', 'video/x-matroska': 'mkv' };
+
+// How long a video is, in seconds (null when the phone can't tell).
+export function videoSeconds(file) {
+  return new Promise((resolve) => {
+    const v = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    let done = false;
+    const end = (d) => {
+      if (done) return;
+      done = true;
+      URL.revokeObjectURL(url);
+      resolve(d);
+    };
+    v.preload = 'metadata';
+    v.muted = true;
+    v.onloadedmetadata = () => end(Number.isFinite(v.duration) ? v.duration : null);
+    v.onerror = () => end(null);
+    setTimeout(() => end(null), 8000);
+    v.src = url;
+  });
+}
+
 export async function uploadShopVideo(shopId, file) {
-  if (file.size > VIDEO_MAX) throw new Error('That video is over 50 MB. Record a shorter one, about 30 seconds.');
+  if (file.size > VIDEO_MAX) throw new Error(TOO_LONG);
+  const secs = await videoSeconds(file);
+  // a phone that can't tell the length: a big file is a long video
+  if ((secs != null && secs > VIDEO_SECONDS + 0.9) || (secs == null && file.size > 20 * 1024 * 1024)) throw new Error(TOO_LONG);
   const type = VIDEO_TYPES[file.type] ? file.type : 'video/mp4';
   const path = `shop-${shopId}/m-${newId()}.${VIDEO_TYPES[type]}`;
   const { error } = await supabase.storage.from('chat-videos').upload(path, file, { contentType: type });
