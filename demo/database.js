@@ -1707,6 +1707,53 @@ const RPC = {
     }
     return { shipment: shipView(sh) };
   },
+  // ---------- live tracking (the shop's own rider) ----------
+  rider_link: ({ p_order }) => {
+    const o = ownedOrder(p_order);
+    if (o.mode !== 'delivery' || o.delivery_by === 'shopdesk') fail("This order isn't with your own rider.");
+    if (o.status !== 'out') fail('Hand it to your rider first.');
+    if (!o.rider_token) Object.assign(o, { rider_token: uuid(), rider_link_at: nowIso() });
+    return o.rider_token;
+  },
+  rider_job: ({ p_token }) => {
+    const o = S.orders.find((x) => x.rider_token === p_token && x.mode === 'delivery');
+    if (!o) return null;
+    const s = shopOf(o);
+    if (o.status !== 'out') return { done: true, status: o.status, shop: s.name };
+    return {
+      done: false,
+      code: codeOf(o),
+      shop: s.name,
+      customer: o.customer_name.split(' ')[0],
+      phone: o.customer_phone,
+      address: o.address,
+      area: o.area,
+      lat: o.delivery_lat,
+      lng: o.delivery_lng,
+      deliver_by: o.deliver_by,
+      rider: o.rider_name,
+      shared_at: (S.spots || {})[o.id] ? S.spots[o.id].at : null,
+    };
+  },
+  rider_ping: ({ p_token, p_lat, p_lng, p_accuracy }) => {
+    const o = S.orders.find((x) => x.rider_token === p_token);
+    if (!o || o.status !== 'out') return false;
+    S.spots = S.spots || {};
+    S.spots[o.id] = { lat: p_lat, lng: p_lng, accuracy: p_accuracy, at: nowIso() };
+    return true;
+  },
+  order_live: ({ p_token, p_order }) => {
+    const o = p_token ? S.orders.find((x) => x.public_token === p_token) : S.orders.find((x) => x.id === p_order && x.shop_id === (myShop() || {}).id);
+    if (!o || o.status !== 'out' || o.mode !== 'delivery') return null;
+    const sp = (S.spots || {})[o.id];
+    if (sp && Date.now() - Date.parse(sp.at) < 30 * 60000) return { sharing: true, link: true, ...sp, rider: o.rider_name };
+    // in the demo, a rider who was sent the link rides from Yaba towards Lekki over 25 minutes
+    if (o.rider_link_at) {
+      const f = Math.min(1, (Date.now() - Date.parse(o.rider_link_at)) / (25 * 60000));
+      return { sharing: true, link: true, lat: 6.5158 + (6.4478 - 6.5158) * f, lng: 3.3796 + (3.4723 - 3.3796) * f, accuracy: 15, at: nowIso(), rider: o.rider_name };
+    }
+    return { sharing: false, link: !!o.rider_token };
+  },
   // Which bank an account number is at, and the name on it (Paystack, in the real app). In the demo: numbers that look like
   // phone numbers are at OPay and PalmPay, other numbers at GTBank.
   demo_find_account: ({ p_number, p_bank }) => {
@@ -2170,7 +2217,7 @@ const RPC = {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const WRITES =
-  /^(set_|confirm|mark_|advance|cancel|add_|hand_|place|customer_|claim|report|touch|pack_|answer_|problem_|send_|refund_|save_|delete_)/;
+  /^(set_|confirm|mark_|advance|cancel|add_|hand_|place|customer_|claim|report|touch|pack_|answer_|problem_|send_|refund_|save_|delete_|rider_link|rider_ping)/;
 async function rpc(name, args = {}) {
   await wait(90);
   const fn = RPC[name];

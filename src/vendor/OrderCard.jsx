@@ -36,6 +36,7 @@ import { payMessage, payOnlineMessage } from './orderText.js';
 import { hasPin, mapLink } from '../lib/products.js';
 import { useMoneySwitches } from '../lib/moneyApi.js';
 import { CourierPrices, CourierBook, CourierTrack } from './Courier.jsx';
+import { RiderLive } from './RiderLive.jsx';
 
 // Why a shop cancels. The customer sees it on their order.
 const CANCEL_REASONS = [
@@ -445,6 +446,7 @@ export function OrderCard({
           <span className="sub">
             <a href={telLink(o.rider_phone)}>{o.rider_phone}</a> · due {whenText(o.deliver_by)}
           </span>
+          <RiderLive o={o} shop={shop} code={code} say={say} />
         </div>
       )}
       {packing && (

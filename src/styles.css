@@ -1107,3 +1107,25 @@ svg.star { width: 14px; height: 14px; fill: var(--wait); flex: none; }
 .slip > .courier:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
 .acct-ok { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
 .acct-ok svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Live tracking ---------- */
+.livemap { position: relative; overflow: hidden; border-radius: 14px; background: var(--soft); border: 1px solid var(--line); }
+.livemap-tiles img { position: absolute; width: 256px; height: 256px; max-width: none; user-select: none; }
+:root[data-theme="dark"] .livemap-tiles { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .livemap-tiles { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6); } }
+.livemap-pin { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); }
+.livemap-pin.rider { background: var(--info); }
+.livemap-pin.rider i { position: absolute; inset: -9px; border-radius: 50%; background: var(--info); opacity: .25; animation: livepulse 2s ease-out infinite; }
+.livemap-pin.me { background: var(--ink); }
+.livemap-credit { position: absolute; right: 6px; bottom: 4px; font-size: 10px; color: #333; background: rgba(255, 255, 255, .8); padding: 1px 5px; border-radius: 4px; text-decoration: none; }
+@keyframes livepulse { from { transform: scale(.6); opacity: .45; } to { transform: scale(1.6); opacity: 0; } }
+.live { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.live-line { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 var(--good); animation: livedot 1.6s ease-out infinite; flex: none; }
+@keyframes livedot { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent); } 100% { box-shadow: 0 0 0 8px transparent; } }
+.rider-live { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.rider-addr { font-size: 16px; line-height: 1.45; margin: 4px 0 12px; }
+.share { display: flex; flex-direction: column; gap: 10px; }
+.share .btn { width: 100%; }
+.share-state { display: flex; align-items: center; gap: 10px; }
+@media (prefers-reduced-motion: reduce) { .livemap-pin.rider i, .live-dot { animation: none; } }

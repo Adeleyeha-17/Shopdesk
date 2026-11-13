@@ -313,12 +313,25 @@ await step('the shop owner packs the order and hands it to a rider', async () =>
   await see('is with Kola Ade');
 });
 
+await step('the shop sends the rider a tracking link; the rider page shows the job and shares their location', async () => {
+  const c = card();
+  await c.locator('.rider-live button:has-text("Open rider page")').click();
+  await see('Delivery for');
+  await see('Share my location');
+  await p.context().grantPermissions(['geolocation']);
+  await p.context().setGeolocation({ latitude: 6.5, longitude: 3.4 });
+  await p.locator('button:has-text("Share my location")').click();
+  await see('Sharing your location');
+});
+
 // ---------------- customer: delivered ----------------
 await step('the customer sees the rider and confirms delivery', async () => {
   await as('Customer');
   await tab('Orders').click();
   await p.locator(`a:has-text("${code}")`).click();
   await see('Kola Ade');
+  await p.locator('.livemap .livemap-pin.rider').waitFor();
+  expect((await p.locator('.live-line').innerText()).includes('Live location'), 'the live line is missing');
   await pause(500); // the page finishes sliding in; a tap during the slide is lost
   await p.locator('button:has-text("I got everything")').click();
   await p.locator('h2:text-is("Delivered")').waitFor();

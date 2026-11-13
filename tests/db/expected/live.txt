@@ -1,0 +1,24 @@
+L1 no rider link before the order goes out (expect an error):
+psql:live.sql:22: ERROR:  Hand it to your rider first.
+CONTEXT:  PL/pgSQL function rider_link(bigint) line N at RAISE
+L2 another shop cannot get the link; this shop can, and gets the same one twice (expect an error, then t):
+psql:live.sql:28: ERROR:  Order not found.
+CONTEXT:  PL/pgSQL function owned_order(bigint) line N at RAISE
+PL/pgSQL function rider_link(bigint) line N during statement block local variable initialization
+t
+L3 the rider page shows the job; nothing is shared yet, so the customer sees no map (expect the job, then sharing false):
+Live Cakes|Funmi|4 Admiralty Way, Lekki Phase 1|Musa|false
+false
+L4 the rider shares; the customer and the shop see where (expect t, then 6.5|3.4|Musa twice):
+t
+6.5|3.4|Musa
+6.5|3.4|Musa
+L5 another shop sees nothing; a wrong link does nothing (expect null, f):
+null
+f
+L6 once delivered, the rider page says done and sharing stops (expect delivered, f, null):
+delivered
+f
+null
+L7 nobody reads positions directly (expect permission denied):
+psql:live.sql:54: ERROR:  permission denied for table rider_spots

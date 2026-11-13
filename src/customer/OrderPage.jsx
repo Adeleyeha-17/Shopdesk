@@ -28,6 +28,7 @@ import { ReportProblemForm, CustomerProblem } from './ProblemBox.jsx';
 import { RateShop } from './RateShop.jsx';
 import { money } from '../lib/moneyApi.js';
 import { useShipment, ShipmentView } from '../shared/Shipment.jsx';
+import { useLiveRider, LiveRiderCard } from '../shared/LiveRider.jsx';
 
 // Why an order was cancelled, in the customer's words.
 const CANCELLED = {
@@ -177,6 +178,8 @@ export function OrderPage({ token }) {
   // the courier's latest, when the delivery is on its way
   const shipping = !!sh && status === 'out';
   const onlineOnly = !!pay && pay.online_only; // a ShopDesk Delivery order: paid online, never by transfer to the shop
+  // the shop's own rider sharing their location
+  const [live] = useLiveRider({ token, on: status === 'out' && !sh && !!o && o.mode === 'delivery' });
   useEffect(() => {
     if (shipping) refreshShip();
   }, [shipping, refreshShip]);
@@ -305,6 +308,7 @@ export function OrderPage({ token }) {
       {o.status === 'out' && !pickup && !sh && (
         <section className="card boxed">
           <div className="label">Your rider</div>
+          <LiveRiderCard live={live} name={o.rider_name} />
           <div className="row">
             <div>
               <strong style={{ fontSize: 17 }}>{o.rider_name}</strong>

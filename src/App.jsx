@@ -19,6 +19,7 @@ import { VendorApp } from './vendor/VendorApp.jsx';
 import { AdminApp } from './admin/AdminApp.jsx';
 import { RatingsPage } from './customer/RatingsPage.jsx';
 import { ShopPage } from './customer/ShopPage.jsx';
+import { RiderPage } from './rider/RiderPage.jsx';
 import { OrderPage } from './customer/OrderPage.jsx';
 import { MyOrdersPage } from './customer/MyOrdersPage.jsx';
 import { ShopsPage } from './customer/ShopsPage.jsx';
@@ -95,6 +96,8 @@ function Pages() {
   if (p === '/email-off') return <EmailOffPage />;
   const o = p.match(/^\/o\/([0-9a-f-]{36})$/i);
   if (o) return <OrderPage token={o[1]} />;
+  const rider = p.match(/^\/r\/([0-9a-f-]{36})$/i);
+  if (rider) return <RiderPage token={rider[1]} />;
   const r = p.match(/^\/([a-z0-9-]{3,30})\/ratings$/i);
   if (r) return <RatingsPage slug={r[1].toLowerCase()} />;
   const s = p.match(/^\/([a-z0-9-]{3,30})(?:\/(cart|checkout))?$/i);
