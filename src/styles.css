@@ -1105,3 +1105,5 @@ svg.star { width: 14px; height: 14px; fill: var(--wait); flex: none; }
 .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .panel > .switch-row + .switch-row { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
 .slip > .courier:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+.acct-ok { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.acct-ok svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }

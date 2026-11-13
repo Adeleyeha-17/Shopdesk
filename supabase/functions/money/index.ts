@@ -15,6 +15,7 @@
 //   POST {"action":"track", "order":id} or {"token":...}     shop or customer: the latest from the courier
 //   POST {"action":"pay", "token":...}                       customer: start paying online, returns the Paystack page
 //   POST {"action":"check", "reference":...}                 customer back from Paystack: was it paid?
+//   POST {"action":"bank", "account_number", "bank"?}        signed in: which bank the account is at, and the name on it
 //   POST {"action":"status"}                                 admin: are the keys set, test or live, courier wallet balance
 //   POST ?hook=paystack                                      Paystack's webhook
 //   POST ?hook=shipbubble                                    Shipbubble's webhook
@@ -279,6 +280,55 @@ export async function bankCode(api, bank) {
   return hits[0]?.code || null;
 }
 
+// Bank codes in Nigerian account numbers (NUBAN): the last digit checks the first nine against the bank's code, so a number
+// can only belong to a few of these banks. Phone-number accounts (OPay, PalmPay, Moniepoint, Kuda) are always tried.
+const NUBAN = {
+  'Access Bank': '044', Citibank: '023', Ecobank: '050', 'Fidelity Bank': '070', 'First Bank': '011', FCMB: '214',
+  'Globus Bank': '103', GTBank: '058', 'Jaiz Bank': '301', 'Keystone Bank': '082', 'Polaris Bank': '076',
+  'Providus Bank': '101', 'Stanbic IBTC': '221', 'Standard Chartered': '068', 'Sterling Bank': '232', 'SunTrust Bank': '100',
+  'TAJ Bank': '302', 'Titan Trust Bank': '102', UBA: '033', 'Union Bank': '032', 'Unity Bank': '215', 'Wema Bank': '035',
+  'Zenith Bank': '057',
+};
+const WEIGHTS = [3, 7, 3, 3, 7, 3, 3, 7, 3, 3, 7, 3];
+export function nubanOk(code, num) {
+  const s = code + num.slice(0, 9);
+  let t = 0;
+  for (let i = 0; i < 12; i++) t += Number(s[i]) * WEIGHTS[i];
+  return (10 - (t % 10)) % 10 === Number(num[9]);
+}
+export const likelyBanks = (num) => [
+  'OPay', 'PalmPay', 'Moniepoint', 'Kuda',
+  ...Object.keys(NUBAN).filter((b) => nubanOk(NUBAN[b], num)),
+];
+
+// Looks the account up at each bank; returns the ones where it exists, with the account name.
+export async function findAccount(api, num, banks) {
+  const found = await Promise.all(
+    banks.map(async (b) => {
+      try {
+        const code = await bankCode(api, b);
+        if (!code) return null;
+        const d = await api.paystack('/bank/resolve?account_number=' + num + '&bank_code=' + encodeURIComponent(code));
+        return d && d.account_name ? { bank: b, account_name: String(d.account_name).trim().slice(0, 60) } : null;
+      } catch (e) {
+        return null;
+      }
+    }),
+  );
+  return found.filter(Boolean);
+}
+
+// At most 20 account checks per person every 10 minutes (each check asks Paystack a few times).
+const checks = new Map();
+function allowCheck(uid) {
+  const now = Date.now();
+  const recent = (checks.get(uid) || []).filter((t) => now - t < 600000);
+  if (recent.length >= 20) return false;
+  recent.push(now);
+  checks.set(uid, recent);
+  return true;
+}
+
 export async function ensureSubaccount(sql, api, shop) {
   const want = shop.bank + ':' + shop.account_number;
   if (shop.subaccount && shop.subaccount_for === want) return shop.subaccount;
@@ -429,6 +479,17 @@ const ACTIONS = {
     if (!known) return { paid: false, status: 'unknown' };
     if (known.status === 'paid') return { paid: true };
     return confirmPayment(sql, api, ref);
+  },
+
+  // The shop typed its account number: which bank is it, and whose name is on it. bank: the one the shop picked, if any.
+  async bank({ api, uid, body }) {
+    if (!uid) throw say('Sign in again.');
+    if (!api.get('PAYSTACK_SECRET_KEY')) return { available: false };
+    const num = String(body.account_number || '').replace(/\D/g, '');
+    if (!/^\d{10}$/.test(num)) throw say('Enter the 10-digit account number.');
+    if (!allowCheck(uid)) throw say('Too many checks. Try again in a few minutes.');
+    const banks = body.bank && BANKS[body.bank] ? [body.bank] : likelyBanks(num);
+    return { available: true, matches: await findAccount(api, num, banks) };
   },
 
   async status({ sql, api, uid }) {

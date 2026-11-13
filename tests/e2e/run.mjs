@@ -505,7 +505,7 @@ await step('the Shop tab has Appearance too', async () => {
 });
 
 // ---------------- a new shop owner signs up ----------------
-await step('a new shop owner can sign up, type a link name with a dash, and send the shop for approval', async () => {
+await step('a new shop owner can sign up, type a link name with a dash, have the bank and name found from the account number, and send the shop for approval', async () => {
   await patch((S) => {
     S.uid = null;
   }, '/');
@@ -523,7 +523,9 @@ await step('a new shop owner can sign up, type a link name with a dash, and send
   await p.locator('#sSlug').pressSequentially('ada-fabrics');
   expect((await p.locator('#sSlug').inputValue()) === 'ada-fabrics', 'the dash in the link name was removed while typing');
   await p.locator('#sNum').fill('0123456789');
-  await p.locator('#sAcct').fill('ADA OKAFOR');
+  await p.locator('.acct-ok:has-text("GTBank · ADA OKAFOR")').waitFor();
+  expect((await p.locator('#sBank').inputValue()) === 'GTBank', 'the bank was not filled in from the account number');
+  expect((await p.locator('#sAcct').inputValue()) === 'ADA OKAFOR', 'the account name was not filled in');
   await p.locator('#sWa').fill('08000000000');
   await p.locator('#sSells').fill('Fabrics');
   await p.locator('#sLoc').fill('Yaba, Lagos');

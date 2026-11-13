@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const copy = path.join(os.tmpdir(), 'shopdesk-money-' + process.pid + '.mjs');
 fs.writeFileSync(copy, fs.readFileSync(path.join(here, '../../supabase/functions/money/index.ts'), 'utf8')
   .replace("'npm:postgres@3.4.5'", JSON.stringify(import.meta.resolve('postgres'))));
-const { handle, bankCode } = await import(pathToFileURL(copy).href);
+const { handle, bankCode, nubanOk, likelyBanks } = await import(pathToFileURL(copy).href);
 fs.unlinkSync(copy);
 
 const sql = postgres({ database: process.env.TEST_DB || 'shopdesk_test', max: 3, onnotice: () => {} });
@@ -48,6 +48,11 @@ async function fakeFetch(url, init = {}) {
     if (u.pathname === '/bank') return new Response(JSON.stringify({ status: true, data: [{ name: 'Kuda Bank', code: '50211' }, { name: 'OPay Digital Services Limited (OPay)', slug: 'paycom', code: '999992' },
       { name: 'Access Bank (Diamond)', code: '063' }, { name: 'Access Bank', code: '044' }, { name: 'Guaranty Trust Bank', code: '058' },
       { name: 'First Bank of Nigeria', code: '011' }, { name: 'United Bank For Africa', code: '033' }] }));
+    if (u.pathname === '/bank/resolve') {
+      const known = { '2012345678:50211': 'ADA OKAFOR', '8031234567:999992': 'ADA OKAFOR' };
+      const name = known[u.searchParams.get('account_number') + ':' + u.searchParams.get('bank_code')];
+      return name ? new Response(JSON.stringify({ status: true, data: { account_name: name } })) : new Response(JSON.stringify({ status: false, message: 'Could not resolve account name' }), { status: 422 });
+    }
     if (u.pathname === '/subaccount') return new Response(JSON.stringify({ status: true, data: { subaccount_code: 'ACCT_shop1' } }));
     if (u.pathname === '/transaction/initialize') return new Response(JSON.stringify({ status: true, data: { authorization_url: 'https://checkout.paystack.com/abc' } }));
     if (u.pathname.startsWith('/transaction/verify/')) return new Response(JSON.stringify({ status: true, data: { status: 'success', amount: paidKobo, currency: 'NGN' } }));
@@ -152,11 +157,23 @@ const banks = { paystack: (path) => fakeFetch('https://api.paystack.co' + path).
 const codes = await Promise.all(['Access Bank', 'GTBank', 'UBA', 'First Bank', 'Other bank'].map((b) => bankCode(banks, b)));
 check('banks named in the shop form match Paystack (the shortest name wins), and Other bank has none', codes.join() === '044,058,033,011,', codes);
 
+r = await post({ action: 'bank', account_number: '2012345678' }, 'shop');
+check('an account number finds its bank and name', r.available && r.matches.length === 1 && r.matches[0].bank === 'Kuda' && r.matches[0].account_name === 'ADA OKAFOR', r);
+r = await post({ action: 'bank', account_number: '2012345678', bank: 'GTBank' }, 'shop');
+check('the bank the shop picked is checked alone', r.available && r.matches.length === 0, r);
+r = await post({ action: 'bank', account_number: '2012345678' }, null);
+check('only signed-in people can check accounts', /Sign in/.test(r.error || ''), r);
+check('the bank code check works (044 + 012345678 gives 4, so 0123456784 fits Access Bank)', nubanOk('044', '0123456784') && !nubanOk('044', '0123456781'), null);
+check('phone-number banks are always tried, other banks only when the number fits', likelyBanks('0123456784').includes('Access Bank') && !likelyBanks('0123456781').includes('Access Bank') && likelyBanks('0123456784').slice(0, 4).join() === 'OPay,PalmPay,Moniepoint,Kuda', likelyBanks('0123456784'));
+
 r = await post({ action: 'status' }, 'shop');
 check('only Admin sees the keys status', r.error === 'Not allowed.', r);
 r = await post({ action: 'status' }, 'admin');
 check('Admin sees test mode and the wallet', r.paystack?.mode === 'test' && r.courier?.mode === 'test' && r.courier.balance === 25001, r);
 
+ENV.PAYSTACK_SECRET_KEY = '';
+r = await post({ action: 'bank', account_number: '2012345678' }, 'shop');
+check('without a Paystack key the check is simply off', r.available === false, r);
 ENV.SHIPBUBBLE_API_KEY = '';
 r = await post({ action: 'quote', order: ord.id }, 'shop');
 check('a database check message comes through as it is', /locked once paid/.test(r.error || ''), r);

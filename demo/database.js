@@ -1707,6 +1707,16 @@ const RPC = {
     }
     return { shipment: shipView(sh) };
   },
+  // Which bank an account number is at, and the name on it (Paystack, in the real app). In the demo: numbers that look like
+  // phone numbers are at OPay and PalmPay, other numbers at GTBank.
+  demo_find_account: ({ p_number, p_bank }) => {
+    const num = String(p_number || '').replace(/\D/g, '');
+    if (!/^\d{10}$/.test(num)) fail('Enter the 10-digit account number.');
+    const name = uid() === VENDOR.id ? 'BIMPE ADEYEMI' : 'ADA OKAFOR';
+    const at = /^[789]/.test(num) ? ['OPay', 'PalmPay'] : ['GTBank'];
+    const matches = at.filter((b) => !p_bank || b === p_bank).map((b) => ({ bank: b, account_name: name }));
+    return { available: true, matches };
+  },
   customer_pay_online: ({ p_token }) => {
     const o = customerOrder(p_token);
     if (!['awaiting', 'part'].includes(o.status)) fail('This order is already paid or closed.');
@@ -2524,6 +2534,7 @@ const MONEY = {
   track: (b) => ['set_courier_progress', { p_order: b.order, p_token: b.token }],
   pay: (b) => ['customer_pay_online', { p_token: b.token }],
   check: (b) => ['customer_paid_online', { p_ref: b.reference }],
+  bank: (b) => ['demo_find_account', { p_number: b.account_number, p_bank: b.bank }],
 };
 const functions = {
   invoke: async (fn, { body } = {}) => {

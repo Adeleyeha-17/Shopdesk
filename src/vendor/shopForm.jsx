@@ -1,7 +1,9 @@
 // The shop details form (name, link, bank account, WhatsApp, what you sell, where you are),
-// used when a vendor sets up their shop and again on the Shop tab.
-import React from 'react';
+// used when a vendor sets up their shop and again on the Shop tab. Typing the account number finds its bank and the name on
+// it (see useAccountCheck).
+import React, { useEffect, useRef, useState } from 'react';
 import { slugify } from '../lib/helpers.js';
+import { money } from '../lib/moneyApi.js';
 
 // Where customers pay. Named banks can take online payments (Paystack pays the shop's account); "Other bank" can't.
 // The money server function matches these names to Paystack's bank list (supabase/functions/money), so keep the two in step.
@@ -53,8 +55,90 @@ const slugTyping = (s) =>
     .slice(0, 30);
 const cleanSlug = (s) => String(s || '').replace(/-+$/, '');
 
+// Once the account number has 10 digits, ShopDesk finds which bank it is at and the name on it (through Paystack) and fills
+// them in. If the shop picks its bank itself, only that bank is checked. The number a shop already saved isn't checked again
+// until it changes. Quiet when the check isn't available (no Paystack key yet, or offline).
+function useAccountCheck(v, set) {
+  const [c, setC] = useState({ state: 'idle' });
+  const picked = useRef(false);
+  const num = String(v.account_number || '').replace(/\D/g, '');
+  const saved = useRef(num);
+  const bank = picked.current ? v.bank : '';
+  useEffect(() => {
+    if (num.length !== 10 || bank === 'Other bank' || (num === saved.current && !picked.current)) {
+      setC({ state: 'idle' });
+      return undefined;
+    }
+    let on = true;
+    setC({ state: 'checking' });
+    const t = setTimeout(() => {
+      money('bank', { account_number: num, bank: bank || undefined })
+        .then((r) => {
+          if (!on) return;
+          const m = (r.available && r.matches) || [];
+          if (!r.available) setC({ state: 'idle' });
+          else if (m.length === 1) {
+            set((x) => ({ ...x, bank: m[0].bank, account_name: m[0].account_name }));
+            setC({ state: 'ok', match: m[0] });
+          } else if (m.length > 1) setC({ state: 'many', matches: m });
+          else setC({ state: 'none', bank });
+        })
+        .catch(() => on && setC({ state: 'idle' }));
+    }, 400);
+    return () => {
+      on = false;
+      clearTimeout(t);
+    };
+  }, [num, bank]);
+  const choose = (m) => {
+    set((x) => ({ ...x, bank: m.bank, account_name: m.account_name }));
+    setC({ state: 'ok', match: m });
+  };
+  const pickBank = (b) => {
+    picked.current = true;
+    set((x) => ({ ...x, bank: b }));
+  };
+  return [c, choose, pickBank];
+}
+
+function AccountCheck({ c, choose }) {
+  if (c.state === 'checking') return <span className="field-hint">Checking the account…</span>;
+  if (c.state === 'ok')
+    return (
+      <span className="acct-ok">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 12.5l4.5 4.5L19 7.5" />
+        </svg>
+        {c.match.bank} · {c.match.account_name}
+      </span>
+    );
+  if (c.state === 'many')
+    return (
+      <>
+        <span className="field-hint">This number is at more than one bank. Which is yours?</span>
+        <div className="filters">
+          {c.matches.map((m) => (
+            <button key={m.bank} type="button" className="filter" onClick={() => choose(m)}>
+              {m.bank} · {m.account_name}
+            </button>
+          ))}
+        </div>
+      </>
+    );
+  if (c.state === 'none')
+    return (
+      <span className="field-hint">
+        {c.bank
+          ? `Not found at ${c.bank}. Check the number.`
+          : 'We couldn’t find this account. Check the number, or pick your bank.'}
+      </span>
+    );
+  return null;
+}
+
 export function ShopFields({ v, set }) {
   const f = (k) => (e) => set({ ...v, [k]: e.target.value });
+  const [check, choose, pickBank] = useAccountCheck(v, set);
   return (
     <>
       <div className="field">
@@ -79,8 +163,13 @@ export function ShopFields({ v, set }) {
         </span>
       </div>
       <div className="field">
-        <label htmlFor="sBank">Where customers pay</label>
-        <select id="sBank" value={v.bank} onChange={f('bank')}>
+        <label htmlFor="sNum">Account number</label>
+        <input id="sNum" inputMode="numeric" value={v.account_number} onChange={f('account_number')} maxLength={13} />
+        <AccountCheck c={check} choose={choose} />
+      </div>
+      <div className="field">
+        <label htmlFor="sBank">Bank</label>
+        <select id="sBank" value={v.bank} onChange={(e) => pickBank(e.target.value)}>
           <optgroup label="Most used">
             {POPULAR_BANKS.map((b) => (
               <option key={b}>{b}</option>
@@ -93,10 +182,6 @@ export function ShopFields({ v, set }) {
           </optgroup>
           <option>Other bank</option>
         </select>
-      </div>
-      <div className="field">
-        <label htmlFor="sNum">Account number</label>
-        <input id="sNum" inputMode="numeric" value={v.account_number} onChange={f('account_number')} />
       </div>
       <div className="field">
         <label htmlFor="sAcct">Account name</label>
