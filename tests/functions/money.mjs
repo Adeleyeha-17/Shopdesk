@@ -102,15 +102,15 @@ check('only the customer can pay', /Sign in with the account/.test(r.error || ''
 r = await post({ action: 'pay', token: tok }, 'cust');
 const init = calls.filter((c) => c.url.endsWith('/transaction/initialize')).pop()?.body;
 check('paying returns the Paystack page', r.url === 'https://checkout.paystack.com/abc' && /^SD/.test(r.reference), r);
-// 17,250 due: the customer pays Paystack's fee on top (₦365), ShopDesk's share is delivery plus that fee, and Paystack takes
-// its fee from ShopDesk's share, so the shop gets its 15,000 in full
-check('goods to the shop subaccount, delivery and the card fee to ShopDesk', init.subaccount === 'ACCT_shop1' && init.amount === 1761500 && init.transaction_charge === 261500 && init.bearer === 'account', init);
+// 17,250 due: the customer pays ShopDesk's ₦50 and Paystack's fee (₦365) on top; ShopDesk's share is delivery plus both,
+// and Paystack takes its fee from ShopDesk's share, so the shop gets its 15,000 in full
+check('goods to the shop subaccount, delivery and the card fee to ShopDesk', init.subaccount === 'ACCT_shop1' && init.amount === 1766500 && init.transaction_charge === 266500 && init.bearer === 'account', init);
 const psFee = Math.min(Math.ceil(init.amount * 0.015) + 10000, 200000);
-check('after Paystack takes its fee, ShopDesk still has the delivery fee', init.transaction_charge - psFee >= 225000, psFee);
+check('after Paystack takes its fee, ShopDesk still has the delivery fee and its own fee', init.transaction_charge - psFee >= 230000, psFee);
 const sub = calls.find((c) => c.url.endsWith('/subaccount'));
 check('the subaccount uses the shop bank details', sub.body.settlement_bank === '999992' && sub.body.account_number === '0123456780', sub.body);
 
-paidKobo = 1761500;
+paidKobo = 1766500;
 const ev = JSON.stringify({ event: 'charge.success', data: { reference: r.reference, amount: paidKobo } });
 let h = await post(ev, null, 'paystack', { 'x-paystack-signature': 'nope' });
 check('a webhook with a bad signature is refused', h.status === 401, h);

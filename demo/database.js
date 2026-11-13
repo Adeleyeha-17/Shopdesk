@@ -953,7 +953,9 @@ const SHIP_STEPS = [
   ['in_transit', 'On the way'],
   ['completed', 'Delivered'],
 ];
-// Paystack's fee, added on top for the customer who pays online (online_fee in the real database)
+// ShopDesk's fee on each online payment, and Paystack's fee, both added on top for the customer who pays online
+// (online_service_fee and online_fee in the real database)
+const SERVICE = 50;
 const onlineFee = (b) =>
   b <= 0 ? 0 : Math.ceil(b / 0.985) < 2500 ? Math.ceil(b / 0.985) - b : Math.min(Math.ceil((b + 100) / 0.985) - b, 2000);
 const shipmentOf = (o) => (S.shipments || []).find((x) => x.order_id === o.id) || null;
@@ -981,8 +983,8 @@ function demoPaystack(ref, done) {
     <button class="btn dp-pay"></button><button class="btn ghost dp-cancel">Cancel</button>
     <p class="note dp-note">In the real app this is Paystack's own page. Nothing is charged in the demo.</p></div>`;
   wrap.querySelector('.dp-shop').textContent = s.name;
-  wrap.querySelector('.dp-amt').textContent = naira(p.amount + p.fee);
-  wrap.querySelector('.dp-pay').textContent = 'Pay ' + naira(p.amount + p.fee);
+  wrap.querySelector('.dp-amt').textContent = naira(p.amount + p.fee + p.service);
+  wrap.querySelector('.dp-pay').textContent = 'Pay ' + naira(p.amount + p.fee + p.service);
   const close = () => {
     wrap.remove();
     if (done) done();
@@ -1600,7 +1602,8 @@ const RPC = {
         ['OPay', 'Moniepoint', 'Kuda', 'PalmPay'].includes(s.bank) &&
         ['awaiting', 'part'].includes(o.status) &&
         !(o.mode === 'delivery' && o.delivery_paid_by === 'customer' && o.delivery_fee == null),
-      fee: onlineFee(toPay(o) - o.amount_paid),
+      fee: onlineFee(toPay(o) - o.amount_paid + SERVICE),
+      service: SERVICE,
       delivery_by: o.delivery_by || 'shop',
       courier: o.delivery_quote ? o.delivery_quote.name : null,
       shipment: sh ? shipView(sh) : null,
@@ -1708,7 +1711,8 @@ const RPC = {
       reference: ref,
       order_id: o.id,
       amount: due,
-      fee: onlineFee(due),
+      fee: onlineFee(due + SERVICE),
+      service: SERVICE,
       delivery_part: o.delivery_by === 'shopdesk' && o.amount_paid === 0 ? o.delivery_fee || 0 : 0,
       paid: false,
     });

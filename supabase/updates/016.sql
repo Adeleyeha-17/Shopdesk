@@ -1,8 +1,8 @@
 -- 016: Pay online (Paystack) and ShopDesk Delivery (Shipbubble). Both are off until you switch them on in Admin > Payments & delivery.
 --   * Pay online: the customer pays once through Paystack. The goods money goes to the shop's bank (a Paystack subaccount made
 --     from the bank details the shop already gave); the ShopDesk Delivery fee comes to ShopDesk. ShopDesk never holds the shop's money.
---     Paystack's fee is added on top for the customer who chooses to pay online, so the shop gets the full amount. Paying the
---     shop by transfer stays free.
+--     Paystack's fee and a small ShopDesk fee are added on top for the customer who chooses to pay online, so the shop gets the
+--     full amount. Paying the shop by transfer stays free.
 --   * ShopDesk Delivery: the shop gets courier prices on a new order, picks one, and books the pickup once it's paid and packed.
 --     ShopDesk pays the courier from its own courier wallet; the customer and the shop follow the delivery on the order.
 --     If the delivery fee didn't come to ShopDesk online (the customer paid the shop by transfer), it goes on the shop's delivery bill.
@@ -18,6 +18,8 @@ alter table public.settings add column if not exists paystack_fee_by text not nu
 alter table public.settings drop constraint if exists settings_paystack_fee_by_check;
 alter table public.settings add constraint settings_paystack_fee_by_check check (paystack_fee_by in ('customer', 'shop', 'shopdesk'));
 alter table public.settings alter column paystack_fee_by set default 'customer';
+-- ShopDesk's own fee on each online payment (naira), paid by the customer on top, like the card fee
+alter table public.settings add column if not exists online_service_fee integer not null default 50 check (online_service_fee between 0 and 1000);
 
 alter table public.shops add column if not exists pickup_address text not null default '' check (char_length(pickup_address) <= 200);
 alter table public.shops add column if not exists pickup_code bigint;
@@ -50,6 +52,7 @@ create table if not exists public.online_payments (
   amount integer not null check (amount > 0),
   delivery_part integer not null default 0 check (delivery_part >= 0),
   fee integer not null default 0 check (fee >= 0), -- Paystack's fee, paid by the customer on top of amount
+  service integer not null default 0 check (service >= 0), -- ShopDesk's fee, paid by the customer on top of amount
   status text not null default 'started' check (status in ('started', 'paid')),
   created_at timestamptz not null default now(),
   paid_at timestamptz
@@ -159,7 +162,7 @@ end $$;
 -- The customer starts paying online: records the attempt and returns what Paystack needs.
 create or replace function public.money_start_payment(p_token uuid, p_ref text) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare v public.orders; s public.shops; st public.settings; v_due int; v_delivery int; v_fee int;
+declare v public.orders; s public.shops; st public.settings; v_due int; v_delivery int; v_fee int; v_service int;
 begin
   select * into st from public.settings where id = 1;
   if not st.online_pay_on then raise exception 'Paying online isn''t on yet. Pay by transfer for now.'; end if;
@@ -173,9 +176,11 @@ begin
   v_due := v.items_total + case when v.delivery_paid_by = 'customer' then coalesce(v.delivery_fee, 0) else 0 end - v.amount_paid;
   if v_due <= 0 then raise exception 'Nothing is left to pay.'; end if;
   v_delivery := case when v.delivery_by = 'shopdesk' and v.delivery_paid_by = 'customer' and v.amount_paid = 0 then coalesce(v.delivery_fee, 0) else 0 end;
-  v_fee := case when st.paystack_fee_by = 'customer' then public.online_fee(v_due) else 0 end;
-  insert into public.online_payments (reference, order_id, shop_id, amount, delivery_part, fee) values (p_ref, v.id, v.shop_id, v_due, v_delivery, v_fee);
-  return jsonb_build_object('amount', v_due, 'delivery_part', v_delivery, 'fee', v_fee, 'fee_by', st.paystack_fee_by, 'order_id', v.id,
+  v_service := st.online_service_fee;
+  v_fee := case when st.paystack_fee_by = 'customer' then public.online_fee(v_due + v_service) else 0 end;
+  insert into public.online_payments (reference, order_id, shop_id, amount, delivery_part, fee, service)
+  values (p_ref, v.id, v.shop_id, v_due, v_delivery, v_fee, v_service);
+  return jsonb_build_object('amount', v_due, 'delivery_part', v_delivery, 'fee', v_fee, 'service', v_service, 'fee_by', st.paystack_fee_by, 'order_id', v.id,
     'email', coalesce((select email from auth.users where id = v.customer_id), 'order' || v.id || '@shopdesk.com.ng'),
     'shop', jsonb_build_object('id', s.id, 'name', s.name, 'slug', s.slug, 'bank', s.bank, 'account_number', s.account_number,
       'subaccount', s.paystack_subaccount, 'subaccount_for', s.paystack_for));
@@ -189,7 +194,7 @@ begin
   select * into p from public.online_payments where reference = p_ref for update;
   if not found then raise exception 'Unknown payment.'; end if;
   if p.status = 'paid' then return jsonb_build_object('order_id', p.order_id, 'already', true); end if;
-  if coalesce(p_kobo, 0) < (p.amount + p.fee)::bigint * 100 then raise exception 'The amount paid doesn''t match.'; end if;
+  if coalesce(p_kobo, 0) < (p.amount + p.fee + p.service)::bigint * 100 then raise exception 'The amount paid doesn''t match.'; end if;
   select * into v from public.orders where id = p.order_id for update;
   v_due := v.items_total + case when v.delivery_paid_by = 'customer' then coalesce(v.delivery_fee, 0) else 0 end - v.amount_paid;
   v_amt := least(p.amount, greatest(v_due, 0));
@@ -288,8 +293,9 @@ language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'online', st.online_pay_on and s.status = 'active' and s.bank in ('OPay', 'Moniepoint', 'Kuda', 'PalmPay') and s.account_number <> ''
       and o.status in ('awaiting', 'part') and not (o.mode = 'delivery' and o.delivery_paid_by = 'customer' and o.delivery_fee is null),
-    'fee', case when st.paystack_fee_by = 'customer' then public.online_fee(
+    'fee', case when st.paystack_fee_by = 'customer' then public.online_fee(st.online_service_fee +
       o.items_total + case when o.delivery_paid_by = 'customer' then coalesce(o.delivery_fee, 0) else 0 end - o.amount_paid) else 0 end,
+    'service', st.online_service_fee,
     'delivery_by', o.delivery_by,
     'courier', o.delivery_quote->>'name',
     'shipment', (select jsonb_build_object('courier', sh.courier, 'status', sh.status, 'tracking_url', sh.tracking_url, 'tracking_code', sh.tracking_code,
@@ -304,8 +310,8 @@ begin
   if not public.is_admin() then raise exception 'Not allowed.'; end if;
   return jsonb_build_object(
     'settings', (select jsonb_build_object('online_pay_on', online_pay_on, 'delivery_on', delivery_on, 'delivery_margin', delivery_margin,
-      'paystack_fee_by', paystack_fee_by) from public.settings where id = 1),
-    'online', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(amount), 0), 'delivery', coalesce(sum(delivery_part), 0), 'fees', coalesce(sum(fee), 0))
+      'paystack_fee_by', paystack_fee_by, 'online_service_fee', online_service_fee) from public.settings where id = 1),
+    'online', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(amount), 0), 'delivery', coalesce(sum(delivery_part), 0), 'fees', coalesce(sum(fee), 0), 'service', coalesce(sum(service), 0))
       from public.online_payments where status = 'paid'),
     'shipments', coalesce((select jsonb_agg(x order by x.created_at desc) from (
       select sh.order_id, sh.created_at, sh.courier, sh.status, sh.cost, sh.price, sh.paid_online, sh.billed_at, sh.tracking_url,
@@ -341,6 +347,7 @@ begin
     invited_months = coalesce((p->>'invited_months')::int, invited_months),
     online_pay_on = coalesce((p->>'online_pay_on')::boolean, online_pay_on), delivery_on = coalesce((p->>'delivery_on')::boolean, delivery_on),
     delivery_margin = coalesce((p->>'delivery_margin')::int, delivery_margin), paystack_fee_by = coalesce(p->>'paystack_fee_by', paystack_fee_by),
+    online_service_fee = coalesce((p->>'online_service_fee')::int, online_service_fee),
     updated_at = now()
   where id = 1;
   insert into public.audit_log (actor, action, detail) values (auth.uid(), 'settings', left(p::text, 300));

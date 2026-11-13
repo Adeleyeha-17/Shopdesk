@@ -30,6 +30,7 @@ export function MoneyPage({ say, go }) {
   const [d, setD] = useState(null);
   const [keys, setKeys] = useState(null);
   const [margin, setMargin] = useState('');
+  const [service, setService] = useState('');
   const [err, setErr] = useState('');
   const load = useCallback(
     () =>
@@ -39,6 +40,7 @@ export function MoneyPage({ say, go }) {
           setErr('');
           setD(data);
           setMargin((m) => (m === '' ? String(data.settings.delivery_margin) : m));
+          setService((m) => (m === '' ? String(data.settings.online_service_fee) : m));
         }
       }),
     [],
@@ -164,6 +166,16 @@ export function MoneyPage({ say, go }) {
               />
             </div>
             <div className="field">
+              <label htmlFor="service">ShopDesk fee on each online payment (₦)</label>
+              <input
+                id="service"
+                inputMode="numeric"
+                value={service}
+                onChange={(e) => setService(e.target.value)}
+                placeholder="e.g. 50"
+              />
+            </div>
+            <div className="field">
               <label htmlFor="feeBy">Paystack&apos;s fee is paid by</label>
               <select
                 id="feeBy"
@@ -177,22 +189,27 @@ export function MoneyPage({ say, go }) {
             </div>
           </div>
           <p className="note">
-            The customer pays the courier&apos;s price plus this, rounded up to the next ₦50. The difference is
-            ShopDesk&apos;s.
+            The customer pays the courier&apos;s price plus the first amount, rounded up to the next ₦50. A customer who
+            pays online also pays ShopDesk&apos;s fee, on top of what they owe the shop. Both are ShopDesk&apos;s.
           </p>
           <div className="btns">
             <button
               className="btn small"
               onClick={() => {
                 const n = toInt(margin);
+                const f = toInt(service);
                 if (n == null || n < 0 || n > 20000) {
-                  setErr('Enter an amount from 0 to 20,000.');
+                  setErr('Enter an amount from 0 to 20,000 added to courier prices.');
                   return;
                 }
-                save({ delivery_margin: n }, 'Margin saved.');
+                if (f == null || f < 0 || f > 1000) {
+                  setErr('Enter a ShopDesk fee from 0 to 1,000.');
+                  return;
+                }
+                save({ delivery_margin: n, online_service_fee: f }, 'Saved.');
               }}
             >
-              Save margin
+              Save
             </button>
           </div>
         </section>
@@ -206,8 +223,11 @@ export function MoneyPage({ say, go }) {
           </span>
         </div>
         <div className="tile">
-          <span className="label">Delivery money in online</span>
-          <span className="big num">{naira(d.online.delivery)}</span>
+          <span className="label">Came to ShopDesk online</span>
+          <span className="big num">{naira(d.online.delivery + d.online.service)}</span>
+          <span className="sub">
+            {naira(d.online.delivery)} delivery · {naira(d.online.service)} ShopDesk fees
+          </span>
         </div>
         <div className="tile">
           <span className="label">Kept after couriers</span>

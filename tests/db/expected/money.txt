@@ -16,13 +16,13 @@ psql:money.sql:38: ERROR:  Get the courier prices again.
 CONTEXT:  PL/pgSQL function money_pick_quote(bigint,text,text) line N at RAISE
 Dellyman
 2200|shopdesk|t
-M5 the order page: it can be paid online, with ShopDesk Delivery, and the customer sees the card fee on top (expect 440):
-true|shopdesk|Dellyman|none|440
-M6 only the customer can start paying; they pay goods and delivery plus the card fee, and the delivery part goes to ShopDesk (expect an error, then 22200, 2200 and 440):
+M5 the order page: it can be paid online, with ShopDesk Delivery, and the customer sees the card fee and the ShopDesk fee on top (expect 441 and 50):
+true|shopdesk|Dellyman|none|441|50
+M6 only the customer can start paying; they pay goods and delivery plus both fees, and the delivery part goes to ShopDesk (expect an error, then 22200, 2200, 441 and 50):
 psql:money.sql:45: ERROR:  Sign in with the account that placed this order.
 CONTEXT:  PL/pgSQL function money_start_payment(uuid,text) line N at RAISE
-22200|2200|440|payer@example.com|OPay
-M7 too little is refused, and so is the amount without the card fee; the right amount marks the order paid with what was due, once (expect two errors, then 22200, then already):
+22200|2200|441|50|payer@example.com|OPay
+M7 too little is refused, and so is the amount without the fees; the right amount marks the order paid with what was due, once (expect two errors, then 22200, then already):
 psql:money.sql:49: ERROR:  The amount paid doesn't match.
 CONTEXT:  PL/pgSQL function money_paid(text,bigint) line N at RAISE
 psql:money.sql:50: ERROR:  The amount paid doesn't match.

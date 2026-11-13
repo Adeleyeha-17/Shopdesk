@@ -38,6 +38,14 @@ const CANCELLED = {
   customer_asked: 'Cancelled because you asked.',
 };
 
+// What paying online adds on top: Paystack's card fee and ShopDesk's fee (paying the shop by transfer adds nothing).
+function onlineFees(pay) {
+  const parts = [];
+  if (pay.fee > 0) parts.push(`${naira(pay.fee)} card fee`);
+  if (pay.service > 0) parts.push(`${naira(pay.service)} ShopDesk fee`);
+  return parts.length ? `Includes ${parts.join(' and ')}. ` : '';
+}
+
 // The big line at the top of the order page: where the order is right now.
 function headlineFor(o, pickup, feeWait) {
   if (o.status === 'cancelled') return 'Cancelled';
@@ -378,14 +386,14 @@ export function OrderPage({ token }) {
             {pay && pay.online && canAct && (
               <div className="pay-online">
                 <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
-                  {paying ? 'Opening Paystack…' : `Pay ${naira(left + (pay.fee || 0))} online`}
+                  {paying ? 'Opening Paystack…' : `Pay ${naira(left + (pay.fee || 0) + (pay.service || 0))} online`}
                 </button>
                 <span className="sub">
-                  {pay.fee > 0 ? `Includes ${naira(pay.fee)} card fee. ` : ''}Card, bank transfer or USSD with Paystack.
+                  {onlineFees(pay)}Card, bank transfer or USSD with Paystack.
                   Your order is marked paid at once.
                 </span>
                 <div className="or">
-                  <span>{pay.fee > 0 ? 'or transfer to the shop, no fee' : 'or pay the shop by transfer'}</span>
+                  <span>{pay.fee > 0 || pay.service > 0 ? 'or transfer to the shop, no fee' : 'or pay the shop by transfer'}</span>
                 </div>
               </div>
             )}

@@ -280,13 +280,13 @@ await step('a second order: the shop gets courier prices and confirms with the c
   await see('confirmed with Dellyman');
 });
 
-await step('the customer pays online with the card fee on top (transfer stays free), and the order is paid at once', async () => {
+await step('the customer pays online with the card fee and ShopDesk fee on top (transfer stays free), and the order is paid at once', async () => {
   await as('Customer');
   await tab('Orders').click();
   await p.locator(`a:has-text("${code2}")`).click();
   await see('Delivered by Dellyman with ShopDesk Delivery');
   const box = await p.locator('.pay-online').innerText();
-  expect(/Includes ₦\d+ card fee/.test(box), 'the card fee is not shown');
+  expect(/Includes ₦\d+ card fee and ₦50 ShopDesk fee/.test(box), 'the card fee and ShopDesk fee are not shown');
   expect(box.includes('transfer to the shop, no fee'), 'transfer is not shown as free');
   await pause(500);
   await p.locator('button:has-text("online")').click();
