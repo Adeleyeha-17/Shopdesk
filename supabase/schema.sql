@@ -320,6 +320,8 @@ alter table public.shops drop constraint if exists shops_slug_reserved;
 alter table public.shops add constraint shops_slug_reserved check (slug not in ('admin', 'privacy', 'orders', 'order', 'login', 'signin', 'shopdesk', 'help', 'support', 'api', 'app', 'email-off', 'account', 'shops'));
 -- Plans: a shop is open until paid_until (plus the grace days in settings).
 alter table public.shops add column if not exists paid_until timestamptz;
+-- Free plan: a shop whose plan has run out can still take this many orders a month (0 = no free plan, every shop pays).
+alter table public.settings add column if not exists free_orders integer not null default 30 check (free_orders between 0 and 10000);
 update public.shops set paid_until = coalesce(reviewed_at, created_at) + make_interval(days => (select trial_days from public.settings where id = 1))
   where status = 'active' and paid_until is null;
 -- Products you hide stay hidden: vendors can't show them again.
@@ -449,11 +451,26 @@ language sql stable security definer set search_path = public as $$
   select jsonb_build_object('vendor', public.has_shop(auth.uid()), 'customer', public.has_shopped(auth.uid()));
 $$;
 
--- A shop takes orders when you've approved it and (once you charge a price and close unpaid shops) its plan hasn't run out past the grace days.
+-- A shop's orders this month (Lagos time, not counting cancelled ones), and when it passed the free orders (the first order
+-- over the limit), if it has.
+create or replace function public.shop_month(p_shop uuid) returns table (orders int, passed_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  with m as (
+    select o.created_at from public.orders o
+    where o.shop_id = p_shop and o.status <> 'cancelled'
+      and o.created_at >= (date_trunc('month', now() at time zone 'Africa/Lagos') at time zone 'Africa/Lagos'))
+  select (select count(*)::int from m),
+    (select created_at from m order by created_at offset (select free_orders from public.settings where id = 1) limit 1);
+$$;
+
+-- A shop takes orders when you've approved it and (once you charge a price and close unpaid shops) either its plan hasn't run
+-- out past the grace days, or it's on the free plan: up to the free orders this month, and for the grace days after it passes them.
 create or replace function public.shop_open(s public.shops) returns boolean
 language sql stable security definer set search_path = public as $$
-  select s.status = 'active' and coalesce((select not st.close_unpaid or st.monthly_price = 0 or s.paid_until is null or s.paid_until + make_interval(days => st.grace_days) > now()
-    from public.settings st where st.id = 1), true);
+  select s.status = 'active' and coalesce((select not st.close_unpaid or st.monthly_price = 0 or s.paid_until is null
+      or s.paid_until + make_interval(days => st.grace_days) > now()
+      or (st.free_orders > 0 and (m.orders <= st.free_orders or m.passed_at + make_interval(days => st.grace_days) > now()))
+    from public.settings st cross join public.shop_month(s.id) m where st.id = 1), true);
 $$;
 
 -- An order's code, as customers and the shop see it (BB-1043).
@@ -1919,10 +1936,15 @@ begin
       'text', count(*) || ' cancelled orders in the last 30 days')
     from public.orders o join public.shops s on s.id = o.shop_id where o.status = 'cancelled' and o.created_at > now() - interval '30 days' group by s.id having count(*) >= 5
     union all
-    select jsonb_build_object('kind', 'plan', 'level', 2, 'shop_id', s.id, 'shop', s.name, 'slug', s.slug, 'whatsapp', s.whatsapp, 'since', s.paid_until,
-      'text', case when public.shop_open(s) then 'Plan ran out. The shop closes on ' || to_char(s.paid_until + make_interval(days => st.grace_days), 'Dy DD Mon') || ' unless they pay'
+    select jsonb_build_object('kind', 'plan', 'level', 2, 'shop_id', s.id, 'shop', s.name, 'slug', s.slug, 'whatsapp', s.whatsapp,
+      'since', case when st.free_orders > 0 then m.passed_at else s.paid_until end,
+      'text', case when st.free_orders > 0 then
+          case when public.shop_open(s) then 'Passed the ' || st.free_orders || ' free orders this month. The shop closes on ' || to_char(m.passed_at + make_interval(days => st.grace_days), 'Dy DD Mon') || ' unless they pay'
+            else 'Passed the ' || st.free_orders || ' free orders this month and closed for not paying' end
+        when public.shop_open(s) then 'Plan ran out. The shop closes on ' || to_char(s.paid_until + make_interval(days => st.grace_days), 'Dy DD Mon') || ' unless they pay'
         else 'Closed for not paying since ' || to_char(s.paid_until + make_interval(days => st.grace_days), 'Dy DD Mon') end)
-    from public.shops s where st.close_unpaid and st.monthly_price > 0 and s.status = 'active' and s.paid_until < now()
+    from public.shops s cross join public.shop_month(s.id) m
+    where st.close_unpaid and st.monthly_price > 0 and s.status = 'active' and s.paid_until < now() and (st.free_orders = 0 or m.orders > st.free_orders)
     union all
     select jsonb_build_object('kind', 'waiting', 'level', 2, 'shop_id', s.id, 'shop', s.name, 'slug', s.slug, 'whatsapp', s.whatsapp, 'since', s.created_at,
       'text', 'Waiting for approval for ' || extract(day from now() - s.created_at)::int || ' days')
@@ -2125,6 +2147,7 @@ begin
   return jsonb_build_object(
     'settings', (select to_jsonb(st) - 'id' from public.settings st where id = 1),
     'shops', (select coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'slug', s.slug, 'status', s.status, 'whatsapp', s.whatsapp, 'paid_until', s.paid_until, 'open', public.shop_open(s),
+        'month_orders', (select orders from public.shop_month(s.id)), 'passed_at', (select passed_at from public.shop_month(s.id)),
         'last_paid', (select max(created_at) from public.plan_payments pp where pp.shop_id = s.id), 'paid_total', (select coalesce(sum(amount), 0) from public.plan_payments pp where pp.shop_id = s.id))
         order by s.paid_until nulls last), '[]'::jsonb) from public.shops s where s.status in ('active', 'suspended')),
     'payments', (select coalesce(jsonb_agg(jsonb_build_object('shop', s.name, 'amount', pp.amount, 'months', pp.months, 'note', pp.note, 'paid_until', pp.paid_until, 'created_at', pp.created_at)
@@ -2147,6 +2170,7 @@ begin
     online_pay_on = coalesce((p->>'online_pay_on')::boolean, online_pay_on), delivery_on = coalesce((p->>'delivery_on')::boolean, delivery_on),
     delivery_margin = coalesce((p->>'delivery_margin')::int, delivery_margin), paystack_fee_by = coalesce(p->>'paystack_fee_by', paystack_fee_by),
     online_service_fee = coalesce((p->>'online_service_fee')::int, online_service_fee),
+    free_orders = coalesce((p->>'free_orders')::int, free_orders),
     updated_at = now()
   where id = 1;
   if (select delivery_on and not online_pay_on from public.settings where id = 1) then
@@ -2260,6 +2284,7 @@ end $$;
 create or replace function public.my_plan() returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object('paid_until', s.paid_until, 'open', public.shop_open(s), 'monthly_price', st.monthly_price, 'grace_days', st.grace_days, 'close_unpaid', st.close_unpaid,
+    'free_orders', st.free_orders, 'month_orders', (select orders from public.shop_month(s.id)), 'passed_at', (select passed_at from public.shop_month(s.id)),
     'pay_bank', st.pay_bank, 'pay_account_number', st.pay_account_number, 'pay_account_name', st.pay_account_name, 'admin_whatsapp', st.admin_whatsapp)
   from public.shops s cross join public.settings st where s.owner_id = auth.uid() and st.id = 1;
 $$;
@@ -2526,6 +2551,7 @@ grant execute on function public.email_by_token(uuid, boolean) to anon, authenti
 revoke execute on function public.owned_order(bigint) from authenticated;
 revoke execute on function public.shops_watch_changes() from authenticated;
 revoke execute on function public.shop_open(public.shops) from authenticated;
+revoke all on function public.shop_month(uuid) from public, anon, authenticated;
 revoke execute on function public.has_shop(uuid), public.has_shopped(uuid), public.shops_one_role(), public.customers_one_role(), public.customer_order(uuid) from authenticated;
 revoke execute on function public.order_prefix_for(text), public.order_code(text, bigint), public.problem_status(public.problems), public.can_report(public.orders),
   public.shops_set_prefix() from authenticated;

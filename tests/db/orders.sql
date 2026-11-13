@@ -172,9 +172,9 @@ select * from settings;
 reset role; update shops set paid_until = now() - interval '10 days' where slug = 'rose';
 set role anon; reset request.jwt.claim.sub; select case when get_storefront('rose') is null then 'closed' else 'open' end;
 set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-\echo N9 plan runs out past the grace days: order page closes and it shows in Needs attention (expect closed, plan):
+\echo N9 with no free plan, a plan run out past the grace days: order page closes and it shows in Needs attention (expect closed, plan):
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-select admin_save_settings('{"monthly_price": 3000, "pay_bank": "Moniepoint", "pay_account_number": "70 1234 5678", "pay_account_name": "SHOPDESK EDEN", "admin_whatsapp": "08090000000"}');
+select admin_save_settings('{"monthly_price": 3000, "free_orders": 0, "pay_bank": "Moniepoint", "pay_account_number": "70 1234 5678", "pay_account_name": "SHOPDESK EDEN", "admin_whatsapp": "08090000000"}');
 reset role; update shops set paid_until = now() - interval '10 days' where slug = 'rose';
 set role anon; reset request.jwt.claim.sub; select coalesce(get_storefront('rose')::text, 'closed');
 set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';

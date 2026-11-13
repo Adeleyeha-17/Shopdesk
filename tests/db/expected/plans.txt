@@ -1,0 +1,30 @@
+
+P1 the plan ran out long ago, but the shop is on the free plan: it is open, with 0 of 3 orders this month (expect open, 3, 0, t):
+open
+3|0|true
+P2 three orders keep it open and out of Needs attention (expect 3, open, 0):
+3
+open
+0
+P3 the fourth order goes through, then with no grace days the page closes and Admin sees it (expect t, 4, closed, the attention text):
+t
+4
+closed
+Passed the 3 free orders this month and closed for not paying
+P4 a fifth order is refused (expect an error):
+psql:plans.sql:41: ERROR:  This shop isn't taking orders right now.
+CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+P5 with grace days, the shop stays open after passing the free orders and the Plans page shows its month (expect open, 4, t):
+
+open
+4|t
+P6 a cancelled order does not count: back to 3, under the limit (expect 3, open):
+
+
+3
+open
+P7 with the free plan off (0), the run-out plan closes the shop as before; paying reopens it (expect closed, open):
+
+closed
+open
+

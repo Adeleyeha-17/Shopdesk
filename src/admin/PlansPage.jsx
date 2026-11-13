@@ -1,4 +1,4 @@
-// Plans & payments: your price, trial and grace days, where vendors pay you, and every shop's plan.
+// Plans & payments: your price, trial, free orders a month and grace days, where vendors pay you, and every shop's plan.
 import React, { useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira, toInt } from '../lib/money.js';
@@ -16,15 +16,17 @@ export function PlansPage({ d, setModal, say, load }) {
   async function save() {
     const price = toInt(v.monthly_price),
       trial = toInt(v.trial_days),
+      free = toInt(v.free_orders),
       grace = toInt(v.grace_days);
-    if (price == null || trial == null || grace == null) {
-      setErr('Enter numbers for the price, trial and grace days.');
+    if (price == null || trial == null || free == null || grace == null) {
+      setErr('Enter numbers for the price, trial, free orders and grace days.');
       return;
     }
     const { error } = await supabase.rpc('admin_save_settings', {
       p: {
         monthly_price: price,
         trial_days: trial,
+        free_orders: free,
         grace_days: grace,
         close_unpaid: !!v.close_unpaid,
         pay_bank: v.pay_bank,
@@ -43,12 +45,16 @@ export function PlansPage({ d, setModal, say, load }) {
   const months = b.months.map((m) => ({ x: m.month, v: m.income }));
   const thisM = months.length ? months[months.length - 1].v : 0;
   const lastM = months.length > 1 ? months[months.length - 2].v : 0;
-  const paying = b.shops.filter(
-    (s) => s.last_paid && s.paid_until && new Date(s.paid_until) > new Date(),
-  ).length;
+  const paying = b.shops.filter((s) => s.last_paid && s.paid_until && new Date(s.paid_until) > new Date()).length;
+  const payTo = b.settings.pay_account_number
+    ? `, paid to ${b.settings.pay_bank} ${b.settings.pay_account_number} (${b.settings.pay_account_name})`
+    : '';
   const remind = (s) =>
-    `Hi ${s.name}, this is ShopDesk. Your plan ${new Date(s.paid_until) < new Date() ? 'ended' : 'ends'} on ${dayOf(s.paid_until)}. ` +
-    `It's ${naira(b.settings.monthly_price)} a month${b.settings.pay_account_number ? `, paid to ${b.settings.pay_bank} ${b.settings.pay_account_number} (${b.settings.pay_account_name})` : ''}. Send the proof here and we'll extend it.`;
+    b.settings.free_orders > 0 && (s.month_orders || 0) > b.settings.free_orders
+      ? `Hi ${s.name}, this is ShopDesk. Busy month: you've passed your ${b.settings.free_orders} free orders! ` +
+        `It's ${naira(b.settings.monthly_price)} for the month${payTo}. Send the proof here and we'll record it.`
+      : `Hi ${s.name}, this is ShopDesk. Your plan ${new Date(s.paid_until) < new Date() ? 'ended' : 'ends'} on ${dayOf(s.paid_until)}. ` +
+        `It's ${naira(b.settings.monthly_price)} a month${payTo}. Send the proof here and we'll extend it.`;
   return (
     <>
       <div className="page-head">
@@ -90,6 +96,13 @@ export function PlansPage({ d, setModal, say, load }) {
               <input id="pTrial" inputMode="numeric" value={v.trial_days} onChange={f('trial_days')} />
             </div>
             <div className="field">
+              <label htmlFor="pFree">Free orders a month</label>
+              <input id="pFree" inputMode="numeric" value={v.free_orders} onChange={f('free_orders')} />
+              <span className="field-hint">
+                After the trial, a shop pays only in months it passes this many orders. 0 means every shop pays.
+              </span>
+            </div>
+            <div className="field">
               <label htmlFor="pGrace">Grace days after the plan ends</label>
               <input id="pGrace" inputMode="numeric" value={v.grace_days} onChange={f('grace_days')} />
             </div>
@@ -112,12 +125,7 @@ export function PlansPage({ d, setModal, say, load }) {
             </div>
             <div className="field">
               <label htmlFor="pNum">Account number</label>
-              <input
-                id="pNum"
-                inputMode="numeric"
-                value={v.pay_account_number}
-                onChange={f('pay_account_number')}
-              />
+              <input id="pNum" inputMode="numeric" value={v.pay_account_number} onChange={f('pay_account_number')} />
             </div>
             <div className="field">
               <label htmlFor="pName">Account name</label>
@@ -161,6 +169,12 @@ export function PlansPage({ d, setModal, say, load }) {
             <tbody>
               {b.shops.map((s) => {
                 const p = planState(s, b.settings);
+                // on the free plan and under the limit: nothing to remind them about
+                const onFree =
+                  b.settings.free_orders > 0 &&
+                  s.paid_until &&
+                  new Date(s.paid_until) < new Date() &&
+                  (s.month_orders || 0) <= b.settings.free_orders;
                 return (
                   <tr key={s.id}>
                     <td className="name">
@@ -174,7 +188,7 @@ export function PlansPage({ d, setModal, say, load }) {
                     <td className="r num">{naira(s.paid_total)}</td>
                     <td className="r">
                       <div className="btns end">
-                        {s.whatsapp && s.paid_until && (
+                        {s.whatsapp && s.paid_until && !onFree && (
                           <a
                             className="btn small ghost"
                             href={waLink(s.whatsapp, remind(s))}
@@ -186,9 +200,7 @@ export function PlansPage({ d, setModal, say, load }) {
                         )}
                         <button
                           className="btn small"
-                          onClick={() =>
-                            setModal({ kind: 'payment', shop: s, price: b.settings.monthly_price })
-                          }
+                          onClick={() => setModal({ kind: 'payment', shop: s, price: b.settings.monthly_price })}
                         >
                           Record payment
                         </button>

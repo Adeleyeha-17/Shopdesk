@@ -127,7 +127,7 @@ CONTEXT:  PL/pgSQL function admin_shop_detail(uuid) line N at RAISE
 psql:orders.sql:170: ERROR:  permission denied for table settings
 N8b with no price set, a run-out plan does not close the shop (expect open):
 open
-N9 plan runs out past the grace days: order page closes and it shows in Needs attention (expect closed, plan):
+N9 with no free plan, a plan run out past the grace days: order page closes and it shows in Needs attention (expect closed, plan):
 
 closed
 plan

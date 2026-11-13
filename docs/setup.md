@@ -76,7 +76,7 @@ Both are off until switched on in **Admin → Payments & delivery**, and the app
 
 Setup:
 
-1. Run `supabase/updates/016.sql` (or the full `schema.sql`).
+1. Run `supabase/updates/016.sql`, then `017.sql` (the free plan), or the full `schema.sql`.
 2. **Edge Functions → Deploy a new function**, named `money`, with the contents of `supabase/functions/money/index.ts`. Turn **Enforce JWT verification** off: the function checks who is asking itself, and the webhooks carry no sign-in.
 3. Set these secrets under **Edge Functions → Secrets**. Use test keys while testing and swap in live keys once the accounts are approved:
 
