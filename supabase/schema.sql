@@ -1880,7 +1880,7 @@ begin
   where id = p_shop;
   insert into public.audit_log (actor, action, shop_id, detail) values (auth.uid(), case when p_approve then 'approve' else 'reject' end, p_shop, coalesce(nullif(v_note, ''), case when p_approve then 'approved' else '' end));
   perform public.shopdesk_says(v.id, case when p_approve
-    then 'Good news: ' || v.name || ' is approved and open for orders. Your link: shopdesk.com.ng/' || v.slug || E'\nShare it on your WhatsApp status, in your chats and in your Instagram bio.'
+    then 'Good news: ' || v.name || ' is approved and open for orders. Your link: https://shopdesk.com.ng/' || v.slug || E'\nShare it on your WhatsApp status, in your chats and in your Instagram bio.'
     else 'We can''t open ' || v.name || ' yet: ' || v_note || E'\nFix it in the Shop tab, then reply here and we''ll check again.' end);
 end $$;
 

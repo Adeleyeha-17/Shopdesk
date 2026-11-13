@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { atText, clockOf, dayWord } from '../lib/dates.js';
-import { errText } from '../lib/helpers.js';
+import { errText, copyText } from '../lib/helpers.js';
 import { uploadOrderPhoto } from '../lib/photos.js';
 import { channelName, kick } from '../lib/alerts.js';
 import { PhotoStrip, ChatVideo } from './OrderPhotos.jsx';
@@ -20,6 +20,33 @@ const otherAccount = (t, mine) =>
   ).some((d) => d.length === 10 && d !== String(mine || ''));
 
 const REASONS = ['Rude or insulting', 'Threats', 'Scam', 'Spam'];
+
+// Links in a message open with a tap: full ones (https://...) and bare ones like shopdesk.com.ng/bimpe.
+const LINK = /(https?:\/\/[^\s<]+|\b(?:www\.)?[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com\.ng|com|ng|net|org|io|co|app|shop|store)\b(?:\/[^\s<]*)?)/gi;
+function withLinks(text) {
+  const out = [];
+  let at = 0;
+  String(text).replace(LINK, (m, _x, i) => {
+    const link = m.replace(/[.,!?;:)'"]+$/, ''); // a full stop after a link isn't part of it
+    out.push(text.slice(at, i));
+    out.push(
+      <a
+        key={i}
+        className="msg-link"
+        href={/^https?:/i.test(link) ? link : 'https://' + link}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {link.replace(/^https?:\/\//i, '')}
+      </a>,
+    );
+    at = i + link.length;
+    return m;
+  });
+  out.push(text.slice(at));
+  return out;
+}
 
 // Tap a message from the other side to report it.
 function ReportMessage({ id, onClose }) {
@@ -70,6 +97,7 @@ export function ChatView({
 }) {
   const [menu, setMenu] = useState(null);
   const [reporting, setReporting] = useState(null);
+  const [copied, setCopied] = useState(null);
   if (!messages.length) return <p className="sub chat-empty">No messages yet.</p>;
   // "Today", "Yesterday" or "Wed 12 Nov" above each day's messages; a reply straight after one from the same side sits closer
   const dayOfMsg = (m) => (m.pending ? 'today' : dayWord(m.created_at));
@@ -77,7 +105,9 @@ export function ChatView({
     <div className="chat-list" ref={listRef}>
       {messages.map((m, i) => {
         const mine = m.sender === me;
-        const tappable = canReport && !mine && !m.pending && me !== 'admin';
+        // tap a message: Copy, and Report for the other side's messages
+        const reportable = canReport && !mine && !m.pending && me !== 'admin';
+        const tappable = !m.pending && (reportable || !!m.body);
         const prev = messages[i - 1];
         const day = dayOfMsg(m);
         const newDay = !prev || dayOfMsg(prev) !== day;
@@ -101,7 +131,7 @@ export function ChatView({
               {me === 'admin' && <span className="msg-who">{names[m.sender] || m.sender}</span>}
               {m.photo && <PhotoStrip paths={[m.photo]} label="Photo" />}
               {(m.video || m.localVideo) && <ChatVideo path={m.video} local={m.localVideo} />}
-              {m.body && <p>{m.body}</p>}
+              {m.body && <p>{withLinks(m.body)}</p>}
               <span className="msg-time" title={m.pending ? '' : atText(m.created_at)}>
                 {m.pending ? 'Sending…' : clockOf(m.created_at)}
               </span>
@@ -113,9 +143,30 @@ export function ChatView({
               )}
             </div>
             {tappable && menu === m.id && reporting !== m.id && (
-              <button className="linkbtn msg-act" onClick={() => setReporting(m.id)}>
-                Report
-              </button>
+              <div className={'msg-acts' + (mine ? ' mine' : '')}>
+                {m.body && (
+                  <button
+                    className="msg-act"
+                    onClick={() =>
+                      copyText(
+                        m.body,
+                        (problem) => {
+                          setCopied(problem ? 'no' : m.id);
+                          setTimeout(() => (setCopied(null), setMenu(null)), 1400);
+                        },
+                        '',
+                      )
+                    }
+                  >
+                    {copied === m.id ? 'Copied ✓' : copied === 'no' ? "Couldn't copy" : 'Copy'}
+                  </button>
+                )}
+                {reportable && (
+                  <button className="msg-act" onClick={() => setReporting(m.id)}>
+                    Report
+                  </button>
+                )}
+              </div>
             )}
             {reporting === m.id && (
               <ReportMessage

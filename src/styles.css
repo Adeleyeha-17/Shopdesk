@@ -498,7 +498,15 @@ a.orow { text-decoration: none; color: inherit; }
 .toast-text span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 400; }
 .toast-btn { appearance: none; border: 0; background: var(--on-btn); color: var(--btn); font: 600 14px var(--body); padding: 8px 14px; border-radius: 999px; cursor: pointer; flex: none; }
 .toast-x { appearance: none; border: 0; background: none; color: var(--on-btn); font-size: 20px; line-height: 1; padding: 4px 6px; cursor: pointer; opacity: .7; flex: none; }
-.msg-act { align-self: flex-start; font-size: 12px; margin: -4px 0 0 4px; }
+.msg-acts { display: flex; gap: 6px; align-self: flex-start; margin: 4px 0 2px 4px; }
+.msg-acts.mine { align-self: flex-end; margin: 4px 4px 2px 0; }
+.msg-act { appearance: none; border: 1px solid var(--line); background: var(--bubble); color: var(--ink); font: 600 13px var(--body); padding: 6px 14px; border-radius: 999px; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, .06); }
+.msg-act:active { transform: scale(.96); }
+/* a link in a message: bold, on a soft chip, with an arrow (in the bubble's own colours, never blue or underlined) */
+.msg-link { color: inherit; font-weight: 700; text-decoration: none; padding: 0 5px; border-radius: 6px; background: color-mix(in srgb, currentColor 12%, transparent);
+  overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.msg-link::after { content: " \2197"; font-size: .85em; }
+.msg-link:active { background: color-mix(in srgb, currentColor 22%, transparent); }
 .msg-report { align-self: stretch; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; }
 .panel.done { opacity: .78; }
 .item-line { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }

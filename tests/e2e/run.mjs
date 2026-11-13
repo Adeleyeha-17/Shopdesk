@@ -537,7 +537,7 @@ await step('while Pay online and ShopDesk Delivery are off, the Shop tab shows t
   expect((await soon.filter({ hasText: 'Customers pay online' }).locator('button:has-text("I want this")').count()) === 1, 'Pay online lost its button');
 });
 
-await step('the shop messages ShopDesk inside the app: a full-screen chat that keeps the message, sends a short video (not one over 20 seconds), and shows no names', async () => {
+await step('the shop messages ShopDesk inside the app: a full-screen chat that keeps the message, opens links, copies a message, sends a short video (not one over 20 seconds), and shows no names', async () => {
   await p.locator('.desk-row:has-text("Message ShopDesk")').click();
   const sheet = p.locator('.desk-sheet');
   await sheet.waitFor();
@@ -548,6 +548,15 @@ await step('the shop messages ShopDesk inside the app: a full-screen chat that k
   await sheet.locator('button.cmp-send').click();
   await sheet.locator('.msg.mine:has-text("when does delivery start")').waitFor();
   await sheet.locator('.msg.mine:not(.pending)').first().waitFor();
+  await sheet.locator('textarea').fill('My page is shopdesk.com.ng/bimpes-beauty.');
+  await sheet.locator('button.cmp-send').click();
+  const link = sheet.locator('.msg.mine .msg-link').last();
+  await link.waitFor();
+  expect((await link.getAttribute('href')) === 'https://shopdesk.com.ng/bimpes-beauty', 'the link in the message does not open the shop page');
+  await p.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await sheet.locator('.msg.theirs:has-text("Welcome to ShopDesk") p').click();
+  await sheet.locator('.msg-acts .msg-act:has-text("Copy")').click();
+  await sheet.locator('.msg-act:has-text("Copied")').waitFor();
   await sheet.locator('.cmp-btn').click();
   const media = p.locator('.media-sheet');
   await media.waitFor();
