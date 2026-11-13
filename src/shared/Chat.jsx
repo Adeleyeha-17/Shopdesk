@@ -4,7 +4,7 @@
 // Either side can report the other's message (tap it, then Report): rude, threats, scam or spam. ShopDesk sees it.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
-import { atText } from '../lib/dates.js';
+import { atText, clockOf, dayWord } from '../lib/dates.js';
 import { errText } from '../lib/helpers.js';
 import { uploadOrderPhoto } from '../lib/photos.js';
 import { channelName, kick } from '../lib/alerts.js';
@@ -71,22 +71,40 @@ export function ChatView({
   const [menu, setMenu] = useState(null);
   const [reporting, setReporting] = useState(null);
   if (!messages.length) return <p className="sub chat-empty">No messages yet.</p>;
+  // "Today", "Yesterday" or "Wed 12 Nov" above each day's messages; a reply straight after one from the same side sits closer
+  const dayOfMsg = (m) => (m.pending ? 'today' : dayWord(m.created_at));
   return (
     <div className="chat-list" ref={listRef}>
-      {messages.map((m) => {
+      {messages.map((m, i) => {
         const mine = m.sender === me;
         const tappable = canReport && !mine && !m.pending && me !== 'admin';
+        const prev = messages[i - 1];
+        const day = dayOfMsg(m);
+        const newDay = !prev || dayOfMsg(prev) !== day;
+        const next = messages[i + 1];
+        const last = !next || next.sender !== m.sender || dayOfMsg(next) !== day;
         return (
           <React.Fragment key={m.id}>
+            {newDay && (
+              <span className="chat-day">{day.charAt(0).toUpperCase() + day.slice(1)}</span>
+            )}
             <div
-              className={'msg ' + (mine ? 'mine' : 'theirs') + (m.pending ? ' pending' : '')}
+              className={
+                'msg ' +
+                (mine ? 'mine' : 'theirs') +
+                (m.pending ? ' pending' : '') +
+                (!newDay && prev && prev.sender === m.sender ? ' cont' : '') +
+                (last ? ' last' : '')
+              }
               onClick={tappable ? () => setMenu(menu === m.id ? null : m.id) : undefined}
             >
               {me === 'admin' && <span className="msg-who">{names[m.sender] || m.sender}</span>}
               {m.photo && <PhotoStrip paths={[m.photo]} label="Photo" />}
               {(m.video || m.localVideo) && <ChatVideo path={m.video} local={m.localVideo} />}
               {m.body && <p>{m.body}</p>}
-              <span className="msg-time">{m.pending ? 'Sending…' : atText(m.created_at)}</span>
+              <span className="msg-time" title={m.pending ? '' : atText(m.created_at)}>
+                {m.pending ? 'Sending…' : clockOf(m.created_at)}
+              </span>
               {warnPay && !mine && otherAccount(m.body, payAccount) && (
                 <span className="msg-warn">Only pay to the account on your order.</span>
               )}
@@ -235,25 +253,9 @@ export function Chat({ orderId, me, open, onSeen, autoFocus = false, payAccount 
           value={text}
           onChange={setText}
           onSend={sendText}
+          onFile={(f) => sendPhoto(f)}
           busy={busy}
           autoFocus={autoFocus}
-          before={
-            <label className="chat-photo" htmlFor={'cp' + orderId} aria-label="Send a photo">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 7h3l2-2h6l2 2h3v12H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-              </svg>
-              <input
-                id={'cp' + orderId}
-                type="file"
-                accept="image/*"
-                className="visually-hidden"
-                onChange={(e) => {
-                  sendPhoto(e.target.files && e.target.files[0]);
-                  e.target.value = '';
-                }}
-              />
-            </label>
-          }
         />
       ) : (
         <p className="sub chat-empty">Chat closed.</p>

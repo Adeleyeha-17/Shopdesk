@@ -18,7 +18,7 @@ const FIXES = [
   ['src/lib/helpers.js', "window.history.pushState({ k, from }, '', path);", 'window.__demo.go(path);', 1],
   ['src/lib/helpers.js', "window.history.replaceState({ k }, '', path);", 'window.__demo.go(path);', 1],
   // the ShopDesk chat closes without the browser's history (the demo may sit inside another page)
-  ['src/vendor/ShopDeskChat.jsx', 'const BACK_CLOSES = true;', 'const BACK_CLOSES = false;', 1],
+  ['src/shared/ChatScreen.jsx', 'const BACK_CLOSES = true;', 'const BACK_CLOSES = false;', 1],
   // the rider link opens the rider page inside the demo
   ['src/vendor/RiderLive.jsx', 'const demoOpen = null;', 'const demoOpen = (l) => (window.__demo.go(new URL(l).pathname), window.dispatchEvent(new Event("popstate")), window.scrollTo(0, 0));', 1],
   // Pay online opens a pretend checkout instead of Paystack's page

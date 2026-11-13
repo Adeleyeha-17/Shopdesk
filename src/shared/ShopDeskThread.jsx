@@ -1,6 +1,6 @@
 // The ShopDesk chat: one shop and ShopDesk, inside the app. The shop sees every message from ShopDesk as "ShopDesk",
 // never who wrote it. Used in the shop's app (me = 'shop') and in Admin (me = 'shopdesk'). Text, photos and videos
-// (recorded there and then, or picked from the phone). New messages arrive by themselves; opening the chat marks the
+// (taken there and then, or picked from the phone; videos up to 20 seconds). New messages arrive by themselves; opening the chat marks the
 // other side's messages read.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
@@ -10,24 +10,11 @@ import { kick } from '../lib/alerts.js';
 import { ChatView } from './Chat.jsx';
 import { MessageBox } from './MessageBox.jsx';
 
-const ICONS = {
-  plus: <path d="M12 5v14M5 12h14" />,
-  photo: <path d="M4 7h3l2-2h6l2 2h3v12H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />,
-  record: <path d="M3 7h12v10H3zM15 10.5l6-3.5v10l-6-3.5" />,
-  video: <path d="M4 4h16v16H4zM10 9v6l5-3z" />,
-};
-const Icon = ({ name }) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    {ICONS[name]}
-  </svg>
-);
-
 export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, empty }) {
   const [msgs, setMsgs] = useState(null);
   const [text, setText] = useState(draft);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [attach, setAttach] = useState(false);
   const listRef = useRef(null);
   const read = useRef(onRead);
   read.current = onRead;
@@ -94,29 +81,12 @@ export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, e
     setBusy(false);
   }
   async function sendFile(file, kind) {
-    setAttach(false);
     if (!file) return;
     setBusy(true);
     if (kind === 'video') await send('', { videoFile: file }, { localVideo: URL.createObjectURL(file) });
     else await send('', { photoFile: file }, { body: 'Photo' });
     setBusy(false);
   }
-  const pick = (kind, capture) => (
-    <label className="attach-opt">
-      <Icon name={capture ? 'record' : kind} />
-      <span>{kind === 'photo' ? 'Photo' : capture ? 'Record a video' : 'Video from phone'}</span>
-      <input
-        type="file"
-        accept={kind === 'photo' ? 'image/*' : 'video/*'}
-        capture={capture ? 'environment' : undefined}
-        className="visually-hidden"
-        onChange={(e) => {
-          sendFile(e.target.files && e.target.files[0], kind);
-          e.target.value = '';
-        }}
-      />
-    </label>
-  );
   return (
     <div className="chat desk-chat">
       {msgs === null ? (
@@ -136,35 +106,16 @@ export function ShopDeskThread({ me, shopId, draft = '', chips = null, onRead, e
             ))}
           </div>
         )}
-        {attach && (
-          <>
-            <div className="attach-row">
-              {pick('photo')}
-              {pick('video', true)}
-              {pick('video')}
-            </div>
-            <span className="sub attach-note">Videos can be up to {VIDEO_SECONDS} seconds.</span>
-          </>
-        )}
         {err && <p className="err">{err}</p>}
         <MessageBox
           value={text}
           onChange={setText}
           onSend={sendText}
+          onFile={sendFile}
+          video
+          maxSeconds={VIDEO_SECONDS}
           busy={busy}
           maxLength={2000}
-          onFocus={() => setAttach(false)}
-          before={
-            <button
-              type="button"
-              className={'chat-photo attach-btn' + (attach ? ' on' : '')}
-              aria-label={attach ? 'Close' : 'Send a photo or video'}
-              aria-expanded={attach}
-              onClick={() => setAttach(!attach)}
-            >
-              <Icon name="plus" />
-            </button>
-          }
         />
       </div>
     </div>

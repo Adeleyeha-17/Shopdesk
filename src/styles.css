@@ -6,6 +6,7 @@
 
 /* ---------- colours (light and dark) ---------- */
 :root {
+  --chat-bg: #f2f3f5; --bubble: #ffffff;
   --bg: #ffffff;
   --soft: #f4f5f6;
   --line: #e9eaec;
@@ -24,6 +25,7 @@
 }
 /* dark: when the person picks Dark, or Same as phone on a phone set to dark (src/lib/theme.js sets data-theme) */
 :root[data-theme="dark"] {
+  --chat-bg: #0d0e10; --bubble: #1e2024;
   --bg: #0d0e10; --soft: #17181b; --line: #25272b; --ink: #f2f3f5; --muted: #9ea3ab; --hint: #80848b; --btn: #f2f3f5; --on-btn: #0d0e10;
   --good: #34c46b; --bad: #ff6b6f; --wait: #f2b84b; --info: #6ea0ff; color-scheme: dark;
   --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; }
@@ -457,27 +459,21 @@ a.orow { text-decoration: none; color: inherit; }
 .chat-toggle .sub { margin-left: auto; }
 .chat-toggle:focus-visible, .chat-photo:focus-within { outline: 2px solid var(--info); outline-offset: 2px; }
 .chat { display: flex; flex-direction: column; gap: 8px; }
-.chat-list { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; overscroll-behavior: contain; padding: 2px 0; }
-.msg { max-width: 82%; padding: 8px 11px; border-radius: 16px 16px 16px 4px; background: var(--soft); align-self: flex-start; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.msg.mine { align-self: flex-end; border-radius: 16px 16px 4px 16px; background: var(--btn); color: var(--on-btn); }
-.msg p { margin: 0; white-space: pre-wrap; font-size: 15px; line-height: 1.35; }
-.msg-time { font-size: 11px; opacity: .65; }
-.msg.mine .msg-time { text-align: right; }
+.chat-list { display: flex; flex-direction: column; gap: 0; max-height: 55vh; overflow-y: auto; overscroll-behavior: contain; padding: 10px; background: var(--chat-bg); border-radius: 18px; }
+.msg { max-width: 80%; padding: 7px 12px 5px; margin-top: 8px; border-radius: 18px; background: var(--bubble); box-shadow: 0 1px 1.5px rgba(0, 0, 0, .06); align-self: flex-start; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.msg.mine { align-self: flex-end; background: var(--btn); color: var(--on-btn); box-shadow: none; }
+.msg.cont { margin-top: 2px; }
+.msg.theirs.last { border-bottom-left-radius: 6px; }
+.msg.mine.last { border-bottom-right-radius: 6px; }
+.chat-day { align-self: center; margin: 12px 0 2px; padding: 3px 10px; border-radius: 999px; background: var(--bubble); color: var(--muted); font-size: 12px; font-weight: 600; box-shadow: 0 1px 1.5px rgba(0, 0, 0, .05); }
+.chat-list > .chat-day:first-child { margin-top: 2px; }
+.msg p { margin: 0; white-space: pre-wrap; font-size: 15.5px; line-height: 1.38; }
+.msg-time { font-size: 11px; opacity: .55; align-self: flex-end; }
 .msg-who { font-size: 11px; font-weight: 700; opacity: .7; text-transform: capitalize; }
 .msg.pending { opacity: .6; }
 .msg-warn { font-size: 12px; font-weight: 700; color: var(--bad); }
 .msg .photo-strip img { width: 180px; height: auto; max-height: 220px; object-fit: cover; }
 .chat-send { display: flex; gap: 8px; align-items: flex-end; }
-/* the message box: grows with the message, then scrolls; the arrow turns solid once there's something to send */
-.msgbox { flex: 1; min-width: 0; display: flex; background: var(--soft); border: 1px solid transparent; border-radius: 22px; transition: border-color .15s ease; }
-.msgbox:focus-within { border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
-.msgbox textarea { flex: 1; width: auto; min-height: 0; height: 42px; max-height: 150px; resize: none; border: 0; border-radius: 22px; background: none; color: var(--ink);
-  padding: 10px 16px; font: 400 16px/1.4 var(--body); box-sizing: border-box; overflow-y: auto; outline: none; }
-.msgbox textarea::placeholder { color: var(--hint); }
-.msg-send { appearance: none; flex: none; width: 42px; height: 42px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; background: var(--soft); color: var(--hint); }
-.msg-send.ready { background: var(--btn); color: var(--on-btn); cursor: pointer; }
-.msg-send svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.msg-send:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .chat-photo { flex: none; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--soft); cursor: pointer; }
 .chat-photo svg { width: 20px; height: 20px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
 .chat-empty { text-align: center; padding: 6px 0; }
@@ -1143,37 +1139,25 @@ svg.star { width: 14px; height: 14px; fill: var(--wait); flex: none; }
 .desk-compose { display: flex; flex-direction: column; gap: 8px; }
 /* the shop's chat fills the phone screen like its own page; on a laptop it's a roomy panel */
 body.desk-open { overflow: hidden; }
-.overlay.desk-overlay { padding: 0; place-items: stretch; z-index: 30; }
-.modal.desk-sheet { width: 100%; height: 100%; height: 100dvh; max-height: none; border-radius: 0; padding: 0; gap: 0; box-shadow: none; overflow: hidden; }
+.overlay.desk-overlay { padding: 0; place-items: stretch; z-index: 30; bottom: auto; height: 100%; }
+.modal.desk-sheet { width: 100%; height: 100%; max-height: none; border-radius: 0; padding: 0; gap: 0; box-shadow: none; overflow: hidden; }
 .desk-sheet .desk-head { padding: max(10px, env(safe-area-inset-top)) 16px 10px; border-bottom: 1px solid var(--line); }
 .desk-sheet .desk-head .back-btn { margin-left: -8px; }
 .desk-sheet .desk-chat { flex: 1; min-height: 0; gap: 0; }
 .desk-sheet .chat-list { flex: 1; max-height: none; padding: 16px; gap: 8px; }
 .desk-sheet .chat-empty { flex: 1; display: grid; place-items: center; padding: 24px 32px; line-height: 1.5; }
-.desk-sheet .desk-compose { border-top: 1px solid var(--line); padding: 10px 12px max(10px, env(safe-area-inset-bottom)); }
 @media (min-width: 700px) {
   .overlay.desk-overlay { padding: 24px; place-items: center; }
-  .modal.desk-sheet { width: min(680px, 100%); height: min(820px, calc(100dvh - 48px)); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
+  .modal.desk-sheet { width: min(680px, 100%); height: min(820px, 100%); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
 }
 @media (max-width: 699px) { .modal.desk-sheet { animation: desk-in .26s var(--ease); } }
 @keyframes desk-in { from { transform: translateX(100%); } }
-/* photo and video in the chat */
-.attach-btn { appearance: none; border: 0; padding: 0; color: var(--ink); }
-.attach-btn svg { stroke-width: 2.2; stroke-linecap: round; transition: transform .18s var(--ease); }
-.attach-btn.on svg { transform: rotate(45deg); }
-.attach-btn.chat-photo:focus-within { outline: none; }
-.attach-btn.chat-photo:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
-.desk-sheet .msg, .desk-admin .msg { max-width: min(82%, 480px); }
+/* video in the chat */
+.desk-sheet .msg { max-width: min(80%, 480px); }
 .msg:has(> .chat-video) { padding: 4px; }
 .msg:has(> .chat-video) .msg-time { padding: 0 6px 2px; }
-.attach-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.attach-opt { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; border-radius: 14px; background: var(--soft); font-size: 12px; font-weight: 600; text-align: center; cursor: pointer; }
-.attach-opt svg { width: 22px; height: 22px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
-.attach-opt:focus-within { outline: 2px solid var(--info); outline-offset: 2px; }
 .chat-video { display: block; width: min(260px, 62vw); max-height: 340px; border-radius: 12px; background: #000; }
 .chat-video.wait { height: 150px; background: var(--line); }
-/* Admin: the chat pop-up is a little wider */
-.modal.desk-admin { width: min(640px, 100%); }
 .desk-row { gap: 10px; }
 .desk-row strong { font-weight: 700; }
 /* features that are coming: "I want this" */
@@ -1191,3 +1175,41 @@ body.desk-open { overflow: hidden; }
 .thread-row.unread .thread-main .sub { color: var(--ink); font-weight: 600; }
 .thread-side { display: flex; align-items: center; gap: 10px; flex: none; }
 .thread-side .count { font-style: normal; font-size: 12px; font-weight: 700; min-width: 20px; padding: 1px 7px; border-radius: 999px; text-align: center; background: var(--bad); color: #fff; }
+/* the message box: one floating card with a camera button, the message (it grows as you type) and a round send arrow */
+.composer { display: flex; align-items: flex-end; gap: 6px; padding: 6px; background: var(--bubble); border: 1px solid var(--line); border-radius: 26px; box-shadow: 0 4px 18px rgba(0, 0, 0, .07); }
+.composer:focus-within { border-color: color-mix(in srgb, var(--ink) 20%, var(--line)); }
+.composer textarea { flex: 1; min-width: 0; width: auto; min-height: 0; height: 40px; max-height: 150px; resize: none; border: 0; border-radius: 0; background: none; color: var(--ink);
+  padding: 9px 4px; font: 400 16px/1.4 var(--body); box-sizing: border-box; overflow-y: auto; outline: none; }
+.composer textarea:first-child { padding-left: 12px; }
+.composer textarea::placeholder { color: var(--hint); }
+.cmp-btn, .cmp-send, .round-x { appearance: none; flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; background: var(--soft); color: var(--ink); cursor: pointer; }
+.cmp-btn svg, .cmp-send svg, .round-x svg, .media-tile svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+.cmp-btn svg { width: 22px; height: 22px; stroke-width: 1.8; }
+.cmp-send { color: var(--hint); cursor: default; }
+.cmp-send.ready { background: var(--btn); color: var(--on-btn); cursor: pointer; }
+.cmp-send svg { width: 20px; height: 20px; stroke-width: 2.4; }
+.cmp-btn:focus-visible, .cmp-send:focus-visible, .round-x:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.cmp-btn:active, .cmp-send.ready:active, .media-tile:active { transform: scale(.95); }
+.chat > .composer { margin-top: 4px; }
+/* the full-screen chat: the tinted background runs edge to edge and the message card floats on it */
+.desk-sheet .desk-chat { background: var(--chat-bg); }
+.desk-sheet .chat-list { background: none; border-radius: 0; padding: 8px 14px 12px; }
+.desk-sheet .desk-compose { padding: 6px 10px max(10px, env(safe-area-inset-bottom)); }
+/* Camera / Video / Photos */
+.overlay.media-overlay { z-index: 40; }
+.modal.media-sheet { gap: 16px; padding-top: 10px; border-radius: 28px; }
+.sheet-handle { align-self: center; width: 40px; height: 5px; border-radius: 3px; background: var(--line); }
+.media-head { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; gap: 8px; }
+.media-head h2 { margin: 0; text-align: center; font-size: 17px; }
+.round-x { background: var(--bg); border: 1px solid var(--line); }
+.round-x svg { width: 18px; height: 18px; stroke-width: 2; }
+.media-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.media-tiles.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.media-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 104px; border-radius: 22px; background: var(--soft); font-size: 15px; font-weight: 600; cursor: pointer; transition: transform .12s ease; }
+.media-tile svg { width: 28px; height: 28px; stroke-width: 1.7; }
+.media-tile:focus-within { outline: 2px solid var(--info); outline-offset: 2px; }
+.media-note { text-align: center; margin: -4px 0 0; }
+@media (max-width: 600px) { .overlay.bottom .modal.media-sheet { border-radius: 28px 28px 0 0; } }
+/* chats scroll without a visible scroll bar */
+.chat-list { scrollbar-width: none; }
+.chat-list::-webkit-scrollbar { display: none; }

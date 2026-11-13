@@ -40,6 +40,9 @@ export const whenText = (t) => `${dayWord(t)} by ${clock(new Date(t))}`;
 
 export const atText = (t) => `${dayWord(t)}, ${clock(new Date(t))}`;
 
+// Just the time: "4:05pm" (chats, where the day is shown above).
+export const clockOf = (t) => clock(new Date(t));
+
 // Time slots a shop can promise, and the first one that's at least two hours away.
 export const SLOTS = [9, 10, 12, 14, 16, 18, 20];
 

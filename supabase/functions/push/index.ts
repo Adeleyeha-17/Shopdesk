@@ -101,10 +101,50 @@ export async function encrypt(sub, text) {
   return concat(head, sealed);
 }
 
+// The words on the phone: a short, friendly title with an emoji, and the details underneath. (Emails keep the plain words.)
+const codeIn = (t) => (String(t || '').match(/\b[A-Z]{1,4}-\d+\b/) || [''])[0];
+const firstName = (t) => String(t || '').trim().split(/\s+/)[0] || 'A customer';
+export function catchy(n) {
+  const t = String(n.title || ''), b = String(n.body || ''), code = codeIn(t) || codeIn(b);
+  const shopSays = (title, body) => [title, t ? `${t} · ${body}` : body]; // customer alerts: the title is the shop's name
+  switch (n.kind) {
+    // for the shop
+    case 'new_order': return ['🛍️ Ka-ching! New order', `${b}${code ? ' · ' + code : ''}. Confirm it now.`];
+    case 'says_paid': return [`💸 ${firstName(t)} says they've paid`, b];
+    case 'received': return [`🎉 ${t}!`, 'Delivered and confirmed. Another happy customer.'];
+    case 'visit': return ["👀 Someone's checking out your shop", `${b} Keep sharing your link 🔥`];
+    case 'rating': return [`⭐ ${t}`, b];
+    case 'monthly_report': return [`📊 ${t}`, b];
+    case 'shopdesk': return ['💬 ShopDesk', b];
+    case 'feature': return [`🚀 ${t}!`, b];
+    case 'problem': return ['⚠️ A customer has a problem', `${code ? code + ': ' : ''}${b}`];
+    case 'nudge':
+      return [(/waiting for you/.test(t) ? '⏰ ' : /first product/.test(t) ? '📸 ' : /customers are waiting/.test(t) ? '👋 ' : '📣 ') + t, b];
+    // for the customer (and chats both ways)
+    case 'message': return [`💬 ${t}`, b];
+    case 'shop_message': return [`💬 ${t}`, b];
+    case 'confirmed': return shopSays('✅ Order confirmed!', b);
+    case 'paid': return shopSays('💚 Payment received!', `packing ${code || 'your order'} now 📦`);
+    case 'out': return ['🛵 Your order is on its way!', b];
+    case 'ready': return shopSays('📦 Ready for pick-up!', b);
+    case 'delivered': return shopSays('🎁 Delivered! Got everything?', `${code || 'Your order'}. Tap to confirm.`);
+    case 'fee': return shopSays('🧾 Your delivery fee is in', b);
+    case 'moved': return shopSays('🕐 New delivery time', b);
+    case 'cancelled': return /cancel/i.test(t) ? [`😕 ${t}`, b] : shopSays('😕 Order cancelled', b);
+    case 'refund_sent': return shopSays('💸 Your refund is on its way', b);
+    case 'problem_answer': return [`💬 ${t} answered`, b];
+    case 'problem_sorted': case 'refund_ok': return [`✅ ${t}`, b];
+    case 'refund_missing': case 'problem_escalated': return [`⚠️ ${t}`, b];
+    case 'decided': return [`⚖️ ${t}`, b];
+    default: return [t || 'ShopDesk', b];
+  }
+}
+
 // What the phone shows. Alerts about the same order replace each other; chat messages stack per order.
 export function payload(n) {
   const tag = n.order_id ? (n.kind === 'message' ? 'chat-' : 'order-') + n.order_id : n.kind;
-  return JSON.stringify({ title: n.title, body: n.body, url: n.url, tag, kind: n.kind, order_id: n.order_id });
+  const [title, body] = catchy(n);
+  return JSON.stringify({ title, body, url: n.url, tag, kind: n.kind, order_id: n.order_id });
 }
 
 export async function handle(req, sql, opts = {}) {
