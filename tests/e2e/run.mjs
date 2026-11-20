@@ -576,6 +576,34 @@ await step('the shop messages ShopDesk inside the app: a full-screen chat that k
   await p.locator('.desk-sheet .back-btn').click();
 });
 
+// ---------------- a shop owner buys from another shop with the same account ----------------
+await step('a shop owner buys from another shop with the same account: Buy from other shops, My shop tab, an order at Pack Pro, and Your buying in Sales', async () => {
+  await nav('Shop');
+  await p.locator('.buy-row').click();
+  await tab('My shop').waitFor();
+  expect((await tab('Account').count()) === 0, 'a shop owner still has the Account tab');
+  await patch(() => {}, '/packpro-lagos');
+  await p.locator('.pcard:has(.pname:text-is("Round labels (pack of 100)")) button[data-inc]').click();
+  await tab('Cart').click();
+  await see('Your cart');
+  await p.locator('button:has-text("Checkout")').click();
+  await see('Place order');
+  expect(!(await text()).includes('This is your shop'), 'Pack Pro says it is her own shop');
+  if (await p.locator('#cName').count()) await p.locator('#cName').fill('Bimpe Adeyemi');
+  if (await p.locator('#cPhone').count()) await p.locator('#cPhone').fill('08000000000');
+  await p.locator('button.choice:has-text("pick it up")').click();
+  await p.locator('button:has-text("Place order")').click();
+  await see('Waiting for the shop');
+  expect(/Order PP-\d+/.test(await text()), 'the order has no Pack Pro code');
+  await tab('My shop').click();
+  await nav('Sales');
+  await p.locator('button:has-text("This month")').first().click().catch(() => {});
+  const buying = p.locator('.card.buying');
+  await buying.waitFor();
+  expect((await buying.innerText()).includes('Pack Pro Lagos'), 'Your buying does not list Pack Pro');
+  expect((await buying.innerText()).includes('Not taken off your sales'), 'Your buying does not say it is apart from sales');
+});
+
 // ---------------- a new shop owner signs up ----------------
 await step('a new shop owner can sign up, type a link name with a dash, have the bank and name found from the account number, and send the shop for approval', async () => {
   await patch((S) => {

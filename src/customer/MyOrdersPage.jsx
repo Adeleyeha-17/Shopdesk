@@ -96,14 +96,8 @@ function SignedInOrders({ email, userId, view }) {
     navigate('/orders', { replace: true });
   }
   const [msg, setMsg] = useState('');
-  const [isShop, setIsShop] = useState(false);
   const [loadErr, setLoadErr] = useState(null);
   const load = useCallback(async () => {
-    const { data: a } = await supabase.rpc('my_account');
-    if (a && a.vendor) {
-      setIsShop(true);
-      return;
-    }
     await supabase.rpc('claim_orders', { p_tokens: myTokens() });
     const [{ data, error }, c] = await Promise.all([
       supabase.rpc('my_orders'),
@@ -161,32 +155,7 @@ function SignedInOrders({ email, userId, view }) {
       setMsg('');
     }
   }
-  useBusy(orders === null && !loadErr && !isShop);
-  if (isShop)
-    return (
-      <Page
-        title="My orders"
-        kind="me"
-        right={
-          <button className="linkbtn" onClick={leave}>
-            Sign out
-          </button>
-        }
-      >
-        <section className="card">
-          <h2>This email runs a shop</h2>
-          <p className="note">{email} runs a shop. Use another email to shop.</p>
-          <div className="btns">
-            <a className="btn small" href="/" style={{ textDecoration: 'none' }}>
-              Open my shop
-            </a>
-            <button className="linkbtn" onClick={leave}>
-              Sign out
-            </button>
-          </div>
-        </section>
-      </Page>
-    );
+  useBusy(orders === null && !loadErr);
   const live = (orders || []).filter(
     (o) =>
       !['delivered', 'cancelled'].includes(o.status) ||

@@ -258,12 +258,12 @@ insert into shops (owner_id, name, slug) values (auth.uid(), 'Sneaky Orders', 'o
 \echo R14 visitors who are not signed in cannot place an order (expect permission denied):
 set role anon; reset request.jwt.claim.sub;
 select place_order('rose', '{"name":"Guest","mode":"pickup"}', jsonb_build_array(jsonb_build_object('product_id', :'tolu_p', 'qty', 1)));
-\echo R15 shop accounts cannot order, whether their shop is open (Rose) or turned down (Tunde) (expect 2 errors):
+\echo R15 a shop owner cannot order from their own shop (Rose), but can buy from another shop, even with a turned-down shop of their own (Tunde) (expect 1 error, then an order):
 set role authenticated; set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 select place_order('rose', '{"name":"Rose","mode":"pickup"}', jsonb_build_array(jsonb_build_object('product_id', :'tolu_p', 'qty', 1)));
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select place_order('rose', '{"name":"Tunde","mode":"pickup"}', jsonb_build_array(jsonb_build_object('product_id', :'tolu_p', 'qty', 1)));
-\echo R16 shop accounts cannot claim orders or save customer details (expect 2 errors, then 0 saved):
+\echo R16 a shop owner cannot claim an order from their own shop, but can save their buyer details (expect 0 claimed, then 1 saved):
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 select claim_orders(array[:'tok4']::uuid[]);
 insert into customers (user_id, name) values (auth.uid(), 'Rose');
@@ -274,10 +274,10 @@ insert into shops (owner_id, name, slug) values (auth.uid(), 'Bisi Bags', 'bisib
 set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
 insert into customers (user_id, name) values (auth.uid(), 'Ola');
 insert into shops (owner_id, name, slug) values (auth.uid(), 'Ola Shoes', 'olashoes');
-\echo R18 the app can ask what the account is: shop, customer (expect vendor t customer f, then vendor f customer t):
+\echo R18 the app can ask what the account is: Rose runs a shop and now has buyer details, Bisi only buys (expect vendor t customer t, then vendor f customer t):
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111'; select my_account()->>'vendor', my_account()->>'customer';
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444'; select my_account()->>'vendor', my_account()->>'customer';
-\echo R19 a brand-new email can still open a shop, and then it cannot order (expect f f, pending, error):
+\echo R19 a brand-new email can still open a shop, and can then buy from other shops (expect f f, pending, an order):
 reset role; insert into auth.users values ('77777777-7777-7777-7777-777777777777', 'newvendor@example.com');
 set role authenticated; set request.jwt.claim.sub = '77777777-7777-7777-7777-777777777777';
 select my_account()->>'vendor', my_account()->>'customer';
@@ -303,7 +303,7 @@ select customer_received(:'tok5');
 set role anon; reset request.jwt.claim.sub; select customer_received(:'tok5');
 set role authenticated; set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444'; select customer_received(:'tok5');
 set request.jwt.claim.sub = '66666666-6666-6666-6666-666666666666'; select customer_received(:'tok5'); select get_order_public(:'tok5')->>'status', get_order_public(:'tok5')->>'received_by';
-\echo R22 close for good: the shop page closes, and that email still cannot shop (expect banned, f, null, then 1 error):
+\echo R22 close for good: the shop page closes (expect banned, f, null, then 1 error because Tolu isn't taking orders):
 reset role; select id as roseid from shops where slug = 'rose' \gset
 set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select admin_set_shop_status(:'roseid', 'banned', 'Took money and never delivered, three reports');

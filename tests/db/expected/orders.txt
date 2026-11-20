@@ -188,30 +188,25 @@ R13 a shop cannot take a ShopDesk page name as its link (expect check violation)
 psql:orders.sql:257: ERROR:  new row for relation "shops" violates check constraint "shops_slug_reserved"
 R14 visitors who are not signed in cannot place an order (expect permission denied):
 psql:orders.sql:260: ERROR:  permission denied for function place_order
-R15 shop accounts cannot order, whether their shop is open (Rose) or turned down (Tunde) (expect 2 errors):
-psql:orders.sql:263: ERROR:  This email runs a shop. Use another email to order.
+R15 a shop owner cannot order from their own shop (Rose), but can buy from another shop, even with a turned-down shop of their own (Tunde) (expect 1 error, then an order):
+psql:orders.sql:263: ERROR:  This is your own shop. You can't order from it.
 CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
-psql:orders.sql:265: ERROR:  This email runs a shop. Use another email to order.
-CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
-R16 shop accounts cannot claim orders or save customer details (expect 2 errors, then 0 saved):
-psql:orders.sql:268: ERROR:  This email runs a shop. Use another email to order.
-CONTEXT:  PL/pgSQL function claim_orders(uuid[]) line N at RAISE
-psql:orders.sql:269: ERROR:  This email runs a shop. Use another email to order.
-CONTEXT:  PL/pgSQL function customers_one_role() line N at RAISE
+{"token": "<id>", "order_id": 8, "items_total": 15000, "delivery_pending": false}
+R16 a shop owner cannot claim an order from their own shop, but can save their buyer details (expect 0 claimed, then 1 saved):
 0
+1
 R17 emails that have shopped cannot open a shop: one with orders, one with only saved details (expect 2 errors):
 psql:orders.sql:273: ERROR:  This email is a customer account. Use another email for your shop.
 CONTEXT:  PL/pgSQL function shops_one_role() line N at RAISE
 psql:orders.sql:276: ERROR:  This email is a customer account. Use another email for your shop.
 CONTEXT:  PL/pgSQL function shops_one_role() line N at RAISE
-R18 the app can ask what the account is: shop, customer (expect vendor t customer f, then vendor f customer t):
-true|false
+R18 the app can ask what the account is: Rose runs a shop and now has buyer details, Bisi only buys (expect vendor t customer t, then vendor f customer t):
+true|true
 false|true
-R19 a brand-new email can still open a shop, and then it cannot order (expect f f, pending, error):
+R19 a brand-new email can still open a shop, and can then buy from other shops (expect f f, pending, an order):
 false|false
 pending
-psql:orders.sql:285: ERROR:  This email runs a shop. Use another email to order.
-CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+{"token": "<id>", "order_id": 9, "items_total": 15000, "delivery_pending": false}
 R20 nobody can call the role checks directly, and visitors cannot ask what an account is (expect permission denied x3):
 psql:orders.sql:287: ERROR:  permission denied for function has_shop
 psql:orders.sql:287: ERROR:  permission denied for function has_shopped
@@ -220,7 +215,7 @@ R21 only the customer who placed an order can say they paid or got it: not a vis
 psql:orders.sql:292: ERROR:  Sign in with the email you ordered with.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_says_paid(uuid) line N during statement block local variable initialization
-psql:orders.sql:293: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:293: ERROR:  This order is from your own shop.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_says_paid(uuid) line N during statement block local variable initialization
 psql:orders.sql:294: ERROR:  Sign in with the email you ordered with.
@@ -230,7 +225,7 @@ PL/pgSQL function customer_says_paid(uuid) line N during statement block local v
 true
 t
 
-psql:orders.sql:302: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:302: ERROR:  This order is from your own shop.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_received(uuid) line N during statement block local variable initialization
 psql:orders.sql:303: ERROR:  Sign in with the email you ordered with.
@@ -241,11 +236,12 @@ CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function customer_received(uuid) line N during statement block local variable initialization
 
 delivered|customer
-R22 close for good: the shop page closes, and that email still cannot shop (expect banned, f, null, then 1 error):
+R22 close for good: the shop page closes (expect banned, f, null, then 1 error because Tolupsql:orders.sql:306: error: unterminated quoted string
+
 
 banned|f
 
-psql:orders.sql:313: ERROR:  This email runs a shop. Use another email to order.
+psql:orders.sql:313: ERROR:  This shop isn't taking orders right now.
 CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
 R23 delete is only for you, and only with the link name typed and a reason (expect 4 errors):
 psql:orders.sql:315: ERROR:  Not allowed.

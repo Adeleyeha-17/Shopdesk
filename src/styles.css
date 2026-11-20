@@ -384,6 +384,12 @@ a.orow { text-decoration: none; color: inherit; }
 /* best sellers and top customers */
 .rank { display: flex; flex-direction: column; gap: 12px; }
 .rank-item { display: flex; flex-direction: column; gap: 6px; }
+/* Sales → Your buying: what the shop paid other ShopDesk shops */
+.buying .big { margin-top: 6px; }
+.buying ul.rank { list-style: none; margin: 12px 0 0; padding: 0; gap: 10px; }
+.buying ul.rank li { display: grid; grid-template-columns: 1fr auto auto; align-items: baseline; gap: 10px; }
+.buying ul.rank a { color: var(--ink); text-decoration: none; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.buying ul.rank strong { font-variant-numeric: tabular-nums; }
 .rank-track { height: 6px; border-radius: 999px; background: var(--soft); overflow: hidden; }
 .rank-track i { display: block; height: 100%; border-radius: 999px; background: var(--chart-1); }
 /* when customers order */
@@ -1168,6 +1174,10 @@ body.desk-open { overflow: hidden; }
 .chat-video.wait { height: 150px; background: var(--line); }
 .desk-row { gap: 10px; }
 .desk-row strong { font-weight: 700; }
+.buy-row { gap: 10px; text-decoration: none; }
+.buy-row strong { font-weight: 700; }
+.buy-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--soft); display: inline-grid; place-items: center; flex: none; }
+.buy-mark svg { width: 18px; height: 18px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 /* features that are coming: "I want this" */
 .card.soon { border: 1px dashed var(--line); border-radius: 14px; padding: 14px; gap: 6px; }
 .soon-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

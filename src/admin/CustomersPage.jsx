@@ -1,5 +1,6 @@
-// Admin > Customers: find any customer by name, email or phone (shop owners never show here), see how they've used
-// ShopDesk (orders, problems, problems they lost, messages shops reported), and block or unblock them.
+// Admin > Customers: find any customer by name, email or phone, see how they've used ShopDesk (orders, problems,
+// problems they lost, messages shops reported), and block or unblock them. Shop owners show here only once they've
+// bought from other shops, tagged with their shop; blocking them stops their buying, not their shop.
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { errText } from '../lib/helpers.js';
@@ -55,6 +56,7 @@ export function CustomersPage({ say }) {
               <div key={c.id} className="cust-row">
                 <div className="cust-main">
                   <strong>{c.name || c.email}</strong>
+                  {c.shop && <span className="sub">Also runs {c.shop}. Blocking only stops their buying.</span>}
                   <span className="sub">{[c.email, c.phone].filter(Boolean).join(' · ')}</span>
                   <span className="sub">
                     {c.orders} order{c.orders === 1 ? '' : 's'}

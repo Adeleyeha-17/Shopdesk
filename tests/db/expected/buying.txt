@@ -1,0 +1,35 @@
+B1 a shop owner buys from another shop with the same email; the seller hears a normal new order (expect the order total, then the alert):
+10000
+new_order|New order PP-57
+B2 the account now runs a shop and buys, and knows its own link; its buyer details are saved (expect true true wigpalace, then 1):
+true|true|wigpalace
+1
+B3 nobody orders from their own shop or acts as the customer on their own shop orders (expect 2 errors):
+psql:buying.sql:33: ERROR:  This is your own shop. You can't order from it.
+CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+psql:buying.sql:37: ERROR:  This order is from your own shop.
+CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
+PL/pgSQL function customer_says_paid(uuid) line N during statement block local variable initialization
+B4 alerts about the buying order go to the buyer page, and the buyer writes in the order chat as the customer (expect confirmed with /o/ link, then customer):
+
+confirmed|true
+customer
+B5 the report counts only what was paid, per shop, for the month (expect 0 before paying, then 10000 1 and Pack Pro):
+0
+t
+10000|1|Pack Pro|10000
+B6 a plain customer still cannot open a shop (expect 1 error):
+psql:buying.sql:56: ERROR:  This email is a customer account. Use another email for your shop.
+CONTEXT:  PL/pgSQL function shops_one_role() line N at RAISE
+B7 Admin finds the shop owner as a buyer, tagged with their shop; a shop owner who never bought is not listed (expect the email and Wig Palace, then 0):
+wigseller@example.com|Wig Palace
+0
+B8 blocking the shop owner stops only their buying; their shop still sells, and a pure shop cannot be blocked this way (expect error, then a new order total, then an error):
+
+psql:buying.sql:66: ERROR:  Your account can't place orders. Contact ShopDesk.
+CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
+90000
+psql:buying.sql:70: ERROR:  That isn't a customer account. Suspend the shop instead.
+CONTEXT:  PL/pgSQL function admin_block_user(uuid,boolean,text) line N at RAISE
+B9 visitors cannot ask what a shop spent (expect permission denied):
+psql:buying.sql:73: ERROR:  permission denied for function my_purchases

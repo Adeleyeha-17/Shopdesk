@@ -9,7 +9,7 @@
 --                                          chat messages, alerts, phones with alerts on, blocked customers, deleted shops' copies, email backup
 --   2. upgrades .......................... extra columns for databases made with an older version of this file (order codes, packing ticks,
 --                                          reports about an order or a message, refunds you order, cancel reasons)
---   3. helpers ........................... is_admin, my_shop_id, one email one role (has_shop, has_shopped, my_account), shop_open,
+--   3. helpers ........................... is_admin, my_shop_id, who you are (has_shop, has_shopped, my_account), shop_open,
 --                                          order codes, problem state, money and time words, refund owed, chat open, alerts,
 --                                          fair use (who may report, blocked accounts), tidy-up (unpaid orders, refunds)
 --   4. row-level security ................ who may read or change which rows, and which columns
@@ -443,8 +443,8 @@ language sql stable security definer set search_path = public as $$
   select id from public.shops where owner_id = auth.uid();
 $$;
 
--- One email, one role. An account that has a shop (waiting, open, closed or turned down) can't shop,
--- and an account that has shopped can't open a shop. They use a different email for the other role.
+-- A shop owner can also buy from other shops with the same email (never from their own shop).
+-- A customer account can't open a shop: customers only buy for now, so a shop needs an email that has never shopped.
 create or replace function public.has_shop(p_user uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.shops where owner_id = p_user);
@@ -458,7 +458,8 @@ $$;
 -- What the signed-in account is, so the app can explain before anyone fills in a form.
 create or replace function public.my_account() returns jsonb
 language sql stable security definer set search_path = public as $$
-  select jsonb_build_object('vendor', public.has_shop(auth.uid()), 'customer', public.has_shopped(auth.uid()));
+  select jsonb_build_object('vendor', public.has_shop(auth.uid()), 'customer', public.has_shopped(auth.uid()),
+    'shop_slug', (select slug from public.shops where owner_id = auth.uid()));
 $$;
 
 -- A shop takes orders once you've approved it. ShopDesk is free for shops: there's no plan to run out.
@@ -665,7 +666,7 @@ end $$;
 drop trigger if exists shops_watch_changes on public.shops;
 create trigger shops_watch_changes before update on public.shops for each row execute function public.shops_watch_changes();
 
--- ---------- one email, one role ----------
+-- ---------- customers can't open a shop ----------
 create or replace function public.shops_one_role() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -687,16 +688,6 @@ end $$;
 drop trigger if exists shops_set_prefix on public.shops;
 create trigger shops_set_prefix before insert on public.shops for each row execute function public.shops_set_prefix();
 
-create or replace function public.customers_one_role() returns trigger
-language plpgsql security definer set search_path = public as $$
-begin
-  if public.has_shop(new.user_id) then
-    raise exception 'This email runs a shop. Use another email to order.';
-  end if;
-  return new;
-end $$;
-drop trigger if exists customers_one_role on public.customers;
-create trigger customers_one_role before insert or update on public.customers for each row execute function public.customers_one_role();
 
 -- ---------- alerts: what the other side hears when an order moves ----------
 -- The customer hears when the shop confirms, gets the money, sends it or marks it delivered;
@@ -877,10 +868,11 @@ declare
   v_mode text; v_price int; v_full int; v_addr text; v_lat float8; v_lng float8; v_area text; v_source text;
 begin
   if auth.uid() is null then raise exception 'Sign in to order.'; end if;
-  if public.has_shop(auth.uid()) then raise exception 'This email runs a shop. Use another email to order.'; end if;
   if public.is_blocked(auth.uid()) then raise exception 'Your account can''t place orders. Contact ShopDesk.'; end if;
   select * into v_shop from public.shops where slug = lower(p_slug);
   if not found or not public.shop_open(v_shop) or public.shop_owes(v_shop.id) then raise exception 'This shop isn''t taking orders right now.'; end if;
+  -- shop owners can buy from other shops, but never from their own
+  if v_shop.owner_id = auth.uid() then raise exception 'This is your own shop. You can''t order from it.'; end if;
   perform public.tidy(v_shop.id);
   -- no holding a shop's stock with orders you don't pay for
   if (select count(*) from public.orders where shop_id = v_shop.id and customer_id = auth.uid() and status = 'awaiting' and amount_paid = 0) >= 3 then
@@ -987,14 +979,14 @@ $$;
 -- The customer taps "I've sent the money" on their order page. The shop still checks its bank app before marking it paid;
 -- if it doesn't confirm within a day, the order shows up in your Needs attention list.
 -- Only the account that placed an order can say they've paid or got it, so a shop can't confirm for its customer.
--- (Orders from before accounts have no owner: anyone with the link, except a shop account.)
+-- (Orders from before accounts have no owner: anyone with the link, except the shop that sold it.)
 create or replace function public.customer_order(p_token uuid) returns public.orders
 language plpgsql stable security definer set search_path = public as $$
 declare v public.orders;
 begin
   select * into v from public.orders where public_token = p_token;
   if not found then raise exception 'Order not found.'; end if;
-  if public.has_shop(auth.uid()) then raise exception 'This email runs a shop. Use another email to order.'; end if;
+  if exists (select 1 from public.shops where id = v.shop_id and owner_id = auth.uid()) then raise exception 'This order is from your own shop.'; end if;
   if v.customer_id is not null and v.customer_id is distinct from auth.uid() then
     raise exception 'Sign in with the email you ordered with.';
   end if;
@@ -1034,16 +1026,33 @@ language sql stable security definer set search_path = public as $$
   from public.orders o join public.shops s on s.id = o.shop_id where auth.uid() is not null and o.customer_id = auth.uid();
 $$;
 
+-- What a shop owner spent buying from other shops between two days (Lagos dates, both included), for their report:
+-- money they actually paid on orders that weren't cancelled, in total and per shop.
+create or replace function public.my_purchases(p_from date, p_to date) returns jsonb
+language sql stable security definer set search_path = public as $$
+  with b as (
+    select s.name, s.slug, o.amount_paid
+    from public.orders o join public.shops s on s.id = o.shop_id
+    where auth.uid() is not null and o.customer_id = auth.uid() and o.status <> 'cancelled' and o.amount_paid > 0
+      and (coalesce(o.paid_at, o.created_at) at time zone 'Africa/Lagos')::date between p_from and p_to
+  ), per as (
+    select name, slug, sum(amount_paid)::int as spent, count(*)::int as orders from b group by name, slug
+  )
+  select jsonb_build_object('spent', coalesce((select sum(spent) from per), 0), 'orders', coalesce((select sum(orders) from per), 0),
+    'shops', coalesce((select jsonb_agg(jsonb_build_object('name', name, 'slug', slug, 'spent', spent, 'orders', orders) order by spent desc, name) from per), '[]'::jsonb));
+$$;
+
 -- Orders placed before signing in are saved to the account using their private links (kept on the customer's phone).
 create or replace function public.claim_orders(p_tokens uuid[]) returns int
 language plpgsql security definer set search_path = public as $$
 declare n int;
 begin
   if auth.uid() is null then raise exception 'Sign in first.'; end if;
-  if public.has_shop(auth.uid()) then raise exception 'This email runs a shop. Use another email to order.'; end if;
   if p_tokens is null or array_length(p_tokens, 1) is null then return 0; end if;
   if array_length(p_tokens, 1) > 50 then raise exception 'Too many orders at once.'; end if;
-  update public.orders set customer_id = auth.uid() where public_token = any(p_tokens) and customer_id is null;
+  -- never an order from your own shop
+  update public.orders set customer_id = auth.uid() where public_token = any(p_tokens) and customer_id is null
+    and shop_id not in (select id from public.shops where owner_id = auth.uid());
   get diagnostics n = row_count;
   return n;
 end $$;
@@ -2072,6 +2081,7 @@ begin
 end $$;
 
 -- Admin > Customers: find a customer by name, email or phone, with their orders, problems and reports, to block them.
+-- Shop owners who also buy from other shops show here too, with their shop's name.
 create or replace function public.admin_find_customers(p_q text) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare q text := lower(trim(coalesce(p_q, ''))); d text := regexp_replace(coalesce(p_q, ''), '\D', '', 'g');
@@ -2087,9 +2097,10 @@ begin
         'lost', (select count(*) from public.problems p where p.customer_id = u.id and p.decision = 'shop'),
         'reported', (select count(*) from public.reports r join public.messages m on m.id = r.message_id where r.about = 'customer' and m.customer_id = u.id),
         'last_order', (select max(o.created_at) from public.orders o where o.customer_id = u.id),
-        'blocked', public.is_blocked(u.id), 'block_reason', (select b.reason from public.blocked_users b where b.user_id = u.id)) x
+        'blocked', public.is_blocked(u.id), 'block_reason', (select b.reason from public.blocked_users b where b.user_id = u.id),
+        'shop', (select sh.name from public.shops sh where sh.owner_id = u.id)) x
     from auth.users u left join public.customers c on c.user_id = u.id
-    where not public.has_shop(u.id) and not exists (select 1 from public.admins a where a.user_id = u.id)
+    where (not public.has_shop(u.id) or public.has_shopped(u.id)) and not exists (select 1 from public.admins a where a.user_id = u.id)
       and (lower(coalesce(u.email, '')) like '%' || q || '%' or lower(coalesce(c.name, '')) like '%' || q || '%'
         or (char_length(d) >= 4 and regexp_replace(coalesce(c.phone, ''), '\D', '', 'g') like '%' || d || '%')
         or exists (select 1 from public.orders o where o.customer_id = u.id
@@ -2101,12 +2112,13 @@ revoke all on function public.admin_case_message(bigint, text), public.admin_fin
 grant execute on function public.admin_case_message(bigint, text), public.admin_find_customers(text) to authenticated;
 
 -- Block a customer who abuses ShopDesk (insults, fake problems, unpaid orders). They can't order, write or report.
+-- For a shop owner this only stops their buying: their own shop keeps running (suspend the shop for that).
 create or replace function public.admin_block_user(p_user uuid, p_block boolean, p_reason text) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   if not public.is_admin() then raise exception 'Not allowed.'; end if;
   if char_length(trim(coalesce(p_reason, ''))) < 5 then raise exception 'Write the reason (it goes in the audit log).'; end if;
-  if p_user is null or public.has_shop(p_user) then raise exception 'That isn''t a customer account. Suspend the shop instead.'; end if;
+  if p_user is null or (public.has_shop(p_user) and not public.has_shopped(p_user)) then raise exception 'That isn''t a customer account. Suspend the shop instead.'; end if;
   if p_block then
     insert into public.blocked_users (user_id, reason, created_by) values (p_user, left(trim(p_reason), 300), auth.uid())
     on conflict (user_id) do update set reason = excluded.reason, created_by = excluded.created_by, created_at = now();
@@ -2533,7 +2545,7 @@ grant execute on function public.is_admin(), public.my_shop_id(), public.set_del
   public.purge_customer_details(int), public.admin_attention(), public.admin_growth(), public.admin_shop_detail(uuid), public.admin_hide_product(uuid, boolean, text),
   public.admin_save_settings(jsonb),
   public.admin_post_announcement(text, text, int), public.admin_end_announcement(bigint), public.admin_announcements(), public.get_announcements(),
-  public.my_orders(), public.claim_orders(uuid[]), public.confirm_order(bigint), public.hand_to_rider(bigint, text, text, timestamptz), public.mark_ready(bigint, timestamptz),
+  public.my_orders(), public.my_purchases(date, date), public.claim_orders(uuid[]), public.confirm_order(bigint), public.hand_to_rider(bigint, text, text, timestamptz), public.mark_ready(bigint, timestamptz),
   public.my_account(), public.pack_item(bigint, boolean), public.set_packing_photo(bigint, text), public.answer_problem(bigint, text, text, int, text[]),
   public.report_problem(uuid, text, text, text[]), public.problem_customer(uuid, text), public.admin_problems(), public.admin_decide_problem(bigint, text, text, int),
   public.send_message(bigint, text, text), public.mark_read(bigint, text), public.save_push_sub(text, text, text), public.delete_push_sub(text),
@@ -2546,7 +2558,7 @@ grant execute on function public.email_by_token(uuid, boolean) to anon, authenti
 revoke execute on function public.owned_order(bigint) from authenticated;
 revoke execute on function public.shops_watch_changes() from authenticated;
 revoke execute on function public.shop_open(public.shops) from authenticated;
-revoke execute on function public.has_shop(uuid), public.has_shopped(uuid), public.shops_one_role(), public.customers_one_role(), public.customer_order(uuid) from authenticated;
+revoke execute on function public.has_shop(uuid), public.has_shopped(uuid), public.shops_one_role(), public.customer_order(uuid) from authenticated;
 revoke execute on function public.order_prefix_for(text), public.order_code(text, bigint), public.problem_status(public.problems), public.can_report(public.orders),
   public.shops_set_prefix() from authenticated;
 revoke execute on function public.naira(int), public.lagos_time(timestamptz), public.kind_text(text), public.shop_owes(uuid), public.can_chat(public.orders),

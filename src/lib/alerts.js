@@ -180,26 +180,34 @@ export function useLive(userId, run) {
   }, [userId]);
 }
 
-// Unread alerts for this account: { list, loaded, byOrder: {id: n}, chats: {id: n}, reload, markRead(order, kind) }
-export function useUnread(userId) {
-  const [list, setList] = useState([]);
+// A shop owner can also buy from other shops, so one account gets two kinds of alerts: about their buying (they open
+// the customer's pages: an order link /o/..., or a shop's message to its customers) and about their own shop.
+export const buyerAlert = (n) => !!n && (/^\/o\//.test(n.url || '') || n.kind === 'shop_message');
+
+// Unread alerts for this account: { list, loaded, byOrder: {id: n}, chats: {id: n}, others, reload, markRead(order, kind) }
+// side 'shop' keeps the shop's alerts and 'buyer' the buying ones; others counts the unread alerts of the other side.
+export function useUnread(userId, side) {
+  const [all, setAll] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const reload = useCallback(async () => {
     if (!userId) return;
     const { data } = await supabase
       .from('notifications')
-      .select('id, order_id, kind')
+      .select('id, order_id, kind, url')
       .is('read_at', null)
       .order('id', { ascending: false })
       .limit(300);
-    setList(data || []);
+    setAll(data || []);
     setLoaded(true);
   }, [userId]);
+  const mine = (n) => !side || (side === 'buyer') === buyerAlert(n);
+  const list = all.filter(mine);
+  const others = all.length - list.length;
   useEffect(() => {
     reload();
   }, [reload]);
   const markRead = useCallback(async (order, kind) => {
-    setList((l) =>
+    setAll((l) =>
       l.filter((n) => !((order == null || n.order_id === order) && (kind == null || n.kind === kind))),
     );
     await supabase.rpc('mark_read', { p_order: order ?? null, p_kind: kind ?? null });
@@ -211,7 +219,7 @@ export function useUnread(userId) {
     byOrder[n.order_id] = (byOrder[n.order_id] || 0) + 1;
     if (n.kind === 'message') chats[n.order_id] = (chats[n.order_id] || 0) + 1;
   });
-  return { list, loaded, byOrder, chats, reload, markRead };
+  return { list, loaded, byOrder, chats, others, reload, markRead };
 }
 
 // The unread count in the tab title ("(2) Bimpe's Beauty") and on the app icon, when the phone supports it.

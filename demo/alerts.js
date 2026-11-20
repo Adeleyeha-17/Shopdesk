@@ -3,7 +3,7 @@
 import { demo } from './runtime.js';
 import { supabase } from './database.js';
 
-export { useLive, useUnread, channelName } from '../src/lib/alerts.js';
+export { useLive, useUnread, channelName, buyerAlert } from '../src/lib/alerts.js';
 // the demo page keeps its own title and has no app icon
 export const useCount = () => {};
 

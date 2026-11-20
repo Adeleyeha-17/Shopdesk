@@ -38,7 +38,7 @@ false
 psql:problems.sql:82: ERROR:  Sign in with the email you ordered with.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function report_problem(uuid,text,text,text[]) line N during statement block local variable initialization
-psql:problems.sql:83: ERROR:  This email runs a shop. Use another email to order.
+psql:problems.sql:83: ERROR:  This order is from your own shop.
 CONTEXT:  PL/pgSQL function customer_order(uuid) line N at RAISE
 PL/pgSQL function report_problem(uuid,text,text,text[]) line N during statement block local variable initialization
 psql:problems.sql:85: ERROR:  Choose what went wrong.
@@ -96,7 +96,7 @@ psql:problems.sql:178: ERROR:  Write your decision.
 CONTEXT:  PL/pgSQL function admin_decide_problem(bigint,text,text,integer) line N at RAISE
 decided|shop
 decided|shop|The packing photo shows the pots were fine.
-Order KK-11: the shop was right. The packing photo shows the pots were fine.
+Order KK-13: the shop was right. The packing photo shows the pots were fine.
 psql:problems.sql:187: ERROR:  This problem is already closed.
 CONTEXT:  PL/pgSQL function admin_decide_problem(bigint,text,text,integer) line N at RAISE
 P18 three complaints decided against a shop in 30 days flag it (expect t):

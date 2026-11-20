@@ -46,7 +46,7 @@ State is local to each page. The cart is kept per shop in `localStorage` (`src/c
 - **Grants.** Execute rights are revoked from `public` and `anon` and granted per function. Internal helpers are not callable by clients.
 - **Column grants.** Vendors may update only the `active` flag on products directly; every other change goes through `save_product`.
 - **Admin.** A single owner account, pinned by `supabase/owner-lock.sql`. Admin functions return aggregate data. Customer details are returned only by `admin_support_view`, which requires a written reason and writes to `audit_log`.
-- **One email, one role.** An account that owns a shop cannot place orders, and an account that has placed orders cannot open a shop.
+- **Shop owners can buy; customers can't sell (yet).** A shop owner can order from other shops with the same account, never from their own shop. An account that has placed orders (or saved buyer details) cannot open a shop. Alerts about a shop owner's buying link to the customer pages (`/o/...`) and stay out of their shop's counts.
 
 ### Orders
 

@@ -5,7 +5,7 @@ import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { photoUrl } from '../lib/photos.js';
 import { errText, navigate } from '../lib/helpers.js';
-import { kick, signOut } from '../lib/alerts.js';
+import { kick } from '../lib/alerts.js';
 import { useInbox, InboxToast } from './inbox.jsx';
 import { CustomerTabs } from './CustomerTabs.jsx';
 import { noteShop, rememberShop } from './myShops.js';
@@ -193,11 +193,11 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [busy, setBusy] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [me, setMe] = useState(null);
-  const [isShop, setIsShop] = useState(null);
+  const [isShop, setIsShop] = useState(null); // signed in as this shop's own owner: they can look, not order
   const [mine, setMine] = useState([]); // this customer's orders with this shop, for Report this shop
   const [uid, setUid] = useState(null);
   // Customers order from their account. Sign-in happens at checkout, so the cart is kept; then their saved details fill in.
-  // A shop's account can't order (one email, one role), so it's told that instead of seeing the form.
+  // Shop owners can buy from other shops like anyone else; on their own shop's page they're told they can't order from it.
   useEffect(() => {
     const use = async (session) => {
       if (!session) {
@@ -211,7 +211,7 @@ export function ShopPage({ slug, step = 'shop' }) {
         supabase.rpc('my_account'),
         supabase.from('customers').select('name, phone, address, area').maybeSingle(),
       ]);
-      const shopAccount = !!(a && a.vendor);
+      const shopAccount = !!(a && a.shop_slug === slug);
       if (c && !shopAccount) setSaved(c);
       if (c && !shopAccount)
         setForm((f) => ({
@@ -607,11 +607,10 @@ export function ShopPage({ slug, step = 'shop' }) {
         </div>
         {isShop && (
           <p className="note">
-            <strong>This email runs a shop.</strong> {me} can't order.{' '}
-            <button className="linkbtn" onClick={signOut}>
-              Sign out
-            </button>{' '}
-            and use another email to order.
+            <strong>This is your shop.</strong> You can't order from it.{' '}
+            <a className="linkbtn" href="/">
+              Go to my shop
+            </a>
           </p>
         )}
         {cartNote && <p className="note cart-note">{cartNote}</p>}
@@ -694,13 +693,10 @@ export function ShopPage({ slug, step = 'shop' }) {
         </section>
       ) : isShop ? (
         <section className="card boxed">
-          <h2 style={{ fontSize: 16, margin: 0 }}>This email runs a shop</h2>
-          <p className="note">{me} runs a shop. Sign out and use another email to order.</p>
+          <h2 style={{ fontSize: 16, margin: 0 }}>This is your shop</h2>
+          <p className="note">You can't order from your own shop.</p>
           <div className="btns">
-            <button className="btn small" onClick={signOut}>
-              Sign out
-            </button>
-            <a className="linkbtn" href="/">
+            <a className="btn small" href="/">
               Go to my shop
             </a>
           </div>

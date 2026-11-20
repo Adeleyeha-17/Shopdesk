@@ -9,7 +9,7 @@ Every rule below is enforced in the database (`supabase/schema.sql`), through ro
 - An order is marked paid only by the vendor, never by the customer.
 - Vendors can't change their own shop's status. Only the admin can suspend or reactivate a shop, with a reason.
 - Only the admin can suspend a shop, close it for good, or delete it. Deleting needs the shop's link name typed and a reason, and the audit log keeps a note.
-- One email, one role: an email that runs a shop can't be used to shop, and an email that has shopped can't open a shop.
+- Shop owners can buy from other shops with the same email, but never from their own shop. An email that has shopped can't open a shop: customers only buy for now.
 - Customers must sign in to order. Only the customer who placed an order can say "I've sent the money" or "I've received it".
 - A paid delivery order can only go out with the rider's name, phone number and a promised delivery time.
 - Every order has a code made from the shop's initials (Bimpe's Beauty → BB-1043). Customers are asked to put it in their transfer note, and the vendor can search for it. The initials are set once and never change.

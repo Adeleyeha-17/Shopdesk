@@ -1,6 +1,5 @@
-// The Shop tab: the shop's order link, ShopDesk Delivery and
-// paying online (once switched on), its details,
-// its rules (payment and delivery) and sign out.
+// The Shop tab: the shop's order link, the chat with ShopDesk, buying from other shops (with the same account),
+// ShopDesk Delivery and paying online (once switched on), its details, its rules (payment and delivery) and sign out.
 import React, { useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { signOut } from '../lib/alerts.js';
@@ -11,8 +10,10 @@ import { ShopFields, checkShop, shopRow } from './shopForm.jsx';
 import { MoneyCards } from './MoneyCards.jsx';
 import { ShopDeskCard } from './ShopDeskChat.jsx';
 import { markShared } from './GetStarted.jsx';
+import { TabIcon } from '../shared/TabIcon.jsx';
 
-export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread }) {
+export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread, unread }) {
+  const buyNews = (unread && unread.others) || 0; // news on orders this shop owner placed with other shops
   const [v, setV] = useState({ ...shop, slugTouched: true });
   const [err, setErr] = useState('');
   const link = `${window.location.origin}/${shop.slug}`;
@@ -89,6 +90,18 @@ export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread }) 
         </div>
       </section>
       <ShopDeskCard unread={deskUnread} open={openDesk} />
+      <section className="card">
+        <a className="chat-toggle buy-row" href={buyNews ? '/orders' : '/shops'}>
+          <span className="buy-mark" aria-hidden="true">
+            <TabIcon name="cart" />
+          </span>
+          <strong>Buy from other shops</strong>
+          {buyNews > 0 && <span className="badge">{buyNews > 9 ? '9+' : buyNews}</span>}
+          <span className="sub" aria-hidden="true">
+            ›
+          </span>
+        </a>
+      </section>
       <MoneyCards shop={shop} reloadShop={reloadShop} say={say} />
       <section className="card">
         <h2>Your shop</h2>

@@ -5,7 +5,7 @@ C2 a new order alerts the shop, not the customer (expect 1|New order TT-<n>|Ada 
 0
 C3 the order moving alerts the customer: confirmed, paid, on its way, delivered (expect confirmed paid out delivered, and the bodies):
 confirmed paid out delivered
-TT-15 confirmed. Pay ₦21,500. / TT-15: payment received. Packing now. / TT-15 is on its way with Musa, 08031234567. By <time>. / TT-15 delivered. Got everything?
+TT-17 confirmed. Pay ₦21,500. / TT-17: payment received. Packing now. / TT-17 is on its way with Musa, 08031234567. By <time>. / TT-17 delivered. Got everything?
 C4 the shop hears when the customer says they paid and when they got it, and nobody hears about their own action (expect says_paid received, 0):
 says_paid received
 1
@@ -98,7 +98,7 @@ true|Ankara gown|true
 2
 C22 you read a chat only with a report or a problem with you (Bayo reported Femi Phones, so his order there opens), and it’s logged; shops and customers can’t (expect t, the chat, 1 log line, then 2 errors):
 t
-{"code": "FP-17", "shop": "Femi Phones", "customer": "Bayo", "messages": []}
+{"code": "FP-19", "shop": "Femi Phones", "customer": "Bayo", "messages": []}
 1
 psql:chat.sql:200: ERROR:  Not allowed.
 CONTEXT:  PL/pgSQL function admin_order_chat(bigint,text) line N at RAISE

@@ -10,7 +10,7 @@ import { problemState } from '../lib/problems.js';
 import { useBusy } from '../lib/busy.js';
 import { Skeleton } from '../shared/Skeleton.jsx';
 import { withOptions } from '../lib/products.js';
-import { kick, useCount, useLive, useUnread } from '../lib/alerts.js';
+import { buyerAlert, kick, useCount, useLive, useUnread } from '../lib/alerts.js';
 import { LoadError } from '../shared/LoadError.jsx';
 import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { Toast, useToast } from '../shared/Toast.jsx';
@@ -206,7 +206,7 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
       loaded: true,
     });
   }, []);
-  const unread = useUnread(userId);
+  const unread = useUnread(userId, 'shop'); // alerts about this shop; unread.others: news on what it bought from other shops
   // the chat with ShopDesk: open from an alert (/?shopdesk=1), and how many of ShopDesk's messages are unread
   const [desk, setDesk] = useState(shopDeskFromUrl);
   const [deskUnread, setDeskUnread] = useState(0);
@@ -243,7 +243,9 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
     unread.reload();
     loadDesk();
     if (!n) return;
-    if (n.kind === 'new_order') say(n.title + ' · ' + n.body);
+    // news on something this shop owner bought from another shop: Open goes to that order (or that shop's page)
+    if (buyerAlert(n)) say({ title: n.title, text: n.body, action: { label: 'Open', run: () => navigate(n.url) } });
+    else if (n.kind === 'new_order') say(n.title + ' · ' + n.body);
     else if (n.kind === 'shopdesk' && !desk) say({ title: 'ShopDesk', text: n.body, action: { label: 'Open', run: openDesk } });
     else if (n.kind === 'feature') say({ title: n.title, text: n.body, action: { label: 'Open', run: () => setTab('shop') } });
     else if (n.kind === 'monthly_report') {

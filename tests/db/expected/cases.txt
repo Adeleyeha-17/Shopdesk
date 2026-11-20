@@ -4,7 +4,7 @@ t
 t
 C2 ShopDesk writes in the order chat; the shop and the customer both see it and hear it (expect shopdesk, then 2 alerts, then 1 visible to each):
 shopdesk
-2|ShopDesk · CW-54
+2|ShopDesk · CW-56
 1
 1
 C3 nobody can report a ShopDesk message, and only the admin can write as ShopDesk (expect 2 errors):

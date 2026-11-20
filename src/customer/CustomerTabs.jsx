@@ -1,5 +1,6 @@
 // The bar at the bottom of the customer's pages, like the shop owner's: their shops, their orders (with a red number
-// when a shop has written), the cart (with how many things are in it) and their account.
+// when a shop has written), the cart (with how many things are in it) and their account. A shop owner buying from
+// other shops gets "My shop" instead of Account, to go back to their shop app.
 // Hidden on checkout, so nothing pulls them away from paying. Tabs change at once, without sliding.
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
@@ -26,6 +27,26 @@ function useCartCount(slug) {
   return n;
 }
 
+// does this account run a shop? asked once per visit for each signed-in email
+const runsShop = {};
+function useRunsShop(email) {
+  const [v, setV] = useState(() => runsShop[email] || false);
+  useEffect(() => {
+    if (!email) return setV(false);
+    if (email in runsShop) return setV(runsShop[email]);
+    let alive = true;
+    supabase.rpc('my_account').then(({ data, error }) => {
+      if (error) return;
+      runsShop[email] = !!(data && data.vendor);
+      if (alive) setV(runsShop[email]);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [email]);
+  return v;
+}
+
 // the signed-in email, for the letter on Account
 function useEmail() {
   const [email, setEmail] = useState('');
@@ -46,6 +67,7 @@ export function CustomerTabs({ active, unread = 0, shopNews = 0 }) {
   const slug = cartShop && cartShop.slug;
   const inCart = useCartCount(slug);
   const email = useEmail();
+  const ownsShop = useRunsShop(email);
   // the cart's number gives a little bump when something is added
   const was = useRef(inCart);
   const [bump, setBump] = useState(0);
@@ -58,7 +80,7 @@ export function CustomerTabs({ active, unread = 0, shopNews = 0 }) {
     ['shops', 'Shops', '/shops'],
     ['orders', 'Orders', '/orders'],
     slug && ['cart', 'Cart', '/' + slug + '/cart'],
-    ['account', 'Account', '/account'],
+    ownsShop ? ['myshop', 'My shop', '/'] : ['account', 'Account', '/account'],
   ].filter(Boolean);
   const letter = (email.trim()[0] || '').toUpperCase();
   return (
@@ -77,7 +99,7 @@ export function CustomerTabs({ active, unread = 0, shopNews = 0 }) {
                 <b>{letter}</b>
               </span>
             ) : (
-              <TabIcon name={k} on={active === k} />
+              <TabIcon name={k === 'myshop' ? 'shop' : k} on={active === k} />
             )}
             {label}
             {k === 'shops' && shopNews > 0 && (

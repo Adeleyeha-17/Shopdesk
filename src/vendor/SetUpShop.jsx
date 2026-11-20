@@ -1,5 +1,5 @@
 // "Set up your shop": the first screen for a new vendor. The shop is sent to ShopDesk for approval.
-// An email that has already been used to shop can't open a shop (one email, one role).
+// An email that has already been used to shop can't open a shop (customers only buy for now).
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { signOut } from '../lib/alerts.js';
@@ -23,7 +23,7 @@ export function SetUpShop({ userId, email, onDone, isOwner }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [isCustomer, setIsCustomer] = useState(null);
-  // One email, one role: an email that has shopped on ShopDesk can't open a shop.
+  // An email that has shopped on ShopDesk can't open a shop (shop owners can buy, but customers can't sell yet).
   useEffect(() => {
     supabase.rpc('my_account').then(({ data }) => setIsCustomer(!!(data && data.customer)));
   }, []);

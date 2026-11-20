@@ -266,6 +266,23 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
     rows: outs.map((x) => [X(x.spent_on + 'T00:00:00'), outKind(x.kind), x.note || '', x.amount]),
   });
 
+  // ---------- Buying (only when the shop bought from other ShopDesk shops in this period) ----------
+  const buys = (r.buying && r.buying.shops) || [];
+  const buyingSheet = buys.length
+    ? dataSheet({
+        name: 'Buying',
+        table: 'BuyingTable',
+        title: 'Buying from other shops',
+        note: 'What you paid other ShopDesk shops in this period. It is not taken off your sales or money in.',
+        columns: [
+          { h: 'Shop', w: 28 },
+          { h: 'Orders', w: 9, s: 'int', total: 'sum' },
+          { h: 'Paid', w: 13, s: 'money', total: 'sum' },
+        ],
+        rows: buys.map((b) => [b.name, b.orders, b.spent]),
+      })
+    : null;
+
   const inP = (range) => `${range},">="&PeriodStart,${range},"<="&PeriodEnd`;
   const inPrev = (range) => `${range},">="&PrevStart,${range},"<="&PrevEnd`;
 
@@ -950,6 +967,7 @@ export function salesWorkbook(r, shop, raw, now = Date.now()) {
       itemsSheet,
       paymentsSheet,
       ...(hasOut ? [outSheet] : []),
+      ...(buyingSheet ? [buyingSheet] : []),
       heatSheet,
       lists,
     ],

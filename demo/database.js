@@ -13,6 +13,8 @@ const HOUR = 36e5;
 const MIN = 6e4;
 export const VENDOR = { id: 'a0000000-0000-4000-8000-000000000001', email: 'bimpe@example.com' };
 export const CUSTOMER = { id: 'a0000000-0000-4000-8000-000000000002', email: 'funmi@example.com' };
+// another shop on ShopDesk that Bimpe buys her jars and labels from, with her same account (update 026)
+const SUPPLIER = { id: 'a0000000-0000-4000-8000-000000000003', email: 'packpro@example.com' };
 const RESERVED = [
   'admin',
   'privacy',
@@ -50,7 +52,12 @@ function weighted(items, weightOf) {
   }
   return items[items.length - 1];
 }
+// Ids for the sample data come from the seeded random numbers, so the sample is the same every day. Anything made
+// while using the demo (an order's private link, a rider link) gets a truly random id: the seeded numbers start over
+// after every reload and would hand out the same id twice.
+let seeding = false;
 function uuid() {
+  if (!seeding && typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   const h = () =>
     Math.floor(R() * 65536)
       .toString(16)
@@ -172,6 +179,14 @@ const HOURS = [
 ];
 
 function seed() {
+  seeding = true;
+  try {
+    return seedData();
+  } finally {
+    seeding = false;
+  }
+}
+function seedData() {
   R = rng(20261106);
   const now = Date.now();
   const t0 = startOfDay(now);
@@ -497,6 +512,98 @@ function seed() {
     p.id = i + 1;
     p.order_id = p.order_id.id;
   });
+  // Bimpe also buys from another ShopDesk shop with the same account: two paid orders from Pack Pro this month
+  // (it shows in her Sales tab as "Your buying") and one waiting for the shop to confirm.
+  const supplier = {
+    ...shop,
+    id: 'b0000000-0000-4000-8000-0000000000bb',
+    owner_id: SUPPLIER.id,
+    name: 'Pack Pro Lagos',
+    slug: 'packpro-lagos',
+    order_prefix: 'PP',
+    bank: 'Moniepoint',
+    account_number: '0987654321',
+    account_name: 'PACK PRO LAGOS',
+    whatsapp: '',
+    sells: 'Jars, labels and gift bags for small brands',
+    location: 'Ikeja, Lagos',
+    pickup_address: '5 Allen Avenue, Ikeja, Lagos',
+    social: '',
+    delivery_paid_by: 'vendor',
+    monthly_goal: null,
+  };
+  users.push(SUPPLIER);
+  const supplies = [
+    ['Amber jars, 250ml (pack of 12)', 9000, 40],
+    ['Round labels (pack of 100)', 4500, 60],
+    ['Kraft gift bags (pack of 20)', 6000, 25],
+  ].map(([name, price, stock], i) => ({
+    ...products[0],
+    id: uuid(),
+    shop_id: supplier.id,
+    name,
+    price,
+    stock,
+    low_at: 5,
+    photo_path: '',
+    created_at: iso(t0 - (60 - i) * DAY),
+  }));
+  const bimpe = { id: VENDOR.id, name: 'Bimpe Adeyemi', phone: '0800 000 0000', address: '14 Herbert Macaulay Way, Yaba' };
+  const monthStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), 1).getTime();
+  [
+    [Math.max(monthStart + 2 * HOUR, now - 9 * DAY), [[0, 2], [1, 1]], 'delivered'],
+    [Math.max(monthStart + 3 * HOUR, now - 3 * DAY), [[2, 1]], 'paid'],
+    [now - 40 * MIN, [[1, 2]], 'awaiting'],
+  ].forEach(([at, lines, step], k) => {
+    const total = lines.reduce((a, [i, q]) => a + supplies[i].price * q, 0);
+    const paid = step !== 'awaiting';
+    const o = {
+      ...orders[0],
+      id: 901 + k, // below the shop's own order numbers, so its next order number stays the same
+      shop_id: supplier.id,
+      public_token: uuid(),
+      customer_id: bimpe.id,
+      customer_name: bimpe.name,
+      customer_phone: bimpe.phone,
+      mode: 'delivery',
+      address: bimpe.address,
+      area: 'Yaba',
+      source: 'direct',
+      items_total: total,
+      delivery_fee: null,
+      delivery_paid_by: 'vendor',
+      amount_paid: paid ? total : 0,
+      status: step,
+      customer_says_paid: false,
+      customer_says_paid_at: null,
+      created_at: iso(at),
+      confirmed_at: paid ? iso(at + 20 * MIN) : null,
+      paid_at: paid ? iso(at + HOUR) : null,
+      out_at: step === 'delivered' ? iso(at + 3 * HOUR) : null,
+      done_at: step === 'delivered' ? iso(at + 6 * HOUR) : null,
+      deliver_by: step === 'delivered' ? iso(at + 6 * HOUR) : null,
+      received_at: step === 'delivered' ? iso(at + 6 * HOUR) : null,
+      received_by: step === 'delivered' ? 'customer' : null,
+      rider_name: step === 'delivered' ? 'Tunde' : '',
+      rider_phone: step === 'delivered' ? '0803 000 0111' : '',
+      packing_photo: null,
+    };
+    orders.push(o);
+    lines.forEach(([i, qty]) =>
+      items.push({
+        id: items.length + 1,
+        order_id: o.id,
+        product_id: supplies[i].id,
+        name: supplies[i].name,
+        price: supplies[i].price,
+        was_price: null,
+        qty,
+        packed: step !== 'awaiting',
+      }),
+    );
+    if (paid) payments.push({ id: payments.length + 1, order_id: o.id, shop_id: supplier.id, amount: total, method: 'tap', created_at: o.paid_at });
+  });
+  products.push(...supplies);
   products.forEach((p) => delete p.pop);
   // Sizes and a sale: the hair oil comes in three sizes (the 200ml on sale), the glow serum is on sale.
   const product_options = [];
@@ -616,14 +723,14 @@ function seed() {
     },
   ];
   return {
-    v: 13,
+    v: 14,
     shop_messages,
     feature_wants: [],
     day: t0,
     uid: VENDOR.id,
     path: '/',
     users,
-    shops: [shop],
+    shops: [shop, supplier],
     products,
     product_options,
     orders,
@@ -681,7 +788,7 @@ try {
   S = null;
 }
 // A fresh sample each day, so "today" always has orders in it.
-if (!S || S.v !== 13 || S.day !== startOfDay(Date.now())) S = seed();
+if (!S || S.v !== 14 || S.day !== startOfDay(Date.now())) S = seed();
 demo.go(S.path || '/');
 let saveTimer = null;
 function save() {
@@ -739,7 +846,8 @@ const hasShop = (u) => S.shops.some((s) => s.owner_id === u);
 const hasShopped = (u) =>
   S.orders.some((o) => o.customer_id === u) || S.customers.some((c) => c.user_id === u);
 const shopOpen = (s) => s && s.status === 'active';
-const SHOP_EMAIL = 'This email runs a shop. Use another email to order.';
+const OWN_SHOP = "This is your own shop. You can't order from it.";
+const ownsShopOf = (o) => !!uid() && (S.shops.find((x) => x.id === o.shop_id) || {}).owner_id === uid();
 function ownedOrder(id) {
   const s = myShop();
   const o = s && S.orders.find((x) => x.id === Number(id) && x.shop_id === s.id);
@@ -747,7 +855,7 @@ function ownedOrder(id) {
 }
 function customerOrder(token) {
   const o = S.orders.find((x) => x.public_token === token) || fail('Order not found.');
-  if (uid() && hasShop(uid())) fail(SHOP_EMAIL);
+  if (ownsShopOf(o)) fail('This order is from your own shop.');
   if (o.customer_id && o.customer_id !== uid()) fail('Sign in with the email you ordered with.');
   return o;
 }
@@ -1018,7 +1126,11 @@ if (typeof window !== 'undefined') window.__demoPay = demoPaystack;
 // ---------- the database functions the app calls ----------
 const RPC = {
   is_admin: () => false,
-  my_account: () => ({ vendor: hasShop(uid()), customer: hasShopped(uid()) }),
+  my_account: () => ({
+    vendor: hasShop(uid()),
+    customer: hasShopped(uid()),
+    shop_slug: (S.shops.find((x) => x.owner_id === uid()) || {}).slug || null,
+  }),
   touch_shop: () => {
     const s = myShop();
     if (s) s.last_active_at = nowIso();
@@ -1438,9 +1550,9 @@ const RPC = {
   },
   place_order: ({ p_slug, p_customer, p_items }) => {
     if (!uid()) fail('Sign in to order.');
-    if (hasShop(uid())) fail(SHOP_EMAIL);
     const s = S.shops.find((x) => x.slug === String(p_slug).toLowerCase());
     if (!shopOpen(s)) fail("This shop isn't taking orders right now.");
+    if (s.owner_id === uid()) fail(OWN_SHOP);
     if (!Array.isArray(p_items) || !p_items.length || p_items.length > 30)
       fail('Pick between 1 and 30 items.');
     const c = p_customer || {};
@@ -2038,12 +2150,29 @@ const RPC = {
         };
       });
   },
+  // what this shop owner paid other shops between two days (Lagos dates), for the Sales tab
+  my_purchases: ({ p_from, p_to }) => {
+    const per = {};
+    S.orders
+      .filter((o) => uid() && o.customer_id === uid() && o.status !== 'cancelled' && o.amount_paid > 0)
+      .filter((o) => {
+        const d = new Date(Date.parse(o.paid_at || o.created_at) + HOUR).toISOString().slice(0, 10);
+        return d >= p_from && d <= p_to;
+      })
+      .forEach((o) => {
+        const s = S.shops.find((x) => x.id === o.shop_id);
+        const r = (per[s.slug] = per[s.slug] || { name: s.name, slug: s.slug, spent: 0, orders: 0 });
+        r.spent += o.amount_paid;
+        r.orders += 1;
+      });
+    const shops = Object.values(per).sort((a, b) => b.spent - a.spent || a.name.localeCompare(b.name));
+    return { spent: shops.reduce((a, x) => a + x.spent, 0), orders: shops.reduce((a, x) => a + x.orders, 0), shops };
+  },
   claim_orders: ({ p_tokens }) => {
     if (!uid()) fail('Sign in first.');
-    if (hasShop(uid())) fail(SHOP_EMAIL);
     let n = 0;
     S.orders.forEach((o) => {
-      if ((p_tokens || []).includes(o.public_token) && !o.customer_id) {
+      if ((p_tokens || []).includes(o.public_token) && !o.customer_id && !ownsShopOf(o)) {
         o.customer_id = uid();
         n++;
       }
@@ -2455,7 +2584,6 @@ class Query {
         });
       } else if (t === 'customers') {
         if (v.user_id !== u) fail('new row violates row-level security policy');
-        if (hasShop(u)) fail(SHOP_EMAIL);
         if (S.customers.some((c) => c.user_id === u))
           fail('duplicate key value violates unique constraint "customers_pkey"');
         S.customers.push({ name: '', phone: '', address: '', updated_at: nowIso(), ...v });

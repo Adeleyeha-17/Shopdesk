@@ -2,7 +2,8 @@
 // Pick a period (Today, 7 days, 30 days, This month, This year, or your own dates) and everything follows it.
 // Top to bottom: this month's goal, sales and how they compare, where the money stands (money in, and orders waiting,
 // money out, what's left), "Do this today", the sales chart, what's selling, where orders come from, when people
-// order, customers and records. "Full report" opens the same numbers as tables; "Download for Excel" saves them.
+// order, customers and records, then what the shop paid other ShopDesk shops ("Your buying").
+// "Full report" opens the same numbers as tables; "Download for Excel" saves them.
 // Every number comes from report.js, so the screen, the Full report and the Excel file always agree.
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/database.js';
@@ -155,11 +156,23 @@ export function SalesTab({ shop, data, say, setTab, setFocus, reloadShop, month,
     setMonth(null);
   }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
   const period = useMemo(() => reportPeriod(key, custom), [key, custom, raw]);
-  const r = useMemo(
+  const report = useMemo(
     () =>
       raw ? buildReport({ shop, data: raw, products: data.products, openOrders: data.orders, period }) : null,
     [raw, shop, data.products, data.orders, period],
   );
+  // what the shop paid other shops in the same period: shown on its own, never taken off sales
+  const [buying, setBuying] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    supabase
+      .rpc('my_purchases', { p_from: ymd(period.start), p_to: ymd(period.end) })
+      .then(({ data: b }) => alive && setBuying(b || null));
+    return () => {
+      alive = false;
+    };
+  }, [period.start, period.end, reloads]);
+  const r = useMemo(() => (report ? { ...report, buying } : null), [report, buying]);
 
   async function saveGoal(amount) {
     const { error } = await supabase.from('shops').update({ monthly_goal: amount }).eq('id', shop.id);
@@ -223,6 +236,7 @@ export function SalesTab({ shop, data, say, setTab, setFocus, reloadShop, month,
           saveGoal={saveGoal}
         />
       )}
+      {r && <BuyingCard b={buying} />}
       {full && r && (
         <FullReport
           r={r}
@@ -253,6 +267,37 @@ export function SalesTab({ shop, data, say, setTab, setFocus, reloadShop, month,
         />
       )}
     </>
+  );
+}
+
+// What the shop paid other ShopDesk shops in this period, and a way to its orders with them. Hidden when it bought nothing.
+function BuyingCard({ b }) {
+  if (!b || !b.spent) return null;
+  const n = b.shops.length;
+  return (
+    <section className="card buying">
+      <div className="row">
+        <h2>Your buying</h2>
+        <a className="linkbtn" href="/orders">
+          My orders ›
+        </a>
+      </div>
+      <div className="big">{naira(b.spent)}</div>
+      <p className="sub">
+        Paid to {n} shop{n === 1 ? '' : 's'} · {b.orders} order{b.orders === 1 ? '' : 's'}. Not taken off your sales.
+      </p>
+      <ul className="rank">
+        {b.shops.slice(0, 5).map((x) => (
+          <li key={x.slug}>
+            <a href={'/' + x.slug}>{x.name}</a>
+            <span className="sub">
+              {x.orders} order{x.orders === 1 ? '' : 's'}
+            </span>
+            <strong>{naira(x.spent)}</strong>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

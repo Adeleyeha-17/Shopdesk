@@ -40,7 +40,7 @@ CONTEXT:  PL/pgSQL function cancel_order(bigint,text,text) line N at RAISE
 psql:fair.sql:104: ERROR:  Choose why you're cancelling.
 CONTEXT:  PL/pgSQL function cancel_order(bigint,text,text) line N at RAISE
 cancelled|out_of_stock
-FG-24 was cancelled: out of stock.
+FG-26 was cancelled: out of stock.
 F10 unpaid orders cancel themselves after 48 hours (stock back, both told); "I’ve paid" orders and part-paid ones stay (expect 1 cancelled, unpaid, +1 stock, 2 alerts, awaiting):
 t
 unpaid

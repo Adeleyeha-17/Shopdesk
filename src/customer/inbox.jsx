@@ -9,7 +9,7 @@ import { Toast, useToast } from '../shared/Toast.jsx';
 // quiet(alert) says when not to pop up (the chat it's for is already open on screen).
 // open(alert) can handle Open itself (return true), e.g. open the chat on this page.
 export function useInbox(uid, { onAlert, quiet, open, title } = {}) {
-  const unread = useUnread(uid);
+  const unread = useUnread(uid, 'buyer'); // a shop owner's own shop alerts stay in their shop app
   const [toast, say, close] = useToast();
   const ref = useRef();
   ref.current = { onAlert, quiet, open };
