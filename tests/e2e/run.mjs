@@ -402,16 +402,23 @@ await step('the paid order has a receipt: it shows the code, the lines and the t
   await p.locator('.receipt').waitFor({ state: 'detached' });
 });
 
-await step("the order page's back arrow goes to My orders; the Account tab shows who is signed in", async () => {
+await step("the order page's back arrow goes to My orders; the Account tab shows who is signed in, and Profile details", async () => {
   await p.locator('.back-btn').click();
   await see('Order history');
   const letter = (await tab('Account').locator('.tab-letter').innerText()).trim();
   await tab('Account').click();
-  await see('Signed in as');
-  const email = (await p.locator('.profile strong').innerText()).trim();
-  expect(email.includes('@'), 'no email on the Account page');
+  await see('Personal');
+  const email = (await p.locator('.profile').innerText()).split('\n').map((x) => x.trim()).find((x) => x.includes('@'));
+  expect(!!email, 'no email on the Account page');
   expect(letter === email[0].toUpperCase(), `the badge shows "${letter}", not the first letter of ${email}`);
+  expect((await p.locator('.menu-row:has-text("Addresses") .mc').innerText()).trim() !== '0', 'Addresses shows no count');
+  await p.locator('.menu-row:has-text("Profile details")').click();
   await see('Your details');
+  await see('You sign in with this.');
+  expect((await p.locator('.signin-email strong').innerText()).trim() === email, 'the sign-in email is not shown');
+  expect((await p.locator('.menu-row:has-text("Sign out")').count()) === 1, 'no Sign out on Profile details');
+  await p.locator('.back-btn').click();
+  await see('Personal');
   await tab('Orders').click();
   await see('Order history');
 });
@@ -467,8 +474,8 @@ await step('the Cart tab opens the one cart straight away; with carts in two sho
 
 await step('Help is a tab: a recent delivered order can be reported from there, and the common questions open', async () => {
   await tab('Account').click();
-  await see('Your details');
-  expect((await p.locator('a.hist-row:has-text("Help")').count()) === 0, 'Account still has a Help row');
+  await see('Personal');
+  expect((await p.locator('.menu-row:has-text("Help")').count()) === 0, 'Account still has a Help row');
   await tab('Help').click();
   await see('How can we help?');
   expect((await tab('Help').getAttribute('aria-current')) === 'page', 'the Help tab is not marked as open');
@@ -485,29 +492,65 @@ await step('Help is a tab: a recent delivered order can be reported from there, 
   }
 });
 
-await step('Account lists the saved addresses (with the one used at checkout), and they can be added and removed', async () => {
+await step('Account → Addresses lists the saved addresses (with the one used at checkout); they can be added, changed and removed', async () => {
   await tab('Account').click();
-  await see('Addresses');
+  await p.locator('.menu-row:has-text("Addresses")').click();
+  await p.locator('.addr-list').waitFor();
   const list = () => p.locator('.addr-list').innerText();
   expect((await list()).includes('4 Admiralty Way'), 'the address used at checkout was not saved');
   const before = await p.locator('.addr-list li').count();
-  await p.locator('.addr-list li:has-text("14 Admiralty Way") button:has-text("Remove")').click();
+  await p.locator('.addr-list li:has-text("14 Admiralty Way") button[aria-label^="Edit"]').click();
+  await p.locator('.addr-list li.editing button:has-text("Remove")').click();
   await pause(300);
   expect((await p.locator('.addr-list li').count()) === before - 1, 'the address was not removed');
-  await p.locator('section[aria-label="Addresses"] button:has-text("Add")').click();
+  await p.locator('button.addr-add').click();
   await p.locator('#newAddr').fill('Block C, Unilag Staff Quarters, Akoka, Yaba');
   await p.locator('button:has-text("Save address")').click();
   await pause(300);
   expect((await list()).includes('Unilag Staff Quarters'), 'the new address was not added');
+  await p.locator('.addr-list li:has-text("Unilag Staff Quarters") button[aria-label^="Edit"]').click();
+  await p.locator('#newAddr').fill('Block D, Unilag Staff Quarters, Akoka, Yaba');
+  await p.locator('button:has-text("Save changes")').click();
+  await pause(300);
+  expect((await list()).includes('Block D, Unilag'), 'the address was not changed');
+  expect(!(await list()).includes('Block C, Unilag'), 'the old address is still there');
+  await p.locator('.back-btn').click();
+  await see('Personal');
   await tab('Orders').click();
   await see('Order history');
 });
 
-const theme = () => p.evaluate(() => document.documentElement.getAttribute('data-theme'));
-await step('the app opens in light; Account switches it to Dark, Same as phone and back to Light', async () => {
-  expect((await theme()) === 'light', 'did not open in light');
+await step('Account → Legal opens the Terms of Use and the prohibited items; Help has questions for shops too', async () => {
   await tab('Account').click();
+  await p.locator('.menu-row:has-text("Legal")').click();
+  await p.locator('.menu-row:has-text("Terms of Use")').click();
+  await see('About these terms');
+  await see('ShopDesk Technologies Limited');
+  await p.locator('.back-btn').click();
+  await p.locator('.menu-row:has-text("Prohibited items")').click();
+  await p.locator('.faq summary:has-text("Weapons")').click();
+  await see('Guns, ammunition');
+  await p.locator('.back-btn').click();
+  await see('Shop and customer rules');
+  await p.locator('.back-btn').click();
+  await see('Personal');
+  await tab('Help').click();
+  await p.locator('.faq-who button:has-text("Shops")').click();
+  await see('How do I start selling on ShopDesk?');
+  await p.locator('.faq-who button:has-text("Buyers")').click();
+  await see('How do I pay for my order?');
+  await tab('Orders').click();
+});
+
+const theme = () => p.evaluate(() => document.documentElement.getAttribute('data-theme'));
+const preferences = async () => {
+  await tab('Account').click();
+  await p.locator('.menu-row:has-text("Preferences")').click();
   await see('Appearance');
+};
+await step('the app opens in light; Account → Preferences switches it to Dark, Same as phone and back to Light', async () => {
+  expect((await theme()) === 'light', 'did not open in light');
+  await preferences();
   await p.locator('.seg.wide button:has-text("Dark")').click();
   expect((await theme()) === 'dark', 'Dark did not switch');
   const bg = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -515,7 +558,7 @@ await step('the app opens in light; Account switches it to Dark, Same as phone a
   await p.reload();
   await p.locator('.demo-bar').waitFor();
   expect((await theme()) === 'dark', 'Dark was not kept after a reload');
-  await tab('Account').click();
+  await preferences();
   await p.locator('.seg.wide button:has-text("Same as phone")').click();
   expect((await theme()) === 'light', 'Same as phone should follow the (light) test phone');
   await p.emulateMedia({ colorScheme: 'dark' });

@@ -1,5 +1,5 @@
-// /help, the Help tab: the customer's recent orders with "Something wrong? Report a problem", short answers to what buyers ask most,
-// and how to reach ShopDesk.
+// /help, the Help tab: the customer's recent orders with "Something wrong? Report a problem", short answers to what
+// buyers and shop owners ask most (Buyers | Shops; /help#shops opens on Shops), and how to reach ShopDesk.
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { atText } from '../lib/dates.js';
@@ -9,7 +9,7 @@ import { CustomerTabs } from './CustomerTabs.jsx';
 import { useInbox, InboxToast } from './inbox.jsx';
 
 // the same rules as docs/rules.md, in buyers' words
-const QUESTIONS = [
+const FOR_BUYERS = [
   [
     'How do I pay for my order?',
     "You pay the shop directly, by transfer to the account shown on your order. Put the order code in the transfer note, then tap \"I've sent the money\". The shop confirms once the money arrives. ShopDesk never holds your money.",
@@ -36,6 +36,38 @@ const QUESTIONS = [
   ],
 ];
 
+// and in shop owners' words
+const FOR_SHOPS = [
+  [
+    'How do I start selling on ShopDesk?',
+    'Open your shop with your email, add your products with photos and prices, and add the bank account customers pay into. ShopDesk checks every new shop before it goes live. Once you are approved, share your shop link anywhere you sell.',
+  ],
+  [
+    'How much does ShopDesk cost?',
+    'Nothing. There is no monthly plan, and your shop never closes for not paying.',
+  ],
+  [
+    'How do customers pay me?',
+    'Straight into your own bank account: every order shows your account and an order code for the transfer note. When the money arrives, check your bank app, then tap Money in on the order. ShopDesk never holds your money.',
+  ],
+  [
+    "What if a customer doesn't pay?",
+    'ShopDesk reminds them twice. An order not paid in 48 hours cancels itself and the items go back in stock. You can cancel an unpaid order yourself and tell the customer why.',
+  ],
+  [
+    'How do delivery fees work?',
+    'You choose whether the customer pays delivery or you deliver for free. If the customer pays, you type the fee on each order before they pay, so it fits the rider and the distance.',
+  ],
+  [
+    'A customer reported a problem. What now?',
+    'Answer within 48 hours: refund, send it again, or explain in the order chat. If you and the customer cannot sort it out, ShopDesk reads the chat and photos and decides. If ShopDesk decides on a refund, pay it within 48 hours and add the transfer receipt, or your shop stops taking orders until you do.',
+  ],
+  [
+    'How do I reach ShopDesk?',
+    'Open the ShopDesk chat on your Shop tab. You can send photos and short videos there.',
+  ],
+];
+
 export function HelpPage() {
   const [orders, setOrders] = useState(null);
   const [uid, setUid] = useState(null);
@@ -47,6 +79,8 @@ export function HelpPage() {
     });
   }, []);
   const inbox = useInbox(uid, { title: 'Help' });
+  // /help#shops opens on the shop owners' questions
+  const [who, setWho] = useState(() => (window.location.hash === '#shops' ? 'shops' : 'buyers'));
   useBusy(orders === null);
   // the last few orders that reached them, newest first
   const recent = (orders || []).filter((o) => o.status === 'delivered' && o.done_at).slice(0, 3);
@@ -87,7 +121,17 @@ export function HelpPage() {
       })}
       <section className="card boxed faq">
         <div className="faq-title">Common questions</div>
-        {QUESTIONS.map(([q, a]) => (
+        <div className="faq-who">
+          <div className="seg wide" role="group" aria-label="Questions from">
+            <button aria-pressed={who === 'buyers'} onClick={() => setWho('buyers')}>
+              Buyers
+            </button>
+            <button aria-pressed={who === 'shops'} onClick={() => setWho('shops')}>
+              Shops
+            </button>
+          </div>
+        </div>
+        {(who === 'shops' ? FOR_SHOPS : FOR_BUYERS).map(([q, a]) => (
           <details key={q}>
             <summary>{q}</summary>
             <p>{a}</p>

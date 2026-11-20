@@ -27,6 +27,13 @@ const RESERVED = [
   'support',
   'api',
   'app',
+  'email-off',
+  'account',
+  'shops',
+  'carts',
+  'legal',
+  'terms',
+  'prohibited',
 ];
 
 // ---------- small tools ----------
@@ -2725,7 +2732,14 @@ class Query {
         fail('duplicate key value violates unique constraint "shops_slug_key"');
       if (t === 'shops' && RESERVED.includes(this.values.slug))
         fail('new row for relation "shops" violates check constraint "shops_slug_reserved"');
-      const allowed = { shops: true, products: true, customers: true };
+      if (t === 'customer_addresses' && this.values.address !== undefined) {
+        const address = String(this.values.address).trim();
+        if (address.length < 3)
+          fail('new row for relation "customer_addresses" violates check constraint "customer_addresses_address_check"');
+        if (S.customer_addresses.some((a) => a.user_id === u && !rows.includes(a) && a.address.toLowerCase() === address.toLowerCase()))
+          fail('duplicate key value violates unique constraint "customer_addresses_one"');
+      }
+      const allowed = { shops: true, products: true, customers: true, customer_addresses: true };
       if (!allowed[t]) fail('Not allowed.');
       rows.forEach((r) =>
         Object.assign(r, this.values, t === 'shops' ? { status: r.status, owner_id: r.owner_id } : {}),

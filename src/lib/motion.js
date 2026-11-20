@@ -43,9 +43,10 @@ export function depth(path) {
   if (p === '/' || p === '/admin') return 0;
   if (p === '/shops') return 0.5;
   if (['/orders', '/carts', '/orders/carts', '/help', '/email-off'].includes(p) || /^\/[^/]+\/cart$/.test(p)) return 2;
-  if (p === '/account' || p === '/orders/history' || /^\/[^/]+\/checkout$/.test(p)) return 3;
+  if (p === '/account') return 2.5;
+  if (p.startsWith('/account/') || p === '/orders/history' || p === '/legal' || /^\/[^/]+\/checkout$/.test(p)) return 3;
   if (p.startsWith('/o/')) return 4;
-  if (p === '/privacy') return 5;
+  if (p === '/privacy' || p === '/terms' || p === '/prohibited') return 5;
   return 1; // a shop's page
 }
 // moving up (to a shallower page) slides back; anything else slides forward

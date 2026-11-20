@@ -103,11 +103,19 @@ export function SetUpShop({ userId, email, onDone, isOwner }) {
         <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
         <span>
           I accept the{' '}
+          <a href="/terms" target="_blank" rel="noopener">
+            Terms of Use
+          </a>{' '}
+          and the{' '}
           <a href="/privacy#rules" target="_blank" rel="noopener">
             shop rules
           </a>
-          : real goods only, no taking money without delivering, refunds for cancelled orders, and customers'
-          details used only for their orders.
+          : real goods only, nothing on the{' '}
+          <a href="/prohibited" target="_blank" rel="noopener">
+            prohibited list
+          </a>
+          , no taking money without delivering, refunds for cancelled orders, and customers' details used only for
+          their orders.
         </span>
       </label>
       {err && <p className="err">{err}</p>}

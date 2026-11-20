@@ -2,9 +2,10 @@
 //   /              the vendor's app (sign in, set up your shop, then Sales / Orders / Stock / Shop)
 //   /admin         ShopDesk Admin (only your owner account)
 //   /privacy       privacy notice and shop rules
+//   /legal         the legal pages: /terms (Terms of Use), /prohibited (prohibited items), /privacy
 //   /shops         a customer's shops (every shop they've opened or ordered from)
 //   /orders        a customer's own orders
-//   /account       a customer's saved details, email alerts and sign out
+//   /account       a customer's account: /account/details, /account/addresses, /account/preferences
 //   /carts         every shop's cart (the Cart tab, when more than one shop has something in it)
 //   /help          Help: recent orders to report a problem on, common questions, how to reach ShopDesk
 //   /o/<link>      one order, as the customer sees it
@@ -29,6 +30,8 @@ import { HelpPage } from './customer/HelpPage.jsx';
 import { CartsPage } from './customer/Carts.jsx';
 import { ShopsPage } from './customer/ShopsPage.jsx';
 import { PrivacyPage } from './shared/PrivacyPage.jsx';
+import { LegalPage, TermsPage, ProhibitedPage } from './shared/LegalPages.jsx';
+import { AccountPage } from './customer/AccountPage.jsx';
 import { EmailOffPage } from './shared/EmailOffPage.jsx';
 import { LoadingBar } from './shared/LoadingBar.jsx';
 
@@ -97,7 +100,13 @@ function Pages() {
   if (p === '/admin') return <AdminApp />;
   if (p === '/privacy') return <PrivacyPage />;
   if (p === '/shops') return <ShopsPage />;
-  if (p === '/orders' || p === '/account') return <MyOrdersPage view={p === '/account' ? 'account' : 'orders'} />;
+  if (p === '/legal') return <LegalPage />;
+  if (p === '/terms') return <TermsPage />;
+  if (p === '/prohibited') return <ProhibitedPage />;
+  if (p === '/orders') return <MyOrdersPage />;
+  if (p === '/account') return <AccountPage />;
+  const acc = p.match(/^\/account\/(details|addresses|preferences)$/);
+  if (acc) return <AccountPage section={acc[1]} />;
   if (p === '/carts' || p === '/orders/carts') return <CartsPage />;
   if (p === '/orders/history') return <OrderHistoryPage />;
   if (p === '/help') return <HelpPage />;

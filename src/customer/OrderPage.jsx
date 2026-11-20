@@ -587,6 +587,8 @@ export function OrderPage({ token }) {
         </button>
         <span aria-hidden="true">·</span>
         <a href="/privacy">Privacy</a>
+        <span aria-hidden="true">·</span>
+        <a href="/terms">Terms</a>
       </footer>
       {reporting && (
         <ReportShopForm

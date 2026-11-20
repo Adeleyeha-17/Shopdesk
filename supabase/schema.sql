@@ -330,7 +330,7 @@ alter table public.shops add constraint shops_status_check check (status in ('pe
 alter table public.shops alter column status set default 'pending';
 -- Link names ShopDesk uses for its own pages can't be taken by a shop.
 alter table public.shops drop constraint if exists shops_slug_reserved;
-alter table public.shops add constraint shops_slug_reserved check (slug not in ('admin', 'privacy', 'orders', 'order', 'login', 'signin', 'shopdesk', 'help', 'support', 'api', 'app', 'email-off', 'account', 'shops'));
+alter table public.shops add constraint shops_slug_reserved check (slug not in ('admin', 'privacy', 'orders', 'order', 'login', 'signin', 'shopdesk', 'help', 'support', 'api', 'app', 'email-off', 'account', 'shops', 'carts', 'legal', 'terms', 'prohibited'));
 -- Plans: a shop is open until paid_until (plus the grace days in settings).
 alter table public.shops add column if not exists paid_until timestamptz;
 -- Free plan: a shop whose plan has run out can still take this many orders a month (0 = no free plan, every shop pays).

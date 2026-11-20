@@ -137,8 +137,11 @@ export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread, un
         <p className="note">Signed in as {email}.</p>
         <EmailSwitch />
         <div className="btns">
-          <a className="btn small ghost" href="/privacy" style={{ textDecoration: 'none' }}>
-            Rules and privacy
+          <a className="btn small ghost" href="/help#shops" style={{ textDecoration: 'none' }}>
+            Help
+          </a>
+          <a className="btn small ghost" href="/legal" style={{ textDecoration: 'none' }}>
+            Terms and rules
           </a>
           <button className="btn small ghost" onClick={signOut}>
             Sign out

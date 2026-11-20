@@ -30,10 +30,12 @@ There is no application server. The client talks to Supabase directly, and every
 | `/orders` | A customer's orders on their way |
 | `/carts` | Every shop's cart (the Cart tab when more than one shop has something in it; `/orders/carts` still opens it) |
 | `/orders/history` | Buy again and past orders, with filters |
-| `/account` | Saved details, delivery addresses, appearance and alerts |
-| `/help` | The Help tab: recent delivered orders with Report a problem, common questions, contact |
+| `/account` | The Account tab: a menu of Profile details, Addresses, Order history, Preferences and Legal |
+| `/account/details`, `/account/addresses`, `/account/preferences` | Name and phone, sign out and delete saved details; delivery addresses (add, edit, remove); alerts and appearance |
+| `/help` | The Help tab: recent delivered orders with Report a problem, common questions for buyers and for shops (`/help#shops`), contact |
 | `/admin` | Admin console |
-| `/privacy`, `/email-off` | Privacy notice, email unsubscribe |
+| `/privacy`, `/email-off` | Privacy notice and rules, email unsubscribe |
+| `/legal`, `/terms`, `/prohibited` | The legal pages: Terms of Use and the prohibited items list |
 
 State is local to each page. The cart is kept per shop in `localStorage` (`src/customer/cart.js`) and is reconciled against current stock whenever it is restored; `allCarts()` lists every shop's cart for the Cart tab (its number counts every cart, and it opens `/carts` when more than one shop has something in it).
 

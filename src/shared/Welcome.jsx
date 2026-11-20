@@ -105,7 +105,7 @@ export function Welcome({ signedIn = false, email = '', onPick }) {
           footer={
             <div className="signin-foot">
               <p className="fine">
-                By continuing you agree to the{' '}
+                By continuing you agree to the <a href="/terms">Terms of Use</a> and the{' '}
                 <a href={step === 'customer' ? '/privacy' : '/privacy#rules'}>
                   {step === 'customer' ? 'privacy notice' : 'shop rules'}
                 </a>

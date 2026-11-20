@@ -443,6 +443,8 @@ export function ShopPage({ slug, step = 'shop' }) {
       </button>
       <span aria-hidden="true">·</span>
       <a href="/privacy">Privacy</a>
+      <span aria-hidden="true">·</span>
+      <a href="/terms">Terms</a>
     </footer>
   );
   // returning customers see their saved details in one line, with Change; first-timers fill them in
@@ -789,7 +791,7 @@ export function ShopPage({ slug, step = 'shop' }) {
         <section className="card boxed">
           <SignIn compact title="Sign in to order" path={'/' + slug + '/checkout'} note="Your cart stays." />
           <p className="note" style={{ fontSize: 12 }}>
-            <a href="/privacy">Privacy</a>
+            <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
           </p>
         </section>
       ) : isShop ? (

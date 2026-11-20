@@ -1,5 +1,6 @@
-// A customer's delivery addresses (home, office...). Account lists them, with Add and Remove; at checkout, Change opens
-// the list to pick from, or to type a new one. An address used at checkout is saved when the order is placed.
+// A customer's delivery addresses (home, office...). Account → Addresses lists them, with Add, Edit and Remove; at
+// checkout, Change opens the list to pick from, or to type a new one. An address used at checkout is saved when the
+// order is placed.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { errText } from '../lib/helpers.js';
@@ -16,26 +17,92 @@ export async function loadAddresses() {
   return error ? [] : data || [];
 }
 
+// The form for a new address, or for changing one: the address, and the area it's in.
+function AddressForm({ start, saveLabel, onSave, onCancel, onRemove }) {
+  const [draft, setDraft] = useState(start);
+  const [areaOpen, setAreaOpen] = useState(false);
+  const area = draft.area || areaIn(draft.address);
+  return (
+    <div className="stack-sm addr-form">
+      <div className="field">
+        <label htmlFor="newAddr">{start.address ? 'Address' : 'New address'}</label>
+        <input
+          id="newAddr"
+          autoComplete="street-address"
+          value={draft.address}
+          onChange={(e) => setDraft({ ...draft, address: e.target.value })}
+          placeholder="House number, street and area"
+          autoFocus
+        />
+        <span className="area-line">
+          {area ? (
+            <>
+              Area: <strong>{area}</strong>
+            </>
+          ) : (
+            'Add the area so shops know where it is.'
+          )}{' '}
+          <button className="linkbtn" onClick={() => setAreaOpen(true)}>
+            {area ? 'Change' : 'Pick area'}
+          </button>
+        </span>
+      </div>
+      <div className="btns">
+        <button className="btn small" onClick={() => onSave(draft)}>
+          {saveLabel}
+        </button>
+        <button className="linkbtn" onClick={onCancel}>
+          Cancel
+        </button>
+        {onRemove && (
+          <button className="linkbtn bad push-right" onClick={onRemove}>
+            Remove
+          </button>
+        )}
+      </div>
+      {areaOpen && (
+        <AreaPicker
+          value={draft.area}
+          onPick={(a) => setDraft((d) => ({ ...d, area: a }))}
+          onClose={() => setAreaOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Account → Addresses: "Add a new address" on top, then each address with an Edit pencil (Remove is inside Edit).
 export function AccountAddresses({ userId }) {
   const [list, setList] = useState(null);
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({ address: '', area: '' });
-  const [areaOpen, setAreaOpen] = useState(false);
+  const [editing, setEditing] = useState(null); // the id being changed
   const [msg, setMsg] = useState('');
   const reload = useCallback(() => loadAddresses().then(setList), []);
   useEffect(() => {
     reload();
   }, [reload]);
-  async function add() {
-    const address = draft.address.trim().slice(0, 160);
-    if (address.length < 3) return setMsg('Type the address: house number, street and area.');
-    const { error } = await supabase
-      .from('customer_addresses')
-      .insert({ user_id: userId, address, area: (draft.area || areaIn(address) || '').slice(0, 40) });
-    if (error) return setMsg(/duplicate|unique/i.test(error.message) ? 'You saved this address already.' : errText(error));
+  // the address as typed, cut to size, with its area (picked, or read from the address)
+  function clean(d) {
+    const address = d.address.trim().slice(0, 160);
+    return { address, area: (d.area || areaIn(address) || '').slice(0, 40) };
+  }
+  const said = (error) => (/duplicate|unique/i.test(error.message) ? 'You saved this address already.' : errText(error));
+  async function add(d) {
+    const row = clean(d);
+    if (row.address.length < 3) return setMsg('Type the address: house number, street and area.');
+    const { error } = await supabase.from('customer_addresses').insert({ user_id: userId, ...row });
+    if (error) return setMsg(said(error));
     setMsg('');
     setAdding(false);
-    setDraft({ address: '', area: '' });
+    reload();
+  }
+  async function change(id, d) {
+    const row = clean(d);
+    if (row.address.length < 3) return setMsg('Type the address: house number, street and area.');
+    const { error } = await supabase.from('customer_addresses').update(row).eq('id', id);
+    if (error) return setMsg(said(error));
+    setMsg('');
+    setEditing(null);
     reload();
   }
   async function remove(id) {
@@ -44,86 +111,84 @@ export function AccountAddresses({ userId }) {
     else reload();
   }
   return (
-    <section className="card" aria-label="Addresses">
-      <div className="row">
-        <h2>Addresses</h2>
-        {!adding && (
-          <button className="btn small ghost" onClick={() => setAdding(true)}>
-            Add
-          </button>
-        )}
-      </div>
+    <>
+      {adding ? (
+        <section className="card boxed">
+          <AddressForm
+            start={{ address: '', area: '' }}
+            saveLabel="Save address"
+            onSave={add}
+            onCancel={() => {
+              setAdding(false);
+              setMsg('');
+            }}
+          />
+        </section>
+      ) : (
+        <button
+          className="addr-add"
+          onClick={() => {
+            setAdding(true);
+            setEditing(null);
+            setMsg('');
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add a new address
+        </button>
+      )}
       {msg && <p className="note">{msg}</p>}
       {list && list.length > 0 && (
-        <ul className="addr-list">
-          {list.map((a, i) => (
-            <li key={a.id}>
-              <span className="co-pin" aria-hidden="true">
-                <PinIcon />
-              </span>
-              <div>
-                <strong>{a.address}</strong>
-                <span className="sub">
-                  {[a.area, i === 0 ? 'Used last' : ''].filter(Boolean).join(' · ')}
-                </span>
-              </div>
-              <button className="linkbtn" onClick={() => remove(a.id)} aria-label={'Remove ' + a.address}>
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {list && !list.length && !adding && <p className="sub">Addresses you deliver to are saved here when you order.</p>}
-      {adding && (
-        <div className="stack-sm">
-          <div className="field">
-            <label htmlFor="newAddr">New address</label>
-            <input
-              id="newAddr"
-              autoComplete="street-address"
-              value={draft.address}
-              onChange={(e) => setDraft({ ...draft, address: e.target.value })}
-              placeholder="House number, street and area"
-              autoFocus
-            />
-            <span className="area-line">
-              {draft.area || areaIn(draft.address) ? (
-                <>
-                  Area: <strong>{draft.area || areaIn(draft.address)}</strong>
-                </>
+        <section className="card boxed" aria-label="Addresses">
+          <ul className="addr-list">
+            {list.map((a, i) =>
+              editing === a.id ? (
+                <li key={a.id} className="editing">
+                  <AddressForm
+                    start={{ address: a.address, area: a.area }}
+                    saveLabel="Save changes"
+                    onSave={(d) => change(a.id, d)}
+                    onRemove={() => remove(a.id)}
+                    onCancel={() => {
+                      setEditing(null);
+                      setMsg('');
+                    }}
+                  />
+                </li>
               ) : (
-                'Add the area so shops know where it is.'
-              )}{' '}
-              <button className="linkbtn" onClick={() => setAreaOpen(true)}>
-                {draft.area || areaIn(draft.address) ? 'Change' : 'Pick area'}
-              </button>
-            </span>
-          </div>
-          <div className="btns">
-            <button className="btn small" onClick={add}>
-              Save address
-            </button>
-            <button
-              className="linkbtn"
-              onClick={() => {
-                setAdding(false);
-                setMsg('');
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+                <li key={a.id}>
+                  <span className="co-pin" aria-hidden="true">
+                    <PinIcon />
+                  </span>
+                  <div>
+                    <strong>{a.address}</strong>
+                    <span className="sub">{[a.area, i === 0 ? 'Used last' : ''].filter(Boolean).join(' · ')}</span>
+                  </div>
+                  <button
+                    className="icon-btn"
+                    onClick={() => {
+                      setEditing(a.id);
+                      setAdding(false);
+                      setMsg('');
+                    }}
+                    aria-label={'Edit ' + a.address}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
+                    </svg>
+                  </button>
+                </li>
+              ),
+            )}
+          </ul>
+        </section>
       )}
-      {areaOpen && (
-        <AreaPicker
-          value={draft.area}
-          onPick={(a) => setDraft((d) => ({ ...d, area: a }))}
-          onClose={() => setAreaOpen(false)}
-        />
+      {list && !list.length && !adding && (
+        <p className="sub addr-none">Addresses you deliver to are saved here when you order.</p>
       )}
-    </section>
+    </>
   );
 }
 

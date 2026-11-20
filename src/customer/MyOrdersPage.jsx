@@ -1,26 +1,20 @@
 // /orders: orders on their way (updating live, with a dot on orders with news), with Order history one tap away.
-// Carts are on the Cart tab, and Help has its own tab.
-// /account: the name and phone they saved, their delivery addresses, appearance, email alerts and signing out.
+// Carts are on the Cart tab, Help and Account have their own tabs.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { dayOf, whenText } from '../lib/dates.js';
-import { errText, navigate } from '../lib/helpers.js';
-import { signOut } from '../lib/alerts.js';
 import { useInbox, InboxToast } from './inbox.jsx';
 import { Page } from '../shared/Page.jsx';
 import { Skeleton } from '../shared/Skeleton.jsx';
 import { useBusy } from '../lib/busy.js';
 import { LoadError } from '../shared/LoadError.jsx';
-import { EmailSwitch } from '../shared/EmailSwitch.jsx';
-import { ThemePicker } from '../shared/ThemePicker.jsx';
 import { SignIn } from '../shared/SignIn.jsx';
 import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { myTokens } from './savedOrders.js';
 import { CustomerTabs } from './CustomerTabs.jsx';
 import { lastShop, rememberShop } from './myShops.js';
 import { Empty } from '../shared/Empty.jsx';
-import { AccountAddresses } from './Addresses.jsx';
 
 // The label on each order in the list: [colour, words]. (The Shops tab uses it too.)
 export function orderLabel(o) {
@@ -71,70 +65,54 @@ export const isLive = (o) =>
   (o.status === 'delivered' && o.received_by !== 'customer') ||
   ['open', 'answered', 'with_shopdesk'].includes(o.problem);
 
-// A customer's orders with ShopDesk shops (view 'orders') or their account (view 'account').
-export function MyOrdersPage({ view = 'orders' }) {
+// A customer's orders with ShopDesk shops.
+export function MyOrdersPage() {
   const [session, setSession] = useState(undefined);
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => data.subscription.unsubscribe();
   }, []);
-  const title = view === 'account' ? 'Account' : 'My orders';
-  const tabs = <CustomerTabs active={view === 'account' ? 'account' : 'orders'} />;
-  const back = view === 'account' ? '/account' : '/orders';
+  const tabs = <CustomerTabs active="orders" />;
   useBusy(session === undefined);
   if (session === undefined)
     return (
-      <Page title={title} kind="me" tabs={tabs}>
-        <Skeleton kind={view === 'account' ? 'page' : 'list'} />
+      <Page title="My orders" kind="me" tabs={tabs}>
+        <Skeleton kind="list" />
       </Page>
     );
   if (!session)
     return (
-      <Page title={title} kind="me" tabs={tabs}>
+      <Page title="My orders" kind="me" tabs={tabs}>
         <SignIn
-          title={view === 'account' ? 'Your account' : 'Your orders'}
-          path={back}
-          note={view === 'account' ? 'Sign in to see your details and orders.' : 'Sign in to follow your orders.'}
+          title="Your orders"
+          path="/orders"
+          note="Sign in to follow your orders."
           footer={
             <p className="note" style={{ fontSize: 12 }}>
-              <a href="/privacy">Privacy</a>
+              <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
             </p>
           }
         />
       </Page>
     );
-  return <SignedInOrders email={session.user.email} userId={session.user.id} view={view} />;
+  return <SignedInOrders userId={session.user.id} />;
 }
 
 // What was on screen last time, so coming back from an order shows the list straight away while it refreshes.
 // Kept in memory only (gone when the tab closes) and only for the same account.
 let last = null;
 
-function SignedInOrders({ email, userId, view }) {
+function SignedInOrders({ userId }) {
   const seen = last && last.userId === userId ? last : null;
   const [orders, setOrders] = useState(seen ? seen.orders : null);
-  // saved details are shown as text; Edit opens a copy in the form, so the minute refresh never overwrites typing
-  const [me, setMe] = useState(seen ? seen.me : { name: '', phone: '', address: '' });
-  const [draft, setDraft] = useState(null); // null: not editing
-  const [confirmForget, setConfirmForget] = useState(false);
-  const [had, setHad] = useState(seen ? seen.had : false);
   useEffect(() => {
-    last = { userId, orders, me, had };
-  }, [userId, orders, me, had]);
-  async function leave() {
-    last = null;
-    await signOut();
-    navigate('/orders', { replace: true });
-  }
-  const [msg, setMsg] = useState('');
+    last = { userId, orders };
+  }, [userId, orders]);
   const [loadErr, setLoadErr] = useState(null);
   const load = useCallback(async () => {
     await supabase.rpc('claim_orders', { p_tokens: myTokens() });
-    const [{ data, error }, c] = await Promise.all([
-      supabase.rpc('my_orders'),
-      supabase.from('customers').select('name, phone, address').maybeSingle(),
-    ]);
+    const { data, error } = await supabase.rpc('my_orders');
     // a failed refresh keeps the list on screen; a failed first load shows "Try again"
     if (error) setLoadErr(error);
     else {
@@ -142,10 +120,6 @@ function SignedInOrders({ email, userId, view }) {
       setOrders(data || []);
       // first time here without visiting a shop: the Shop tab goes to the shop of their latest order
       if (!lastShop() && data && data[0] && data[0].slug) rememberShop(data[0].slug, data[0].shop);
-    }
-    if (c.data) {
-      setMe(c.data);
-      setHad(true);
     }
   }, []);
   useEffect(() => {
@@ -156,151 +130,11 @@ function SignedInOrders({ email, userId, view }) {
   // live: an order moves or a shop writes; a pop-up opens that chat
   const inbox = useInbox(userId, { onAlert: () => load(), title: 'My orders' });
   const unread = inbox.unread;
-  async function save() {
-    const row = {
-      name: draft.name.trim().slice(0, 60),
-      phone: draft.phone.trim().slice(0, 20),
-      address: draft.address.trim().slice(0, 160),
-    };
-    const { error } = had
-      ? await supabase
-          .from('customers')
-          .update({ ...row, updated_at: new Date().toISOString() })
-          .not('user_id', 'is', null)
-      : await supabase.from('customers').insert({ user_id: userId, ...row });
-    if (error) setMsg(errText(error));
-    else {
-      setMe(row);
-      setHad(true);
-      setDraft(null);
-      setMsg('');
-    }
-  }
-  async function forget() {
-    await supabase.from('customer_addresses').delete().not('user_id', 'is', null);
-    const { error } = await supabase.from('customers').delete().not('user_id', 'is', null);
-    if (error) setMsg(errText(error));
-    else {
-      setHad(false);
-      setMe({ name: '', phone: '', address: '' });
-      setDraft(null);
-      setConfirmForget(false);
-      setMsg('');
-    }
-  }
   useBusy(orders === null && !loadErr);
   const live = (orders || []).filter(isLive);
   const pastCount = (orders || []).length - live.length;
-  // the round letter on the Account page: the first letter of their email
-  const initial = ((email || '').trim()[0] || '?').toUpperCase();
-  if (view === 'account')
-    return (
-      <Page title="Account" kind="me" tabs={<CustomerTabs active="account" unread={inbox.count} shopNews={inbox.shopCount} />}>
-        <section className="card boxed profile">
-          <span className="avatar big" aria-hidden="true">
-            {initial}
-          </span>
-          <div>
-            <span className="sub">Signed in as</span>
-            <strong>{email}</strong>
-          </div>
-        </section>
-        {msg && <p className="note">{msg}</p>}
-        <section className="card">
-          <div className="row">
-            <h2>Your details</h2>
-            {!draft && (
-              <button
-                className="btn small ghost"
-                onClick={() => {
-                  setDraft({ ...me });
-                  setConfirmForget(false);
-                }}
-              >
-                {had ? 'Edit' : 'Add'}
-              </button>
-            )}
-          </div>
-          {!draft ? (
-            had && (
-              <div className="saved-details">
-                {me.name && <strong>{me.name}</strong>}
-                {me.phone && <span>{me.phone}</span>}
-              </div>
-            )
-          ) : (
-            <div className="stack-sm">
-              <div className="field">
-                <label htmlFor="mName">Name</label>
-                <input
-                  id="mName"
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  autoComplete="name"
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="mPhone">Phone number</label>
-                <input
-                  id="mPhone"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={draft.phone}
-                  onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-                />
-              </div>
-              <div className="btns">
-                <button className="btn small" onClick={save}>
-                  Save
-                </button>
-                <button className="linkbtn" onClick={() => setDraft(null)}>
-                  Cancel
-                </button>
-              </div>
-              {had &&
-                (confirmForget ? (
-                  <div className="confirm-del" role="alert">
-                    <span>Delete your saved name, phone number and addresses?</span>
-                    <div className="btns">
-                      <button className="btn small bad" onClick={forget}>
-                        Delete
-                      </button>
-                      <button className="linkbtn" onClick={() => setConfirmForget(false)}>
-                        Keep them
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button className="danger-row" onClick={() => setConfirmForget(true)}>
-                    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
-                      <path
-                        d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    Delete my saved details
-                  </button>
-                ))}
-            </div>
-          )}
-        </section>
-        <AccountAddresses userId={userId} />
-        <ThemePicker />
-        <section className="card">
-          <EmailSwitch />
-        </section>
-        <button className="btn ghost" onClick={leave}>
-          Sign out
-        </button>
-      </Page>
-    );
   return (
     <Page title="My orders" kind="me" tabs={<CustomerTabs active="orders" unread={inbox.count} shopNews={inbox.shopCount} />}>
-      {msg && <p className="note">{msg}</p>}
       <AlertsPrompt who="customer" userId={userId} />
       <a className="card boxed hist-row" href="/orders/history">
         <span className="hist-mark" aria-hidden="true">
