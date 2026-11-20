@@ -5,6 +5,8 @@
 //   /shops         a customer's shops (every shop they've opened or ordered from)
 //   /orders        a customer's own orders
 //   /account       a customer's saved details, email alerts and sign out
+//   /carts         every shop's cart (the Cart tab, when more than one shop has something in it)
+//   /help          Help: recent orders to report a problem on, common questions, how to reach ShopDesk
 //   /o/<link>      one order, as the customer sees it
 //   /email-off     "Stop these emails" (the link in every email)
 //   /<shop-name>   a shop's order page and cart
@@ -24,6 +26,7 @@ import { OrderPage } from './customer/OrderPage.jsx';
 import { MyOrdersPage } from './customer/MyOrdersPage.jsx';
 import { OrderHistoryPage } from './customer/OrderHistory.jsx';
 import { HelpPage } from './customer/HelpPage.jsx';
+import { CartsPage } from './customer/Carts.jsx';
 import { ShopsPage } from './customer/ShopsPage.jsx';
 import { PrivacyPage } from './shared/PrivacyPage.jsx';
 import { EmailOffPage } from './shared/EmailOffPage.jsx';
@@ -94,8 +97,8 @@ function Pages() {
   if (p === '/admin') return <AdminApp />;
   if (p === '/privacy') return <PrivacyPage />;
   if (p === '/shops') return <ShopsPage />;
-  if (p === '/orders' || p === '/account' || p === '/orders/carts')
-    return <MyOrdersPage view={p === '/account' ? 'account' : p === '/orders/carts' ? 'carts' : 'orders'} />;
+  if (p === '/orders' || p === '/account') return <MyOrdersPage view={p === '/account' ? 'account' : 'orders'} />;
+  if (p === '/carts' || p === '/orders/carts') return <CartsPage />;
   if (p === '/orders/history') return <OrderHistoryPage />;
   if (p === '/help') return <HelpPage />;
   if (p === '/email-off') return <EmailOffPage />;

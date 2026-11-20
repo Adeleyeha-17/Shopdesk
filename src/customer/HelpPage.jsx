@@ -1,4 +1,4 @@
-// /help: the customer's recent orders with "Something wrong? Report a problem", short answers to what buyers ask most,
+// /help, the Help tab: the customer's recent orders with "Something wrong? Report a problem", short answers to what buyers ask most,
 // and how to reach ShopDesk.
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
@@ -6,6 +6,7 @@ import { atText } from '../lib/dates.js';
 import { useBusy } from '../lib/busy.js';
 import { Page } from '../shared/Page.jsx';
 import { CustomerTabs } from './CustomerTabs.jsx';
+import { useInbox, InboxToast } from './inbox.jsx';
 
 // the same rules as docs/rules.md, in buyers' words
 const QUESTIONS = [
@@ -37,17 +38,20 @@ const QUESTIONS = [
 
 export function HelpPage() {
   const [orders, setOrders] = useState(null);
+  const [uid, setUid] = useState(null);
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) return setOrders([]);
+      setUid(data.session.user.id);
       supabase.rpc('my_orders').then(({ data: rows }) => setOrders(rows || []));
     });
   }, []);
+  const inbox = useInbox(uid, { title: 'Help' });
   useBusy(orders === null);
   // the last few orders that reached them, newest first
   const recent = (orders || []).filter((o) => o.status === 'delivered' && o.done_at).slice(0, 3);
   return (
-    <Page title="Help" back="/account" kind="me" tabs={<CustomerTabs active="account" />}>
+    <Page title="Help" kind="me" tabs={<CustomerTabs active="help" unread={inbox.count} shopNews={inbox.shopCount} />}>
       <div className="help-hero">
         <h2>How can we help?</h2>
         <p className="sub">Answers to common questions, and help with your recent orders.</p>
@@ -103,6 +107,7 @@ export function HelpPage() {
           </span>
         </div>
       </a>
+      <InboxToast inbox={inbox} />
     </Page>
   );
 }

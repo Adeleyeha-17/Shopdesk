@@ -1,5 +1,5 @@
-// The Carts list on Orders: every shop with something in its cart, so nothing added in one shop gets forgotten while
-// browsing another. Each shows what's in it as the shop sells it now, with Go to cart and Remove.
+// /carts, the Cart tab when more than one shop has something in it: every shop's cart, so nothing added in one shop
+// gets forgotten while browsing another. Each shows what's in it as the shop sells it now, with Go to cart and Remove.
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -8,6 +8,9 @@ import { options, payPrice } from '../lib/products.js';
 import { allCarts, clearCart, fitCart } from './cart.js';
 import { myShops } from './myShops.js';
 import { Empty } from '../shared/Empty.jsx';
+import { Page } from '../shared/Page.jsx';
+import { CustomerTabs } from './CustomerTabs.jsx';
+import { useInbox, InboxToast } from './inbox.jsx';
 
 // a cart's lines with today's prices: [{ name, qty, price, photo }]
 function linesOf(items, products) {
@@ -54,7 +57,7 @@ export function Carts({ carts }) {
     return (
       <Empty
         kind="basket"
-        title="Your carts are empty"
+        title="Your cart is empty"
         text="Add things from any shop and they'll wait here, one cart for each shop."
         action={['Find shops', '/shops']}
       />
@@ -84,7 +87,7 @@ export function Carts({ carts }) {
             </span>
             <div className="cart-thumbs" aria-hidden="true">
               {lines.slice(0, 4).map((l, i) => (
-                <img key={i} src={photoUrl(l.photo)} alt="" loading="lazy" />
+                l.photo ? <img key={i} src={photoUrl(l.photo)} alt="" loading="lazy" /> : <span key={i} />
               ))}
               {lines.length > 4 && <span>+{lines.length - 4}</span>}
             </div>
@@ -121,4 +124,21 @@ export function Carts({ carts }) {
       </section>
     );
   });
+}
+
+export function CartsPage() {
+  const carts = useCarts();
+  // signed in: the tabs show new messages, and a shop's message pops up here too
+  const [uid, setUid] = useState(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setUid(data.session ? data.session.user.id : null));
+  }, []);
+  const inbox = useInbox(uid, { title: 'Your carts' });
+  return (
+    <Page title="Your carts" kind="me" tabs={<CustomerTabs active="cart" unread={inbox.count} shopNews={inbox.shopCount} />}>
+      {carts.length > 1 && <p className="sub carts-note">One cart for each shop, because each shop takes its own order and payment.</p>}
+      <Carts carts={carts} />
+      <InboxToast inbox={inbox} />
+    </Page>
+  );
 }

@@ -416,11 +416,11 @@ await step("the order page's back arrow goes to My orders; the Account tab shows
   await see('Order history');
 });
 
-await step('Order history: Buy again puts a past item back in the cart, Past orders filter by status, and Carts on My orders shows the cart', async () => {
+await step('Order history: Buy again puts a past item back in the cart, and Past orders filter by status', async () => {
+  expect((await p.locator('.seg button:has-text("Carts")').count()) === 0, 'My orders still has a Carts tab');
   await p.locator('a.hist-row:has-text("Order history")').click();
   await p.locator('.again').first().waitFor();
   const first = p.locator('.again-item').first();
-  const name = (await first.locator('.name').innerText()).trim();
   await first.locator('button.add').click();
   await see('in your cart at');
   expect((await first.locator('button.add').innerText()).trim() === '1', 'the + does not show 1 in the cart');
@@ -432,20 +432,46 @@ await step('Order history: Buy again puts a past item back in the cart, Past ord
   expect((await p.locator('.orow').count()) < all, 'the status filter did not narrow the list');
   await p.locator('.pick select[aria-label="Status"]').selectOption('all');
   await p.locator('.back-btn').click();
-  await p.locator('.seg button:has-text("Carts")').click();
-  await p.locator('.cart-card').first().waitFor();
-  await p.locator('.cart-card .cart-thumbs').first().waitFor();
-  expect((await p.locator('.cart-card').first().innerText()).includes(name.split(' · ')[0]), 'the cart does not show the item');
-  await p.locator('.cart-card button:has-text("Remove")').first().click();
-  await p.locator('.cart-card button:has-text("Empty it")').first().click();
-  await see('Your carts are empty');
-  await p.locator('.seg button:has-text("Ongoing")').click();
+  await see('Order history');
 });
 
-await step('Help: a recent delivered order can be reported from there, and the common questions open', async () => {
+await step('the Cart tab opens the one cart straight away; with carts in two shops it opens Your carts, where each can be emptied', async () => {
+  await tab('Cart').click();
+  await p.locator('button:has-text("Checkout")').waitFor();
+  expect((await tab('Cart').getAttribute('aria-current')) === 'page', 'the Cart tab is not marked as open');
+  // a second shop's cart, as if they had added something there too
+  const other = await p.evaluate((key) => {
+    const S = JSON.parse(localStorage.getItem(key));
+    const mine = Object.keys(localStorage).filter((k) => k.startsWith('shopdesk-cart:')).map((k) => k.slice(14));
+    const shop = S.shops.find((s) => !mine.includes(s.slug) && S.products.some((x) => x.shop_id === s.id && x.active && x.stock > 0));
+    const prod = S.products.find((x) => x.shop_id === shop.id && x.active && x.stock > 0 && !S.product_options.some((o) => o.product_id === x.id));
+    localStorage.setItem('shopdesk-cart:' + shop.slug, JSON.stringify({ items: { [prod.id]: 2 }, at: Date.now() }));
+    window.dispatchEvent(new Event('shopdesk-cart'));
+    return { name: shop.name, product: prod.name };
+  }, KEY);
+  await tab('Cart').locator('.badge:text-is("3")').waitFor();
+  await tab('Cart').click();
+  await see('One cart for each shop');
+  await p.locator('.cart-card .cart-thumbs').nth(1).waitFor();
+  expect((await p.locator('.cart-card').count()) === 2, 'Your carts does not show both carts');
+  expect((await p.locator('.cart-card').first().innerText()).includes(other.name), 'the newest cart is not first');
+  await p.locator('.cart-card button:has-text("Remove")').first().click();
+  await p.locator('.cart-card button:has-text("Empty it")').first().click();
+  await pause(200);
+  expect((await p.locator('.cart-card').count()) === 1, 'the cart was not emptied');
+  await p.locator('.cart-card button:has-text("Remove")').first().click();
+  await p.locator('.cart-card button:has-text("Empty it")').first().click();
+  await see('Your cart is empty');
+  expect((await tab('Cart').locator('.badge').count()) === 0, 'the Cart tab still shows a number');
+});
+
+await step('Help is a tab: a recent delivered order can be reported from there, and the common questions open', async () => {
   await tab('Account').click();
-  await p.locator('a.hist-row:has-text("Help")').click();
+  await see('Your details');
+  expect((await p.locator('a.hist-row:has-text("Help")').count()) === 0, 'Account still has a Help row');
+  await tab('Help').click();
   await see('How can we help?');
+  expect((await tab('Help').getAttribute('aria-current')) === 'page', 'the Help tab is not marked as open');
   await p.locator('.faq summary').first().click();
   expect((await p.locator('.faq details[open] p').innerText()).includes('never holds your money'), 'the answer did not open');
   await p.locator('.help-order').first().waitFor();

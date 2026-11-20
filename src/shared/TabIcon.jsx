@@ -34,6 +34,16 @@ const ICONS = {
       <circle className="f" cx="17" cy="19.6" r="1.5" />
     </>,
   ],
+  help: [
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01" />
+    </>,
+    <>
+      <circle className="f" cx="12" cy="12" r="9.2" />
+      <path className="cutline" d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01" />
+    </>,
+  ],
   account: [
     <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20c1.4-3.3 4.2-5 7.5-5s6.1 1.7 7.5 5" />,
     <>

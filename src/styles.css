@@ -541,6 +541,9 @@ a.brand { color: inherit; -webkit-tap-highlight-color: transparent; }
 
 /* the customer's tab bar uses the shop owner's (.tabs): links instead of buttons, and a letter for Account */
 .tab[aria-current="page"] { color: var(--ink); font-weight: 700; }
+/* five tabs (Shops, Orders, Cart, Help, Account): a narrower pill so they fit on a small phone */
+.tabs-in.five .tab svg { padding: 4px 12px; }
+.tabs-in.five .badge { right: calc(50% - 22px); }
 /* the tab you're on: a filled icon (src/shared/TabIcon.jsx); .cut and .cutline are drawn in the bar's colour */
 .tab svg .f { fill: currentColor; stroke: currentColor; stroke-width: 1.4; }
 .tab svg .cut { fill: var(--bg); stroke: none; }
@@ -1279,14 +1282,11 @@ body.desk-open { overflow: hidden; }
 .empty-state .ez { fill: var(--e3); font: 700 11px var(--body); }
 
 .orders-top { display: flex; flex-direction: column; gap: 10px; }
-.seg .count { margin-left: 6px; font-size: 12px; color: var(--muted); }
 .seg button[aria-pressed="true"] .count { color: var(--ink); }
 .hist-row { display: flex; flex-direction: row; align-items: center; gap: 12px; text-decoration: none; color: inherit; padding: 14px 16px; }
 .hist-row strong { flex: 1; }
 .hist-mark { width: 34px; height: 34px; border-radius: 10px; background: var(--soft); display: grid; place-items: center; flex: none; }
 .hist-mark svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.help-link { align-self: center; font-size: 14px; color: var(--muted); text-decoration: none; padding: 8px; }
-.help-link strong { color: var(--ink); }
 
 .cart-card { display: flex; flex-direction: column; gap: 10px; }
 .cart-card .row strong { font-size: 16px; }
@@ -1358,3 +1358,4 @@ body.desk-open { overflow: hidden; }
 .addr-pick button[aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--ink); }
 .addr-pick .co-pin { margin-top: 1px; }
 .saved-addr { align-self: flex-start; font-size: 14px; }
+.carts-note { margin: -4px 2px 2px; font-size: 13px; }

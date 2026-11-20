@@ -1,21 +1,21 @@
 // The bar at the bottom of the customer's pages, like the shop owner's: their shops, their orders (with a red number
-// when a shop has written), the cart (with how many things are in it) and their account. A shop owner buying from
-// other shops gets "My shop" instead of Account, to go back to their shop app.
+// when a shop has written), the cart (with how many things are in all their carts), Help and their account. A shop
+// owner buying from other shops gets "My shop" instead of Account, to go back to their shop app.
 // Hidden on checkout, so nothing pulls them away from paying. Tabs change at once, without sliding.
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
-import { allCarts, loadCart } from './cart.js';
-import { myShops } from './myShops.js';
+import { allCarts } from './cart.js';
 import { TabIcon } from '../shared/TabIcon.jsx';
 
 
-const countIn = (slug) => Object.values(slug ? loadCart(slug) : {}).reduce((a, q) => a + (q > 0 ? q : 0), 0);
+// how many things are in all their carts together
+const countAll = () => allCarts().reduce((a, c) => a + Object.values(c.items).reduce((b, q) => b + (q > 0 ? q : 0), 0), 0);
 
-// how many things are in that shop's cart, kept up to date as the cart changes (cart.js tells us)
-function useCartCount(slug) {
-  const [n, setN] = useState(() => countIn(slug));
+// kept up to date as a cart changes (cart.js tells us), here or in another tab
+function useCartCount() {
+  const [n, setN] = useState(countAll);
   useEffect(() => {
-    const f = () => setN(countIn(slug));
+    const f = () => setN(countAll());
     f();
     window.addEventListener('shopdesk-cart', f);
     window.addEventListener('storage', f);
@@ -23,7 +23,7 @@ function useCartCount(slug) {
       window.removeEventListener('shopdesk-cart', f);
       window.removeEventListener('storage', f);
     };
-  }, [slug]);
+  }, []);
   return n;
 }
 
@@ -58,14 +58,10 @@ function useEmail() {
   return email;
 }
 
-// active: 'shops', 'orders', 'cart' or 'account'. unread: new messages and updates on their orders.
+// active: 'shops', 'orders', 'cart', 'help' or 'account'. unread: new messages and updates on their orders.
 // shopNews: messages from shops (on the Shops tab).
 export function CustomerTabs({ active, unread = 0, shopNews = 0 }) {
-  // the Cart tab: the newest shop with something in its cart, or else the shop opened last
-  const shops = myShops();
-  const cartShop = shops.find((s) => countIn(s.slug) > 0) || shops[0];
-  const slug = cartShop && cartShop.slug;
-  const inCart = useCartCount(slug);
+  const inCart = useCartCount();
   const email = useEmail();
   const ownsShop = useRunsShop(email);
   // the cart's number gives a little bump when something is added
@@ -75,18 +71,20 @@ export function CustomerTabs({ active, unread = 0, shopNews = 0 }) {
     if (inCart > was.current) setBump((b) => b + 1);
     was.current = inCart;
   }, [inCart]);
+  // the Cart tab: straight to the cart when only one shop has something in it, or else the list of their carts
+  const carts = allCarts();
 
   const tabs = [
     ['shops', 'Shops', '/shops'],
     ['orders', 'Orders', '/orders'],
-    // carts in more than one shop: the Cart tab opens all of them (Orders → Carts)
-    slug && ['cart', 'Cart', allCarts().length > 1 ? '/orders/carts' : '/' + slug + '/cart'],
+    ['cart', 'Cart', carts.length === 1 ? '/' + carts[0].slug + '/cart' : '/carts'],
+    ['help', 'Help', '/help'],
     ownsShop ? ['myshop', 'My shop', '/'] : ['account', 'Account', '/account'],
-  ].filter(Boolean);
+  ];
   const letter = (email.trim()[0] || '').toUpperCase();
   return (
     <nav className="tabs" aria-label="ShopDesk">
-      <div className="tabs-in" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
+      <div className="tabs-in five" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
         {tabs.map(([k, label, href]) => (
           <a
             key={k}

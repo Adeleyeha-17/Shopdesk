@@ -180,7 +180,7 @@ function History({ userId }) {
                       return (
                         <div key={key} className="again-item">
                           <div className="pimg">
-                            <img src={photoUrl(it.photo_path)} alt={name} loading="lazy" />
+                            {it.photo_path && <img src={photoUrl(it.photo_path)} alt={name} loading="lazy" />}
                             <button
                               className={'add' + (inCart ? ' in' : '')}
                               disabled={!g.open || out || inCart >= it.stock}

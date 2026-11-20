@@ -1,11 +1,11 @@
-// /orders: Ongoing (orders on their way, updating live, with a dot on orders with news) and Carts (every shop with
-// something in its cart), with Order history and Help one tap away. /orders/carts opens on Carts.
-// /account: the name and phone they saved, their delivery addresses, Help, email alerts and signing out.
+// /orders: orders on their way (updating live, with a dot on orders with news), with Order history one tap away.
+// Carts are on the Cart tab, and Help has its own tab.
+// /account: the name and phone they saved, their delivery addresses, appearance, email alerts and signing out.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { dayOf, whenText } from '../lib/dates.js';
-import { errText, navigate, setAddress } from '../lib/helpers.js';
+import { errText, navigate } from '../lib/helpers.js';
 import { signOut } from '../lib/alerts.js';
 import { useInbox, InboxToast } from './inbox.jsx';
 import { Page } from '../shared/Page.jsx';
@@ -19,7 +19,6 @@ import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { myTokens } from './savedOrders.js';
 import { CustomerTabs } from './CustomerTabs.jsx';
 import { lastShop, rememberShop } from './myShops.js';
-import { Carts, useCarts } from './Carts.jsx';
 import { Empty } from '../shared/Empty.jsx';
 import { AccountAddresses } from './Addresses.jsx';
 
@@ -72,7 +71,7 @@ export const isLive = (o) =>
   (o.status === 'delivered' && o.received_by !== 'customer') ||
   ['open', 'answered', 'with_shopdesk'].includes(o.problem);
 
-// A customer's orders with ShopDesk shops (view 'orders' or 'carts') or their account (view 'account').
+// A customer's orders with ShopDesk shops (view 'orders') or their account (view 'account').
 export function MyOrdersPage({ view = 'orders' }) {
   const [session, setSession] = useState(undefined);
   useEffect(() => {
@@ -82,7 +81,7 @@ export function MyOrdersPage({ view = 'orders' }) {
   }, []);
   const title = view === 'account' ? 'Account' : 'My orders';
   const tabs = <CustomerTabs active={view === 'account' ? 'account' : 'orders'} />;
-  const back = view === 'account' ? '/account' : view === 'carts' ? '/orders/carts' : '/orders';
+  const back = view === 'account' ? '/account' : '/orders';
   useBusy(session === undefined);
   if (session === undefined)
     return (
@@ -117,8 +116,6 @@ function SignedInOrders({ email, userId, view }) {
   const [orders, setOrders] = useState(seen ? seen.orders : null);
   // saved details are shown as text; Edit opens a copy in the form, so the minute refresh never overwrites typing
   const [me, setMe] = useState(seen ? seen.me : { name: '', phone: '', address: '' });
-  const carts = useCarts();
-  const [seg, setSeg] = useState(view === 'carts' ? 'carts' : null); // null: Ongoing, or Carts when nothing is on its way
   const [draft, setDraft] = useState(null); // null: not editing
   const [confirmForget, setConfirmForget] = useState(false);
   const [had, setHad] = useState(seen ? seen.had : false);
@@ -194,11 +191,6 @@ function SignedInOrders({ email, userId, view }) {
   useBusy(orders === null && !loadErr);
   const live = (orders || []).filter(isLive);
   const pastCount = (orders || []).length - live.length;
-  const shown = seg || (live.length || !carts.length ? 'ongoing' : 'carts');
-  function pick(k) {
-    setSeg(k);
-    setAddress(k === 'carts' ? '/orders/carts' : '/orders');
-  }
   // the round letter on the Account page: the first letter of their email
   const initial = ((email || '').trim()[0] || '?').toUpperCase();
   if (view === 'account')
@@ -297,16 +289,6 @@ function SignedInOrders({ email, userId, view }) {
           )}
         </section>
         <AccountAddresses userId={userId} />
-        <a className="card boxed hist-row" href="/help">
-          <span className="hist-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01" />
-            </svg>
-          </span>
-          <strong>Help</strong>
-          <span className="sub" aria-hidden="true">›</span>
-        </a>
         <ThemePicker />
         <section className="card">
           <EmailSwitch />
@@ -320,14 +302,6 @@ function SignedInOrders({ email, userId, view }) {
     <Page title="My orders" kind="me" tabs={<CustomerTabs active="orders" unread={inbox.count} shopNews={inbox.shopCount} />}>
       {msg && <p className="note">{msg}</p>}
       <AlertsPrompt who="customer" userId={userId} />
-      <div className="seg wide" role="group" aria-label="Orders">
-        <button aria-pressed={shown === 'ongoing'} onClick={() => pick('ongoing')}>
-          Ongoing{live.length > 0 && <span className="count">{live.length}</span>}
-        </button>
-        <button aria-pressed={shown === 'carts'} onClick={() => pick('carts')}>
-          Carts{carts.length > 0 && <span className="count">{carts.length}</span>}
-        </button>
-      </div>
       <a className="card boxed hist-row" href="/orders/history">
         <span className="hist-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -338,9 +312,7 @@ function SignedInOrders({ email, userId, view }) {
         {pastCount > 0 && <span className="sub">{pastCount}</span>}
         <span className="sub" aria-hidden="true">›</span>
       </a>
-      {shown === 'carts' ? (
-        <Carts carts={carts} />
-      ) : orders === null ? (
+      {orders === null ? (
         loadErr ? (
           <LoadError error={loadErr} onRetry={load} what="your orders" compact />
         ) : (
@@ -356,9 +328,6 @@ function SignedInOrders({ email, userId, view }) {
           action={['Find shops', '/shops']}
         />
       )}
-      <a className="help-link" href="/help">
-        Need help with an order? <strong>Get help</strong>
-      </a>
       <InboxToast inbox={inbox} />
     </Page>
   );
