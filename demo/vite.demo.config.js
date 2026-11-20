@@ -17,6 +17,7 @@ const FIXES = [
   ['src/lib/motion.js', 'window.location.pathname', 'window.__demo.path', 1],
   ['src/lib/helpers.js', "window.history.pushState({ k, from }, '', path);", 'window.__demo.go(path);', 1],
   ['src/lib/helpers.js', "window.history.replaceState({ k }, '', path);", 'window.__demo.go(path);', 1],
+  ['src/lib/helpers.js', "window.history.replaceState(window.history.state, '', path);", 'window.__demo.go(path);', 1],
   // the ShopDesk chat closes without the browser's history (the demo may sit inside another page)
   ['src/shared/ChatScreen.jsx', 'const BACK_CLOSES = true;', 'const BACK_CLOSES = false;', 1],
   // the rider link opens the rider page inside the demo

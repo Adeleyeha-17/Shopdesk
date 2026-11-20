@@ -65,6 +65,15 @@ export function copyText(text, say, done) {
 // Moves to another page of the app without reloading it: the page slides (see motion.js) and starts at the top.
 // replace: true swaps the current page in the history instead of adding one, so Back skips it.
 // move: 'forward', 'back' or 'none' (tabs change at once); by default it follows how deep the pages are.
+// Changes the address shown without moving to another page (a view inside a page, like Orders → Carts).
+export function setAddress(path) {
+  try {
+    window.history.replaceState(window.history.state, '', path);
+  } catch (e) {
+    /* the address stays as it was; the view still changes */
+  }
+}
+
 export function navigate(path, { replace = false, move } = {}) {
   const from = currentPath();
   const to = path.split(/[?#]/)[0] || '/';

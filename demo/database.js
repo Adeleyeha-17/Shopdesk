@@ -769,8 +769,15 @@ function seedData() {
     orders.push(o);
     items.push({ id: items.length + 1, order_id: o.id, product_id: p.id, name: p.name, price: p.price, was_price: null, qty: 1, packed: false });
   }
+  // saved delivery addresses: the one each customer used, and a second one for Funmi (her office)
+  const addrRows = custRows
+    .filter((c) => c.address)
+    .map((c) => ({ id: uuid(), user_id: c.user_id, address: c.address, area: c.area || '', used_at: iso(now - DAY), created_at: iso(now - 30 * DAY) }));
+  addrRows.push({ id: uuid(), user_id: CUSTOMER.id, address: '3rd floor, 14 Admiralty Way, Lekki Phase 1', area: 'Lekki Phase 1',
+    used_at: iso(now - 9 * DAY), created_at: iso(now - 60 * DAY) });
   return {
-    v: 15,
+    v: 16,
+    customer_addresses: addrRows,
     shop_messages,
     feature_wants: [],
     day: t0,
@@ -835,7 +842,7 @@ try {
   S = null;
 }
 // A fresh sample each day, so "today" always has orders in it.
-if (!S || S.v !== 15 || S.day !== startOfDay(Date.now())) S = seed();
+if (!S || S.v !== 16 || S.day !== startOfDay(Date.now())) S = seed();
 demo.go(S.path || '/');
 let saveTimer = null;
 function save() {
@@ -1696,6 +1703,7 @@ const RPC = {
     };
     if (old) Object.assign(old, row);
     else S.customers.push(row);
+    if (mode === 'delivery' && !address.startsWith('Map pin')) saveAddress(uid(), o.address, o.area || '');
     lines.forEach(({ p, o: opt, qty }) => {
       const pay = opt ? (opt.sale_price ?? opt.price) : (p.sale_price ?? p.price);
       const full = opt ? opt.price : p.price;
@@ -2186,6 +2194,40 @@ const RPC = {
       Object.assign(p, { status: 'sorted', closed_at: nowIso() });
     return null;
   },
+  my_past_items: () => {
+    if (!uid()) fail('permission denied for function my_past_items');
+    const seen = new Map();
+    S.orders
+      .filter((o) => o.customer_id === uid() && o.status !== 'cancelled')
+      .forEach((o) =>
+        S.order_items
+          .filter((i) => i.order_id === o.id && i.product_id)
+          .forEach((i) => {
+            const k = o.shop_id + '|' + i.product_id + '|' + (i.option_id || '');
+            const was = seen.get(k);
+            if (!was || was.at < o.created_at) seen.set(k, { shop_id: o.shop_id, product_id: i.product_id, option_id: i.option_id || null, at: o.created_at });
+          }),
+      );
+    const per = new Map();
+    [...seen.values()].forEach((b) => {
+      const p = S.products.find((x) => x.id === b.product_id && x.active && !x.hidden_by_admin);
+      if (!p) return;
+      const opts = S.product_options.filter((x) => x.product_id === p.id);
+      const x = b.option_id ? opts.find((y) => y.id === b.option_id) : null;
+      if (b.option_id ? !x : opts.length) return;
+      if (!per.has(b.shop_id)) per.set(b.shop_id, []);
+      per.get(b.shop_id).push({ at: b.at, product_id: p.id, option_id: x ? x.id : null, name: p.name, option: x ? x.name : null,
+        photo_path: p.photo_path, price: x ? x.price : p.price, sale_price: x ? x.sale_price : p.sale_price, stock: x ? x.stock : p.stock });
+    });
+    return [...per.entries()]
+      .map(([shopId, list]) => {
+        const s = S.shops.find((y) => y.id === shopId);
+        list.sort((a, b) => b.at.localeCompare(a.at) || a.name.localeCompare(b.name));
+        return { shop: s.name, slug: s.slug, open: s.status === 'active', last_at: list[0].at, items: list.slice(0, 12).map(({ at, ...it }) => it) };
+      })
+      .sort((a, b) => b.last_at.localeCompare(a.last_at))
+      .slice(0, 20);
+  },
   my_orders: () => {
     if (!uid()) return [];
     return S.orders
@@ -2205,6 +2247,7 @@ const RPC = {
           created_at: o.created_at,
           deliver_by: o.deliver_by,
           received_by: o.received_by,
+          done_at: o.done_at,
           to_pay: toPay(o),
           items: S.order_items
             .filter((i) => i.order_id === o.id)
@@ -2439,12 +2482,27 @@ async function rpc(name, args = {}) {
   }
 }
 
+// a customer's delivery address goes on their list (or comes first again); up to 10 are kept
+function saveAddress(u, address, area, fromAccount) {
+  address = String(address || '').trim().slice(0, 160);
+  if (address.length < 3) fail('new row for relation "customer_addresses" violates check constraint "customer_addresses_address_check"');
+  S.customer_addresses = S.customer_addresses || [];
+  const old = S.customer_addresses.find((a) => a.user_id === u && a.address.toLowerCase() === address.toLowerCase());
+  if (old && fromAccount) fail('duplicate key value violates unique constraint "customer_addresses_one"');
+  if (old) Object.assign(old, { used_at: nowIso(), area: area || old.area });
+  else S.customer_addresses.push({ id: uuid(), user_id: u, address, area: String(area || '').slice(0, 40), used_at: nowIso(), created_at: nowIso() });
+  const mine = S.customer_addresses.filter((a) => a.user_id === u).sort((a, b) => b.used_at.localeCompare(a.used_at));
+  const drop = mine.slice(10);
+  S.customer_addresses = S.customer_addresses.filter((a) => !drop.includes(a));
+}
+
 // ---------- tables the app reads and writes directly (with the same "only your own rows" rules) ----------
 function visible(table) {
   const u = uid();
   const s = myShop();
   if (table === 'shops') return S.shops.filter((x) => x.owner_id === u);
   if (table === 'customers') return S.customers.filter((x) => x.user_id === u);
+  if (table === 'customer_addresses') return S.customer_addresses.filter((x) => x.user_id === u);
   if (table === 'notifications') return S.notifications.filter((x) => x.user_id === u);
   if (table === 'messages')
     return S.messages.filter((x) => (s && x.shop_id === s.id) || (u && x.customer_id === u));
@@ -2650,6 +2708,9 @@ class Query {
         if (S.customers.some((c) => c.user_id === u))
           fail('duplicate key value violates unique constraint "customers_pkey"');
         S.customers.push({ name: '', phone: '', address: '', updated_at: nowIso(), ...v });
+      } else if (t === 'customer_addresses') {
+        if (v.user_id !== u) fail('new row violates row-level security policy');
+        saveAddress(u, v.address, v.area || '', true);
       } else fail('Not allowed.');
       save();
       return { data: null, error: null };
@@ -2672,6 +2733,7 @@ class Query {
     } else if (this.kind === 'delete') {
       if (t === 'money_out') S.money_out = S.money_out.filter((m) => !rows.includes(m));
       else if (t === 'customers') S.customers = S.customers.filter((c) => !rows.includes(c));
+      else if (t === 'customer_addresses') S.customer_addresses = S.customer_addresses.filter((c) => !rows.includes(c));
       else fail('Not allowed.');
     }
     save();

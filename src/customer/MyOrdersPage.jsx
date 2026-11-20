@@ -1,10 +1,11 @@
-// /orders: every order a customer has placed (updating live, with a dot on orders with news).
-// /account: the name, phone and address they saved, email alerts and signing out.
+// /orders: Ongoing (orders on their way, updating live, with a dot on orders with news) and Carts (every shop with
+// something in its cart), with Order history and Help one tap away. /orders/carts opens on Carts.
+// /account: the name and phone they saved, their delivery addresses, Help, email alerts and signing out.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { dayOf, whenText } from '../lib/dates.js';
-import { errText, navigate } from '../lib/helpers.js';
+import { errText, navigate, setAddress } from '../lib/helpers.js';
 import { signOut } from '../lib/alerts.js';
 import { useInbox, InboxToast } from './inbox.jsx';
 import { Page } from '../shared/Page.jsx';
@@ -18,6 +19,9 @@ import { AlertsPrompt } from '../shared/AlertsPrompt.jsx';
 import { myTokens } from './savedOrders.js';
 import { CustomerTabs } from './CustomerTabs.jsx';
 import { lastShop, rememberShop } from './myShops.js';
+import { Carts, useCarts } from './Carts.jsx';
+import { Empty } from '../shared/Empty.jsx';
+import { AccountAddresses } from './Addresses.jsx';
 
 // The label on each order in the list: [colour, words]. (The Shops tab uses it too.)
 export function orderLabel(o) {
@@ -36,7 +40,39 @@ export function orderLabel(o) {
   return ['owe', 'Waiting for payment'];
 }
 
-// A customer's orders with ShopDesk shops (view 'orders') or their account (view 'account').
+// One order in a list (Ongoing, Order history): the shop, where it stands, what was in it, its code, day and total.
+export function OrderRow({ o, unread }) {
+  const [tone, label] = orderLabel(o);
+  return (
+    <a className="card boxed orow" href={'/o/' + o.token}>
+      <div className="row">
+        <strong>
+          {o.shop}
+          {unread.byOrder[o.order_id] > 0 && (
+            <span className="newdot" aria-label={unread.chats[o.order_id] ? 'New message' : 'New update'} />
+          )}
+        </strong>
+        <span className={'chip ' + tone}>{label}</span>
+      </div>
+      {unread.chats[o.order_id] > 0 && <div className="sub newmsg">New message</div>}
+      <div className="items">{o.items}</div>
+      <div className="row">
+        <span className="order-id">
+          {o.code || '#' + o.order_id} · {dayOf(o.created_at)}
+        </span>
+        <span className="num">{naira(o.to_pay)}</span>
+      </div>
+    </a>
+  );
+}
+
+// still on its way, or still needs the customer (confirm delivery, an open problem)
+export const isLive = (o) =>
+  !['delivered', 'cancelled'].includes(o.status) ||
+  (o.status === 'delivered' && o.received_by !== 'customer') ||
+  ['open', 'answered', 'with_shopdesk'].includes(o.problem);
+
+// A customer's orders with ShopDesk shops (view 'orders' or 'carts') or their account (view 'account').
 export function MyOrdersPage({ view = 'orders' }) {
   const [session, setSession] = useState(undefined);
   useEffect(() => {
@@ -46,6 +82,7 @@ export function MyOrdersPage({ view = 'orders' }) {
   }, []);
   const title = view === 'account' ? 'Account' : 'My orders';
   const tabs = <CustomerTabs active={view === 'account' ? 'account' : 'orders'} />;
+  const back = view === 'account' ? '/account' : view === 'carts' ? '/orders/carts' : '/orders';
   useBusy(session === undefined);
   if (session === undefined)
     return (
@@ -58,7 +95,7 @@ export function MyOrdersPage({ view = 'orders' }) {
       <Page title={title} kind="me" tabs={tabs}>
         <SignIn
           title={view === 'account' ? 'Your account' : 'Your orders'}
-          path={view === 'account' ? '/account' : '/orders'}
+          path={back}
           note={view === 'account' ? 'Sign in to see your details and orders.' : 'Sign in to follow your orders.'}
           footer={
             <p className="note" style={{ fontSize: 12 }}>
@@ -71,9 +108,6 @@ export function MyOrdersPage({ view = 'orders' }) {
   return <SignedInOrders email={session.user.email} userId={session.user.id} view={view} />;
 }
 
-// how many past orders show at first, and how many more each "Show older orders" adds
-const PAST_STEP = 10;
-
 // What was on screen last time, so coming back from an order shows the list straight away while it refreshes.
 // Kept in memory only (gone when the tab closes) and only for the same account.
 let last = null;
@@ -81,15 +115,16 @@ let last = null;
 function SignedInOrders({ email, userId, view }) {
   const seen = last && last.userId === userId ? last : null;
   const [orders, setOrders] = useState(seen ? seen.orders : null);
-  const [pastShown, setPastShown] = useState(seen ? seen.pastShown : PAST_STEP);
   // saved details are shown as text; Edit opens a copy in the form, so the minute refresh never overwrites typing
   const [me, setMe] = useState(seen ? seen.me : { name: '', phone: '', address: '' });
+  const carts = useCarts();
+  const [seg, setSeg] = useState(view === 'carts' ? 'carts' : null); // null: Ongoing, or Carts when nothing is on its way
   const [draft, setDraft] = useState(null); // null: not editing
   const [confirmForget, setConfirmForget] = useState(false);
   const [had, setHad] = useState(seen ? seen.had : false);
   useEffect(() => {
-    last = { userId, orders, pastShown, me, had };
-  }, [userId, orders, pastShown, me, had]);
+    last = { userId, orders, me, had };
+  }, [userId, orders, me, had]);
   async function leave() {
     last = null;
     await signOut();
@@ -145,6 +180,7 @@ function SignedInOrders({ email, userId, view }) {
     }
   }
   async function forget() {
+    await supabase.from('customer_addresses').delete().not('user_id', 'is', null);
     const { error } = await supabase.from('customers').delete().not('user_id', 'is', null);
     if (error) setMsg(errText(error));
     else {
@@ -156,37 +192,13 @@ function SignedInOrders({ email, userId, view }) {
     }
   }
   useBusy(orders === null && !loadErr);
-  const live = (orders || []).filter(
-    (o) =>
-      !['delivered', 'cancelled'].includes(o.status) ||
-      (o.status === 'delivered' && o.received_by !== 'customer') ||
-      ['open', 'answered', 'with_shopdesk'].includes(o.problem),
-  );
-  const past = (orders || []).filter((o) => !live.includes(o));
-  const row = (o) => {
-    const [tone, label] = orderLabel(o);
-    return (
-      <a key={o.token} className="card boxed orow" href={'/o/' + o.token}>
-        <div className="row">
-          <strong>
-            {o.shop}
-            {unread.byOrder[o.order_id] > 0 && (
-              <span className="newdot" aria-label={unread.chats[o.order_id] ? 'New message' : 'New update'} />
-            )}
-          </strong>
-          <span className={'chip ' + tone}>{label}</span>
-        </div>
-        {unread.chats[o.order_id] > 0 && <div className="sub newmsg">New message</div>}
-        <div className="items">{o.items}</div>
-        <div className="row">
-          <span className="order-id">
-            {o.code || '#' + o.order_id} · {dayOf(o.created_at)}
-          </span>
-          <span className="num">{naira(o.to_pay)}</span>
-        </div>
-      </a>
-    );
-  };
+  const live = (orders || []).filter(isLive);
+  const pastCount = (orders || []).length - live.length;
+  const shown = seg || (live.length || !carts.length ? 'ongoing' : 'carts');
+  function pick(k) {
+    setSeg(k);
+    setAddress(k === 'carts' ? '/orders/carts' : '/orders');
+  }
   // the round letter on the Account page: the first letter of their email
   const initial = ((email || '').trim()[0] || '?').toUpperCase();
   if (view === 'account')
@@ -222,7 +234,6 @@ function SignedInOrders({ email, userId, view }) {
               <div className="saved-details">
                 {me.name && <strong>{me.name}</strong>}
                 {me.phone && <span>{me.phone}</span>}
-                {me.address && <span>{me.address}</span>}
               </div>
             )
           ) : (
@@ -246,16 +257,6 @@ function SignedInOrders({ email, userId, view }) {
                   onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
                 />
               </div>
-              <div className="field">
-                <label htmlFor="mAddr">Delivery address</label>
-                <input
-                  id="mAddr"
-                  value={draft.address}
-                  onChange={(e) => setDraft({ ...draft, address: e.target.value })}
-                  placeholder="Street, area and a landmark"
-                  autoComplete="street-address"
-                />
-              </div>
               <div className="btns">
                 <button className="btn small" onClick={save}>
                   Save
@@ -267,7 +268,7 @@ function SignedInOrders({ email, userId, view }) {
               {had &&
                 (confirmForget ? (
                   <div className="confirm-del" role="alert">
-                    <span>Delete your saved name, phone number and address?</span>
+                    <span>Delete your saved name, phone number and addresses?</span>
                     <div className="btns">
                       <button className="btn small bad" onClick={forget}>
                         Delete
@@ -295,6 +296,17 @@ function SignedInOrders({ email, userId, view }) {
             </div>
           )}
         </section>
+        <AccountAddresses userId={userId} />
+        <a className="card boxed hist-row" href="/help">
+          <span className="hist-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01" />
+            </svg>
+          </span>
+          <strong>Help</strong>
+          <span className="sub" aria-hidden="true">›</span>
+        </a>
         <ThemePicker />
         <section className="card">
           <EmailSwitch />
@@ -304,43 +316,49 @@ function SignedInOrders({ email, userId, view }) {
         </button>
       </Page>
     );
-  const olderLeft = past.length - pastShown;
   return (
     <Page title="My orders" kind="me" tabs={<CustomerTabs active="orders" unread={inbox.count} shopNews={inbox.shopCount} />}>
       {msg && <p className="note">{msg}</p>}
       <AlertsPrompt who="customer" userId={userId} />
-      {orders === null ? (
+      <div className="seg wide" role="group" aria-label="Orders">
+        <button aria-pressed={shown === 'ongoing'} onClick={() => pick('ongoing')}>
+          Ongoing{live.length > 0 && <span className="count">{live.length}</span>}
+        </button>
+        <button aria-pressed={shown === 'carts'} onClick={() => pick('carts')}>
+          Carts{carts.length > 0 && <span className="count">{carts.length}</span>}
+        </button>
+      </div>
+      <a className="card boxed hist-row" href="/orders/history">
+        <span className="hist-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M3.5 12a8.5 8.5 0 1 0 2.5-6M3.5 4v4h4M12 7.5V12l3 2" />
+          </svg>
+        </span>
+        <strong>Order history</strong>
+        {pastCount > 0 && <span className="sub">{pastCount}</span>}
+        <span className="sub" aria-hidden="true">›</span>
+      </a>
+      {shown === 'carts' ? (
+        <Carts carts={carts} />
+      ) : orders === null ? (
         loadErr ? (
           <LoadError error={loadErr} onRetry={load} what="your orders" compact />
         ) : (
           <Skeleton kind="list" />
         )
-      ) : !orders.length ? (
-        <section className="card">
-          <h2>No orders yet</h2>
-          <p className="note">Your orders will show here.</p>
-        </section>
+      ) : live.length ? (
+        live.map((o) => <OrderRow key={o.token} o={o} unread={unread} />)
       ) : (
-        <>
-          {live.length > 0 && (
-            <>
-              <h2>In progress</h2>
-              {live.map(row)}
-            </>
-          )}
-          {past.length > 0 && (
-            <>
-              <h2>Past orders</h2>
-              {past.slice(0, pastShown).map(row)}
-              {olderLeft > 0 && (
-                <button className="btn ghost" onClick={() => setPastShown(pastShown + PAST_STEP)}>
-                  Show older orders
-                </button>
-              )}
-            </>
-          )}
-        </>
+        <Empty
+          kind="scooter"
+          title="Nothing on the way"
+          text={orders.length ? 'Orders you place show here until they reach you.' : 'Your orders will show here once you place one.'}
+          action={['Find shops', '/shops']}
+        />
       )}
+      <a className="help-link" href="/help">
+        Need help with an order? <strong>Get help</strong>
+      </a>
       <InboxToast inbox={inbox} />
     </Page>
   );

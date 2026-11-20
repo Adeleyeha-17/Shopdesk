@@ -15,8 +15,8 @@ export function PrivacyPage() {
         <p className="note">
           <strong>What we keep.</strong> When you order, the shop receives your name, phone number, delivery
           address and what you ordered. Shops sign in with an email address. If you make an account, we keep
-          your email, your order history and the details you choose to save; you can delete your saved details
-          any time from My orders.
+          your email, your order history, the delivery addresses you use (up to 10) and the details you choose to
+          save; you can remove an address or delete your saved details any time from Account.
         </p>
         <p className="note">
           <strong>Deliveries.</strong> When your order goes out, you see the rider's name and phone number so

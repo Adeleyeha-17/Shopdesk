@@ -4,7 +4,7 @@
 // Hidden on checkout, so nothing pulls them away from paying. Tabs change at once, without sliding.
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
-import { loadCart } from './cart.js';
+import { allCarts, loadCart } from './cart.js';
 import { myShops } from './myShops.js';
 import { TabIcon } from '../shared/TabIcon.jsx';
 
@@ -79,7 +79,8 @@ export function CustomerTabs({ active, unread = 0, shopNews = 0 }) {
   const tabs = [
     ['shops', 'Shops', '/shops'],
     ['orders', 'Orders', '/orders'],
-    slug && ['cart', 'Cart', '/' + slug + '/cart'],
+    // carts in more than one shop: the Cart tab opens all of them (Orders → Carts)
+    slug && ['cart', 'Cart', allCarts().length > 1 ? '/orders/carts' : '/' + slug + '/cart'],
     ownsShop ? ['myshop', 'My shop', '/'] : ['account', 'Account', '/account'],
   ].filter(Boolean);
   const letter = (email.trim()[0] || '').toUpperCase();

@@ -22,6 +22,8 @@ import { ShopPage } from './customer/ShopPage.jsx';
 import { RiderPage } from './rider/RiderPage.jsx';
 import { OrderPage } from './customer/OrderPage.jsx';
 import { MyOrdersPage } from './customer/MyOrdersPage.jsx';
+import { OrderHistoryPage } from './customer/OrderHistory.jsx';
+import { HelpPage } from './customer/HelpPage.jsx';
 import { ShopsPage } from './customer/ShopsPage.jsx';
 import { PrivacyPage } from './shared/PrivacyPage.jsx';
 import { EmailOffPage } from './shared/EmailOffPage.jsx';
@@ -87,12 +89,15 @@ function Pages() {
       </div>
     );
   }
-  const p = path.replace(/\/+$/, '') || '/';
+  const p = path.split(/[?#]/)[0].replace(/\/+$/, '') || '/';
   if (p === '/') return <VendorApp />;
   if (p === '/admin') return <AdminApp />;
   if (p === '/privacy') return <PrivacyPage />;
   if (p === '/shops') return <ShopsPage />;
-  if (p === '/orders' || p === '/account') return <MyOrdersPage view={p === '/account' ? 'account' : 'orders'} />;
+  if (p === '/orders' || p === '/account' || p === '/orders/carts')
+    return <MyOrdersPage view={p === '/account' ? 'account' : p === '/orders/carts' ? 'carts' : 'orders'} />;
+  if (p === '/orders/history') return <OrderHistoryPage />;
+  if (p === '/help') return <HelpPage />;
   if (p === '/email-off') return <EmailOffPage />;
   const o = p.match(/^\/o\/([0-9a-f-]{36})$/i);
   if (o) return <OrderPage token={o[1]} />;

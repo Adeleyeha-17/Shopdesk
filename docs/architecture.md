@@ -27,11 +27,14 @@ There is no application server. The client talks to Supabase directly, and every
 | `/<shop>` | A shop's public page and cart |
 | `/<shop>/checkout` | Checkout for that shop |
 | `/o/<token>` | A single order, addressed by an unguessable token |
-| `/orders` | A customer's order history and saved details |
+| `/orders`, `/orders/carts` | A customer's orders on their way (Ongoing) and every shop's cart (Carts) |
+| `/orders/history` | Buy again and past orders, with filters |
+| `/account` | Saved details, delivery addresses, Help, appearance and alerts |
+| `/help` | Recent delivered orders with Report a problem, common questions, contact |
 | `/admin` | Admin console |
 | `/privacy`, `/email-off` | Privacy notice, email unsubscribe |
 
-State is local to each page. The cart is kept per shop in `localStorage` (`src/customer/cart.js`) and is reconciled against current stock whenever it is restored.
+State is local to each page. The cart is kept per shop in `localStorage` (`src/customer/cart.js`) and is reconciled against current stock whenever it is restored; `allCarts()` lists every shop's cart for Orders → Carts.
 
 `src/lib/database.js` wraps `fetch` with timeouts and retries for idempotent reads. `src/lib/errors.js` turns every failure (network, auth, PostgREST, Postgres and the app's own rule violations) into a plain sentence, so raw errors never reach the interface.
 

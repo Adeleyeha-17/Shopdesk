@@ -42,8 +42,9 @@ export function depth(path) {
   const p = String(path || '/').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
   if (p === '/' || p === '/admin') return 0;
   if (p === '/shops') return 0.5;
-  if (p === '/orders' || p === '/email-off' || /^\/[^/]+\/cart$/.test(p)) return 2;
-  if (p === '/account' || /^\/[^/]+\/checkout$/.test(p)) return 3;
+  if (p === '/orders' || p === '/orders/carts' || p === '/email-off' || /^\/[^/]+\/cart$/.test(p)) return 2;
+  if (p === '/account' || p === '/orders/history' || /^\/[^/]+\/checkout$/.test(p)) return 3;
+  if (p === '/help') return 3.5;
   if (p.startsWith('/o/')) return 4;
   if (p === '/privacy') return 5;
   return 1; // a shop's page

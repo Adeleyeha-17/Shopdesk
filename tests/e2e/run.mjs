@@ -46,7 +46,7 @@ const context = await browser.newContext({
 });
 const p = await context.newPage();
 const pageErrors = [];
-p.on('pageerror', (e) => pageErrors.push(e.message));
+p.on('pageerror', (e) => { pageErrors.push(e.message); if (process.env.SHOW_ERRORS) console.log('PAGE ERROR', e.message.slice(0, 300)); });
 p.setDefaultTimeout(8000);
 
 let failures = 0;
@@ -277,8 +277,15 @@ await step('the Shops tab keeps the shop, with what is in its cart at the top', 
   await see('Place order');
 });
 
-await step('checkout reads the area from the address; Change picks another', async () => {
+await step('checkout offers the saved addresses to pick from; a new address reads its area; Change picks another area', async () => {
   await p.locator('.co-addr .linkbtn:has-text("Change")').click();
+  await p.locator('.addr-pick').waitFor();
+  expect((await p.locator('.addr-pick li').count()) >= 2, 'the saved addresses are not offered');
+  await p.locator('.addr-pick button:has-text("14 Admiralty Way")').click();
+  await p.locator('.addr-pick').waitFor({ state: 'detached' });
+  expect((await p.locator('.co-addr').innerText()).includes('14 Admiralty Way'), 'the picked address is not used');
+  await p.locator('.co-addr .linkbtn:has-text("Change")').click();
+  await p.locator('.modal.sheet button:has-text("Use a new address")').click();
   await p.locator('#cAddr').fill('4 Admiralty Way, Lekki Phase 1');
   expect((await p.locator('.area-line').innerText()).includes('Lekki Phase 1'), 'the area was not read from the address');
   await p.locator('.area-line .linkbtn').click();
@@ -397,7 +404,7 @@ await step('the paid order has a receipt: it shows the code, the lines and the t
 
 await step("the order page's back arrow goes to My orders; the Account tab shows who is signed in", async () => {
   await p.locator('.back-btn').click();
-  await see('Past orders');
+  await see('Order history');
   const letter = (await tab('Account').locator('.tab-letter').innerText()).trim();
   await tab('Account').click();
   await see('Signed in as');
@@ -406,7 +413,68 @@ await step("the order page's back arrow goes to My orders; the Account tab shows
   expect(letter === email[0].toUpperCase(), `the badge shows "${letter}", not the first letter of ${email}`);
   await see('Your details');
   await tab('Orders').click();
-  await see('Past orders');
+  await see('Order history');
+});
+
+await step('Order history: Buy again puts a past item back in the cart, Past orders filter by status, and Carts on My orders shows the cart', async () => {
+  await p.locator('a.hist-row:has-text("Order history")').click();
+  await p.locator('.again').first().waitFor();
+  const first = p.locator('.again-item').first();
+  const name = (await first.locator('.name').innerText()).trim();
+  await first.locator('button.add').click();
+  await see('in your cart at');
+  expect((await first.locator('button.add').innerText()).trim() === '1', 'the + does not show 1 in the cart');
+  await p.locator('.seg button:has-text("Past orders")').click();
+  await p.locator('.orow').first().waitFor();
+  const all = await p.locator('.orow').count();
+  await p.locator('.pick select[aria-label="Status"]').selectOption('cancelled');
+  await pause(200);
+  expect((await p.locator('.orow').count()) < all, 'the status filter did not narrow the list');
+  await p.locator('.pick select[aria-label="Status"]').selectOption('all');
+  await p.locator('.back-btn').click();
+  await p.locator('.seg button:has-text("Carts")').click();
+  await p.locator('.cart-card').first().waitFor();
+  await p.locator('.cart-card .cart-thumbs').first().waitFor();
+  expect((await p.locator('.cart-card').first().innerText()).includes(name.split(' · ')[0]), 'the cart does not show the item');
+  await p.locator('.cart-card button:has-text("Remove")').first().click();
+  await p.locator('.cart-card button:has-text("Empty it")').first().click();
+  await see('Your carts are empty');
+  await p.locator('.seg button:has-text("Ongoing")').click();
+});
+
+await step('Help: a recent delivered order can be reported from there, and the common questions open', async () => {
+  await tab('Account').click();
+  await p.locator('a.hist-row:has-text("Help")').click();
+  await see('How can we help?');
+  await p.locator('.faq summary').first().click();
+  expect((await p.locator('.faq details[open] p').innerText()).includes('never holds your money'), 'the answer did not open');
+  await p.locator('.help-order').first().waitFor();
+  const claim = p.locator('.help-order .claim').first();
+  const words = await claim.innerText();
+  expect(/Report a problem|See it/.test(words), 'no report link on a recent order');
+  if (words.includes('Report a problem')) {
+    await claim.click();
+    await p.locator('h2:text-is("Report a problem")').waitFor();
+    await p.locator('.back-btn').click();
+  }
+});
+
+await step('Account lists the saved addresses (with the one used at checkout), and they can be added and removed', async () => {
+  await tab('Account').click();
+  await see('Addresses');
+  const list = () => p.locator('.addr-list').innerText();
+  expect((await list()).includes('4 Admiralty Way'), 'the address used at checkout was not saved');
+  const before = await p.locator('.addr-list li').count();
+  await p.locator('.addr-list li:has-text("14 Admiralty Way") button:has-text("Remove")').click();
+  await pause(300);
+  expect((await p.locator('.addr-list li').count()) === before - 1, 'the address was not removed');
+  await p.locator('section[aria-label="Addresses"] button:has-text("Add")').click();
+  await p.locator('#newAddr').fill('Block C, Unilag Staff Quarters, Akoka, Yaba');
+  await p.locator('button:has-text("Save address")').click();
+  await pause(300);
+  expect((await list()).includes('Unilag Staff Quarters'), 'the new address was not added');
+  await tab('Orders').click();
+  await see('Order history');
 });
 
 const theme = () => p.evaluate(() => document.documentElement.getAttribute('data-theme'));

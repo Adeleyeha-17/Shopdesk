@@ -22,6 +22,7 @@ import { AreaPicker } from './AreaPicker.jsx';
 import { areaIn } from './areas.js';
 import { noteSource, sourceFor, visitorId } from './source.js';
 import { PinIcon, Star } from './NearYou.jsx';
+import { AddressSheet, loadAddresses } from './Addresses.jsx';
 import { useMoneySwitches } from '../lib/moneyApi.js';
 
 // "₦8,000 ₦9,500": the price to pay, with the old one crossed out during a sale
@@ -252,6 +253,8 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [saved, setSaved] = useState(null); // the customer's saved details, from their last order
   const [editDetails, setEditDetails] = useState(false);
   const [editAddr, setEditAddr] = useState(false);
+  const [addrs, setAddrs] = useState([]); // their saved delivery addresses, used last first
+  const [addrSheet, setAddrSheet] = useState(false);
   const [picking, setPicking] = useState(null); // the product whose sheet is open (its details, or its sizes)
   const [find, setFind] = useState(''); // search this shop's products
   const [inSearch, setInSearch] = useState(false); // the search box is being used
@@ -282,19 +285,23 @@ export function ShopPage({ slug, step = 'shop' }) {
         return;
       }
       // Ask both questions at once (is this a shop's account? any saved details?), then show the form already filled in.
-      const [{ data: a }, { data: c }] = await Promise.all([
+      const [{ data: a }, { data: c }, list] = await Promise.all([
         supabase.rpc('my_account'),
         supabase.from('customers').select('name, phone, address, area').maybeSingle(),
+        loadAddresses(),
       ]);
       const shopAccount = !!(a && a.shop_slug === slug);
       if (c && !shopAccount) setSaved(c);
-      if (c && !shopAccount)
+      if (!shopAccount) setAddrs(list);
+      // the address used last comes first; before addresses were a list, it was the one saved with their details
+      const home = list[0] || (c && c.address ? { address: c.address, area: c.area } : null);
+      if ((c || home) && !shopAccount)
         setForm((f) => ({
           ...f,
-          name: f.name || c.name,
-          phone: f.phone || c.phone,
-          address: f.address || c.address,
-          area: f.area || c.area || areaIn(c.address),
+          name: f.name || (c && c.name) || '',
+          phone: f.phone || (c && c.phone) || '',
+          address: f.address || (home ? home.address : ''),
+          area: f.area || (home ? home.area || areaIn(home.address) : ''),
         }));
       setIsShop(shopAccount);
       setMe(session.user.email);
@@ -440,7 +447,7 @@ export function ShopPage({ slug, step = 'shop' }) {
   );
   // returning customers see their saved details in one line, with Change; first-timers fill them in
   const detailsForm = editDetails || !(saved && saved.name && saved.phone);
-  const addrForm = editAddr || !(saved && saved.address && form.address);
+  const addrForm = editAddr || !(form.address && (addrs.length || (saved && saved.address)));
 
   async function place() {
     const items = lines.map((l) => ({ product_id: l.p.id, ...(l.o ? { option_id: l.o.id } : {}), qty: l.q }));
@@ -893,6 +900,11 @@ export function ShopPage({ slug, step = 'shop' }) {
                       {form.area ? 'Change' : 'Pick area'}
                     </button>
                   </span>
+                  {addrs.length > 0 && (
+                    <button className="linkbtn saved-addr" onClick={() => setAddrSheet(true)}>
+                      Use a saved address
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="co-addr">
@@ -903,11 +915,27 @@ export function ShopPage({ slug, step = 'shop' }) {
                     <strong>{form.address}</strong>
                     {form.area && <span className="sub">{form.area}</span>}
                   </div>
-                  <button className="linkbtn" onClick={() => setEditAddr(true)}>
+                  <button className="linkbtn" onClick={() => (addrs.length ? setAddrSheet(true) : setEditAddr(true))}>
                     Change
                   </button>
                 </div>
               ))}
+            {addrSheet && (
+              <AddressSheet
+                list={addrs}
+                current={form.address}
+                onPick={(a) => {
+                  setAreaPicked(true);
+                  setForm((f) => ({ ...f, address: a.address, area: a.area || areaIn(a.address) }));
+                }}
+                onNew={() => {
+                  setAreaPicked(false);
+                  setForm((f) => ({ ...f, address: '', area: '' }));
+                  setEditAddr(true);
+                }}
+                onClose={() => setAddrSheet(false)}
+              />
+            )}
             {areaOpen && (
               <AreaPicker
                 value={form.area}

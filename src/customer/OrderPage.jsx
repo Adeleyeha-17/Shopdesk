@@ -73,7 +73,8 @@ export function OrderPage({ token }) {
   const [chat, setChat] = useState(() => window.location.hash === '#chat');
   const chatRef = useRef(null);
   const [reporting, setReporting] = useState(false); // report this shop to ShopDesk
-  const [complaining, setComplaining] = useState(false); // report a problem with this order to the shop
+  // report a problem with this order to the shop (Help's "Report a problem" opens the page with #report)
+  const [complaining, setComplaining] = useState(() => window.location.hash === '#report');
   const [cancelling, setCancelling] = useState(false); // "Cancel this order?"
   const [showReceipt, setShowReceipt] = useState(false);
   const autoOpened = useRef(false);

@@ -190,6 +190,18 @@ create table if not exists public.customers (
   updated_at timestamptz not null default now()
 );
 
+-- A customer's delivery addresses (home, office...), newest first at checkout. An address typed at checkout is saved
+-- when the order is placed; the customer can add or remove them in Account. Up to 10 are kept (the oldest go).
+create table if not exists public.customer_addresses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  address text not null check (char_length(address) between 3 and 160),
+  area text not null default '' check (char_length(area) <= 40),
+  used_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create unique index if not exists customer_addresses_one on public.customer_addresses (user_id, lower(address));
+
 -- Problems ("confirm or complain"): up to 3 days after delivery (or once the promised delivery time has passed) the customer
 -- can report one problem with an order. The shop has 48 hours to answer: refund, send it again, or explain. The customer then
 -- says it's sorted or asks ShopDesk (you) to decide. If the shop doesn't answer in 48 hours, it comes to you automatically.
@@ -424,6 +436,19 @@ alter table public.orders add column if not exists source text not null default 
   check (source in ('whatsapp', 'instagram', 'tiktok', 'facebook', 'snapchat', 'x', 'direct'));
 alter table public.order_items add column if not exists was_price integer check (was_price > 0);
 alter table public.customers add column if not exists area text not null default '' check (char_length(area) <= 40);
+-- addresses: keep the 10 used most recently; the address saved before addresses became a list is the first one
+create or replace function public.customer_addresses_keep() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from public.customer_addresses where user_id = new.user_id
+    and id not in (select id from public.customer_addresses where user_id = new.user_id order by used_at desc, created_at desc limit 10);
+  return null;
+end $$;
+drop trigger if exists customer_addresses_keep on public.customer_addresses;
+create trigger customer_addresses_keep after insert on public.customer_addresses for each row execute function public.customer_addresses_keep();
+insert into public.customer_addresses (user_id, address, area, used_at)
+select user_id, trim(address), area, updated_at from public.customers where char_length(trim(address)) >= 3 and trim(address) not like 'Map pin %'
+on conflict do nothing;
 alter table public.shops add column if not exists monthly_goal integer not null default 0 check (monthly_goal between 0 and 2000000000);
 -- Money out: what a shop spends to run (restock, packaging, transport...), so Sales shows what's left.
 create table if not exists public.money_out (
@@ -619,6 +644,9 @@ drop policy if exists payments_owner_read on public.payments;
 create policy payments_owner_read on public.payments for select to authenticated using (shop_id = public.my_shop_id());
 drop policy if exists customers_own on public.customers;
 create policy customers_own on public.customers for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+alter table public.customer_addresses enable row level security;
+drop policy if exists addresses_own on public.customer_addresses;
+create policy addresses_own on public.customer_addresses for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 -- A shop reads the problems reported on its own orders. Nobody writes to problems directly; the functions below do.
 drop policy if exists problems_owner_read on public.problems;
 create policy problems_owner_read on public.problems for select to authenticated using (shop_id = public.my_shop_id());
@@ -648,6 +676,9 @@ grant select on public.orders, public.order_items, public.payments, public.probl
 grant select, delete on public.customers to authenticated;
 grant insert (user_id, name, phone, address, area) on public.customers to authenticated;
 grant update (name, phone, address, area, updated_at) on public.customers to authenticated;
+grant select, delete on public.customer_addresses to authenticated;
+grant insert (user_id, address, area) on public.customer_addresses to authenticated;
+grant update (address, area, used_at) on public.customer_addresses to authenticated;
 -- A shop keeps its own money out: adds, reads and removes (the policy above keeps it to its own rows).
 grant select, delete on public.money_out to authenticated;
 grant insert (shop_id, amount, kind, note, spent_on) on public.money_out to authenticated;
@@ -915,6 +946,12 @@ begin
     on conflict (user_id) do update set name = excluded.name, phone = excluded.phone,
       address = case when excluded.address <> '' then excluded.address else public.customers.address end,
       area = case when excluded.area <> '' then excluded.area else public.customers.area end, updated_at = now();
+    -- and the delivery address goes on their list of addresses (used now, so it comes first next time)
+    if v_mode = 'delivery' and v_addr not like 'Map pin %' then
+      insert into public.customer_addresses (user_id, address, area) values (auth.uid(), v_addr, v_area)
+      on conflict (user_id, lower(address)) do update set used_at = now(),
+        area = case when excluded.area <> '' then excluded.area else public.customer_addresses.area end;
+    end if;
   end if;
   for v_item in select * from jsonb_array_elements(p_items) loop
     v_qty := (v_item->>'qty')::int;
@@ -1030,11 +1067,40 @@ end $$;
 create or replace function public.my_orders() returns jsonb
 language sql stable security definer set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_build_object('token', o.public_token, 'order_id', o.id, 'code', public.order_code(s.order_prefix, o.id), 'shop', s.name, 'slug', s.slug,
-      'status', o.status, 'mode', o.mode, 'created_at', o.created_at, 'deliver_by', o.deliver_by, 'received_by', o.received_by,
+      'status', o.status, 'mode', o.mode, 'created_at', o.created_at, 'deliver_by', o.deliver_by, 'received_by', o.received_by, 'done_at', o.done_at,
       'problem', (select public.problem_status(p) from public.problems p where p.order_id = o.id),
       'to_pay', o.items_total + case when o.delivery_paid_by = 'customer' then coalesce(o.delivery_fee, 0) else 0 end,
       'items', (select string_agg(i.qty || ' × ' || i.name, ', ' order by i.id) from public.order_items i where i.order_id = o.id)) order by o.created_at desc), '[]'::jsonb)
   from public.orders o join public.shops s on s.id = o.shop_id where auth.uid() is not null and o.customer_id = auth.uid();
+$$;
+
+-- Buy again: what the customer bought before (not on cancelled orders), by shop, as each shop sells it now: today's price,
+-- what's left, and whether the shop is taking orders. Items the shop no longer sells (or a size it dropped) are left out.
+-- Shops with the newest purchase first, up to 20 shops and 12 items each.
+create or replace function public.my_past_items() returns jsonb
+language sql stable security definer set search_path = public as $$
+  with bought as (
+    select o.shop_id, i.product_id, i.option_id, max(o.created_at) as last_at
+    from public.orders o join public.order_items i on i.order_id = o.id
+    where auth.uid() is not null and o.customer_id = auth.uid() and o.status <> 'cancelled' and i.product_id is not null
+    group by o.shop_id, i.product_id, i.option_id
+  ), now_sold as (
+    select b.shop_id, b.last_at, p.id as product_id, x.id as option_id, p.name, x.name as option_name, p.photo_path,
+      coalesce(x.price, p.price) as price, case when x.id is not null then x.sale_price else p.sale_price end as sale_price,
+      coalesce(x.stock, p.stock) as stock,
+      row_number() over (partition by b.shop_id order by b.last_at desc, p.name) as n
+    from bought b join public.products p on p.id = b.product_id and p.active and not p.hidden_by_admin
+    left join public.product_options x on x.id = b.option_id and x.product_id = p.id
+    where case when b.option_id is null then not exists (select 1 from public.product_options y where y.product_id = p.id) else x.id is not null end
+  ), per as (
+    select shop_id, max(last_at) as last_at,
+      jsonb_agg(jsonb_build_object('product_id', product_id, 'option_id', option_id, 'name', name, 'option', option_name, 'photo_path', photo_path,
+        'price', price, 'sale_price', sale_price, 'stock', stock) order by last_at desc, name) as items
+    from now_sold where n <= 12 group by shop_id
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('shop', s.name, 'slug', s.slug, 'open', public.shop_open(s) and not public.shop_owes(s.id),
+      'last_at', per.last_at, 'items', per.items) order by per.last_at desc), '[]'::jsonb)
+  from (select * from per order by last_at desc limit 20) per join public.shops s on s.id = per.shop_id;
 $$;
 
 -- What a shop owner spent buying from other shops between two days (Lagos dates, both included), for their report:
@@ -2597,7 +2663,7 @@ grant execute on function public.is_admin(), public.my_shop_id(), public.set_del
   public.purge_customer_details(int), public.admin_attention(), public.admin_growth(), public.admin_shop_detail(uuid), public.admin_hide_product(uuid, boolean, text),
   public.admin_save_settings(jsonb),
   public.admin_post_announcement(text, text, int), public.admin_end_announcement(bigint), public.admin_announcements(), public.get_announcements(),
-  public.my_orders(), public.my_purchases(date, date), public.claim_orders(uuid[]), public.confirm_order(bigint), public.hand_to_rider(bigint, text, text, timestamptz), public.mark_ready(bigint, timestamptz),
+  public.my_orders(), public.my_past_items(), public.my_purchases(date, date), public.claim_orders(uuid[]), public.confirm_order(bigint), public.hand_to_rider(bigint, text, text, timestamptz), public.mark_ready(bigint, timestamptz),
   public.my_account(), public.pack_item(bigint, boolean), public.set_packing_photo(bigint, text), public.answer_problem(bigint, text, text, int, text[]),
   public.report_problem(uuid, text, text, text[]), public.problem_customer(uuid, text), public.admin_problems(), public.admin_decide_problem(bigint, text, text, int),
   public.send_message(bigint, text, text), public.mark_read(bigint, text), public.save_push_sub(text, text, text), public.delete_push_sub(text),
@@ -2609,6 +2675,7 @@ grant execute on function public.is_admin(), public.my_shop_id(), public.set_del
 grant execute on function public.email_by_token(uuid, boolean) to anon, authenticated;
 revoke execute on function public.owned_order(bigint) from authenticated;
 revoke execute on function public.shops_watch_changes() from authenticated;
+revoke execute on function public.customer_addresses_keep() from authenticated;
 revoke execute on function public.shop_open(public.shops) from authenticated;
 revoke execute on function public.has_shop(uuid), public.has_shopped(uuid), public.shops_one_role(), public.customer_order(uuid) from authenticated;
 revoke execute on function public.order_prefix_for(text), public.order_code(text, bigint), public.problem_status(public.problems), public.can_report(public.orders),

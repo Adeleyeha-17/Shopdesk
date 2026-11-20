@@ -65,3 +65,28 @@ export function fitCart(items, products) {
   const text = notes.length ? `Your cart changed: ${notes.join('; ')}.` : '';
   return { items: out, note: text.charAt(0).toUpperCase() + text.slice(1) };
 }
+
+// Every shop with something in its cart (for the Carts list on Orders), the cart changed last first: [{ slug, items, at }].
+export function allCarts() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith('shopdesk-cart:')) continue;
+      const c = JSON.parse(localStorage.getItem(k) || 'null');
+      if (!c || typeof c.items !== 'object' || Date.now() - (c.at || 0) > KEEP_DAYS * 864e5) continue;
+      if (Object.values(c.items).some((q) => q > 0)) out.push({ slug: k.slice('shopdesk-cart:'.length), items: c.items, at: c.at || 0 });
+    }
+  } catch (e) {
+    /* storage turned off: no saved carts */
+  }
+  return out.sort((a, b) => b.at - a.at);
+}
+
+// Buy again: one more of something in that shop's cart, never more than what's left. Returns how many are in it now.
+export function addOne(slug, key, left) {
+  const items = loadCart(slug);
+  const n = Math.min((items[key] || 0) + 1, left, 99);
+  saveCart(slug, { ...items, [key]: n });
+  return n;
+}
