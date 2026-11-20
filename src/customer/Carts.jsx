@@ -1,6 +1,6 @@
 // The Carts list on Orders: every shop with something in its cart, so nothing added in one shop gets forgotten while
 // browsing another. Each shows what's in it as the shop sells it now, with Go to cart and Remove.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { photoUrl } from '../lib/photos.js';
@@ -33,18 +33,19 @@ export function useCarts() {
   return carts;
 }
 
-// what each shop sells now, asked once per visit
+// what each shop sells now: shown at once from the last look, and asked again each time the list opens
 const fronts = {};
 export function Carts({ carts }) {
   const [, redraw] = useState(0);
   const [removing, setRemoving] = useState(null);
+  const asked = useRef(new Set());
   useEffect(() => {
     carts.forEach(({ slug }) => {
-      if (slug in fronts) return;
-      fronts[slug] = undefined;
+      if (asked.current.has(slug)) return;
+      asked.current.add(slug);
       supabase.rpc('get_storefront', { p_slug: slug }).then(({ data, error }) => {
-        fronts[slug] = error ? undefined : data || null; // null: the shop isn't taking orders now
-        if (error) delete fronts[slug];
+        if (error) asked.current.delete(slug); // try again next time the carts change
+        else fronts[slug] = data || null; // null: the shop isn't taking orders now
         redraw((n) => n + 1);
       });
     });

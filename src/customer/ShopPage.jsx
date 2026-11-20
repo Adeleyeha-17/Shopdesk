@@ -925,6 +925,7 @@ export function ShopPage({ slug, step = 'shop' }) {
                 list={addrs}
                 current={form.address}
                 onPick={(a) => {
+                  setEditAddr(false);
                   setAreaPicked(true);
                   setForm((f) => ({ ...f, address: a.address, area: a.area || areaIn(a.address) }));
                 }}
