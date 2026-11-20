@@ -220,9 +220,17 @@ function VendorTabs({ shop, reloadShop, email, userId, isOwner }) {
     const t = setInterval(loadDesk, 60000);
     return () => clearInterval(t);
   }, [loadDesk]);
+  // Opening ShopDesk, or coming back to it, marks the shop as active (so it leaves Admin's "hasn't opened ShopDesk"
+  // list). A query only goes out once it's awaited or then-ed.
+  useEffect(() => {
+    const touch = () => supabase.rpc('touch_shop').then(() => {}, () => {});
+    touch();
+    const back = () => document.visibilityState === 'visible' && touch();
+    document.addEventListener('visibilitychange', back);
+    return () => document.removeEventListener('visibilitychange', back);
+  }, []);
   useEffect(() => {
     load();
-    supabase.rpc('touch_shop');
     kick();
     const t = setInterval(load, 60000);
     return () => clearInterval(t);
