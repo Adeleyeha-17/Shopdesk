@@ -37,6 +37,7 @@ import { hasPin, mapLink } from '../lib/products.js';
 import { useMoneySwitches } from '../lib/moneyApi.js';
 import { CourierPrices, CourierBook, CourierTrack } from './Courier.jsx';
 import { RiderLive } from './RiderLive.jsx';
+import { ReceiptSheet, receiptFromShopOrder } from '../shared/Receipt.jsx';
 
 // Why a shop cancels. The customer sees it on their order.
 const CANCEL_REASONS = [
@@ -174,7 +175,17 @@ export function OrderCard({
   const [rider, setRider] = useState(null); // the hand-over form: { name, phone, date, hour }
   const [ticks, setTicks] = useState({}); // packing ticks saved a moment ago (shown at once)
   const [snapping, setSnapping] = useState(false);
+  const [receipt, setReceipt] = useState(null); // the receipt sheet, once it's ready
   const code = orderCode(shop, o);
+  const paidUp = ['paid', 'out', 'delivered'].includes(o.status) && o.amount_paid > 0;
+  async function openReceipt() {
+    // whether any of the money came online decides how the receipt says it was paid
+    const { data } = await supabase.from('payments').select('method').eq('order_id', o.id);
+    setReceipt({
+      ...receiptFromShopOrder(o, shop, problem, (data || []).some((x) => x.method === 'online')),
+      code,
+    });
+  }
   const packing = o.status === 'paid';
   const items = o.order_items || [];
   const packedCount = items.filter((i) => ticks[i.id] ?? i.packed).length;
@@ -269,7 +280,17 @@ export function OrderCard({
         </div>
       )}
       <div className="row">
-        <span className="sub">{waitFee ? 'Items so far' : 'Customer pays'}</span>
+        <span className="sub">
+          {waitFee ? 'Items so far' : 'Customer pays'}
+          {paidUp && (
+            <>
+              {' · '}
+              <button className="linkbtn rc-link" onClick={openReceipt}>
+                Receipt
+              </button>
+            </>
+          )}
+        </span>
         <span className="num">
           {naira(toPay(o))}
           {o.amount_paid > 0 && due > 0 ? ` · paid ${naira(o.amount_paid)}` : ''}
@@ -356,6 +377,9 @@ export function OrderCard({
             <span className="sub">
               Transfer note: <strong className="ocode">{code}</strong>
             </span>
+            {o.reminded_at && !o.customer_says_paid && (
+              <span className="sub">ShopDesk reminded them {atText(o.reminded_at)}</span>
+            )}
           </div>
           {o.customer_says_paid && (
             <p className="note">
@@ -606,6 +630,7 @@ export function OrderCard({
           />
         </div>
       )}
+      {receipt && <ReceiptSheet r={receipt} onClose={() => setReceipt(null)} />}
     </article>
   );
 }

@@ -129,6 +129,7 @@ export function catchy(n) {
     case 'ready': return shopSays('📦 Ready for pick-up!', b);
     case 'delivered': return shopSays('🎁 Delivered! Got everything?', `${code || 'Your order'}. Tap to confirm.`);
     case 'fee': return shopSays('🧾 Your delivery fee is in', b);
+    case 'pay_reminder': return shopSays('⏰ Waiting for your payment', b);
     case 'moved': return shopSays('🕐 New delivery time', b);
     case 'cancelled': return /cancel/i.test(t) ? [`😕 ${t}`, b] : shopSays('😕 Order cancelled', b);
     case 'refund_sent': return shopSays('💸 Your refund is on its way', b);
@@ -250,6 +251,7 @@ function kindOf(k, who) {
     part_paid: ['Payment', C.wait, 'Part of your payment arrived', 'See your order'],
     confirmed: ['Confirmed', C.good, 'Your order is confirmed', 'Pay for your order'],
     fee: ['Delivery fee', C.wait, 'Your delivery fee is set', 'See your order'],
+    pay_reminder: ['Payment', C.wait, 'Your order is waiting for payment', 'Pay for your order'],
     ready: ['Ready', C.good, 'Your order is ready', 'See your order'],
     out: ['On its way', C.good, 'Your order is on its way', 'Track your order'],
     moved: ['New time', C.wait, 'Your delivery time changed', 'See your order'],

@@ -1,4 +1,4 @@
-// Adding or changing a product: photo, name, price and sale price, or a list of choices (sizes, colours...)
+// Adding or changing a product: photo, name, an optional description, price and sale price, or a list of choices (sizes, colours...)
 // each with its own price, sale price and stock. Prices can change any time; orders already placed keep theirs.
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
@@ -33,6 +33,7 @@ export function ProductForm({ shop, product, onDone, onCancel }) {
   const p = product;
   const [v, setV] = useState(() => ({
     name: p ? p.name : '',
+    desc: (p && p.description) || '',
     price: p && !options(p).length ? str(p.price) : '',
     sale: p && !options(p).length ? str(p.sale_price) : '',
     stock: p && !options(p).length ? str(p.stock) : '',
@@ -40,6 +41,7 @@ export function ProductForm({ shop, product, onDone, onCancel }) {
     label: (p && p.option_label) || 'Size',
   }));
   const [sizes, setSizes] = useState(() => !!p && options(p).length > 0);
+  const [descOpen, setDescOpen] = useState(() => !!(p && p.description)); // the box shows once there's something to say
   const [rows, setRows] = useState(() =>
     p && options(p).length
       ? options(p).map((o) => ({
@@ -86,6 +88,7 @@ export function ProductForm({ shop, product, onDone, onCancel }) {
     if (!photo && !p) return "Add a photo. Customers want to see what they're buying.";
     if (!v.name.trim()) return 'Give the product a name.';
     if (v.name.trim().length > 60) return 'Shorten the name to 60 letters or fewer.';
+    if (v.desc.trim().length > 300) return 'Shorten the description to 300 letters or fewer.';
     if (!sizes) {
       const price = num(v.price),
         sale = num(v.sale);
@@ -140,6 +143,7 @@ export function ProductForm({ shop, product, onDone, onCancel }) {
     // stock is only sent when it was changed here, so orders placed meanwhile aren't undone
     const body = {
       name: v.name.trim(),
+      description: v.desc.trim(),
       low_at: num(v.low) == null ? (p ? p.low_at : 2) : num(v.low),
       ...(path ? { photo_path: path } : {}),
     };
@@ -205,6 +209,25 @@ export function ProductForm({ shop, product, onDone, onCancel }) {
           placeholder="e.g. Sweet Obsession perfume"
         />
       </div>
+      {descOpen ? (
+        <div className="field">
+          <label htmlFor={'pDesc-' + fid}>Description</label>
+          <textarea
+            id={'pDesc-' + fid}
+            value={v.desc}
+            maxLength={300}
+            rows={3}
+            autoFocus={!(p && p.description)}
+            onChange={(e) => set('desc')(e.target.value)}
+            placeholder="e.g. 100% human hair, 18 inches. Lasts 2 years with good care."
+          />
+          {v.desc.length > 250 && <span className="sub">{300 - v.desc.length} letters left</span>}
+        </div>
+      ) : (
+        <button className="linkbtn add-desc" onClick={() => setDescOpen(true)}>
+          + Add a description
+        </button>
+      )}
       <div className="choices" role="radiogroup" aria-label="Price">
         <button className="choice" role="radio" aria-checked={!sizes} onClick={() => setSizes(false)}>
           <strong>One price</strong>

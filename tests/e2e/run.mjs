@@ -225,6 +225,24 @@ await step('a product with sizes opens the size picker, and tapping a size row a
   await p.locator('.sheet button:has-text("Done")').click();
 });
 
+await step("a product with a description has Details: its sheet shows a bigger photo and the shop's words, and search finds it by them", async () => {
+  const c = p.locator('.pcard:has(.pname:text-is("Glow serum, 30ml"))');
+  await c.locator('button.optnames:text-is("Details")').click();
+  await p.locator('.modal.sheet .sheet-photo').waitFor();
+  expect((await p.locator('.modal.sheet .about').innerText()).includes('niacinamide'), 'the description is missing');
+  const box = await p.locator('.modal.sheet').boundingBox();
+  expect(box.x >= 0 && box.x + box.width <= 390, 'the sheet is wider than the screen');
+  await p.locator('.sheet button:has-text("Done")').click();
+  await p.locator('.modal.sheet').waitFor({ state: 'detached' });
+  expect((await p.locator('.pcard:has(.pname:text-is("Black soap, 500g")) button.optnames').count()) === 0, 'Details shows on a product without a description');
+  await p.locator('#shopSearch').fill('niacinamide');
+  await p.locator('.pcard').first().waitFor();
+  const names = await p.locator('.pcard .pname').allInnerTexts();
+  expect(names.length === 1 && names[0].includes('Glow serum'), 'searching the description found ' + names.join(', '));
+  await p.locator('#shopSearch').fill('');
+  await p.locator('#shopSearch').blur();
+});
+
 await step('adding a second product puts 2 on the Cart tab', async () => {
   await p.locator('.pcard:not(:has(.pname:text-is("Hair growth oil"))) button[data-inc]').first().click();
   await tab('Cart').locator('.badge:text-is("2")').waitFor().catch(async () => {
@@ -361,6 +379,22 @@ await step('once delivered, the customer is asked to rate the shop', async () =>
   expect((await p.locator('.rate-card').innerText()).includes('Neat packing'), 'the comment is not shown');
 });
 
+await step('the paid order has a receipt: it shows the code, the lines and the total, and saves as a picture', async () => {
+  await p.locator('button.rc-link:text-is("Receipt")').click();
+  await p.locator('.receipt .rc-total').waitFor();
+  const r = (await p.locator('.receipt').innerText()).replace(/\s+/g, ' ');
+  expect(r.includes(code), 'the order code is missing');
+  expect(r.includes('Total paid') && /₦\d/.test(r), 'the total is missing');
+  expect(r.includes('confirmed by'), 'how it was paid is missing');
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.locator('.modal.sheet button:has-text("Save as picture")').click()]);
+  expect(dl.suggestedFilename() === `Receipt ${code}.png`, 'the file is called ' + dl.suggestedFilename());
+  const png = fs.readFileSync(await dl.path());
+  expect(png.length > 20000 && png.slice(1, 4).toString() === 'PNG', 'the picture is empty or not a PNG');
+  fs.copyFileSync(await dl.path(), path.join(out, 'receipt.png'));
+  await p.locator('.modal.sheet button:has-text("Close")').click();
+  await p.locator('.receipt').waitFor({ state: 'detached' });
+});
+
 await step("the order page's back arrow goes to My orders; the Account tab shows who is signed in", async () => {
   await p.locator('.back-btn').click();
   await see('Past orders');
@@ -437,6 +471,33 @@ await step('the shop owner deletes the product', async () => {
   await p.locator(`section.card:has(strong:text-is("${NAME} 2"))`).waitFor({ state: 'detached' }).catch(() => {
     throw new Error('the product is still listed');
   });
+});
+
+await step('the shop owner adds a description to a product added long ago, and it stays when edited again', async () => {
+  const c = p.locator('section.card:has(strong:text-is("Black soap, 500g"))');
+  await c.locator('button:has-text("Edit")').click();
+  await p.locator('button.add-desc').click();
+  await p.locator('textarea[id^="pDesc-"]').fill('Made with plantain ash and palm kernel oil. Good for oily skin.');
+  await p.locator('button:has-text("Save changes")').click();
+  await see('Black soap, 500g saved');
+  await pause(800); // the list reloads with the saved product
+  await c.locator('button:has-text("Edit")').click();
+  expect((await p.locator('textarea[id^="pDesc-"]').inputValue()).includes('plantain'), 'the description was not kept');
+  await p.locator('section.card.boxed button:has-text("Cancel")').first().click();
+});
+
+await step('the shop sees a receipt on a paid order, and "ShopDesk reminded them" on an unpaid one', async () => {
+  await nav('Orders');
+  await p.locator('button:has-text("Not paid")').first().click();
+  await p.locator('article.card:has-text("ShopDesk reminded them")').first().waitFor();
+  await p.locator('button:has-text("To send")').first().click();
+  const paid = p.locator('article.card:has(button.rc-link)').first();
+  await paid.locator('button.rc-link').click();
+  await p.locator('.receipt .rc-total').waitFor();
+  const r = (await p.locator('.receipt').innerText()).replace(/\s+/g, ' ');
+  expect(r.includes("Bimpe's Beauty Store") && r.includes('Total paid'), 'the receipt is missing the shop or total');
+  await p.locator('.modal.sheet button:has-text("Close")').click();
+  await p.locator('.receipt').waitFor({ state: 'detached' });
 });
 
 await step('the Sales page shows the goal, where the money stands and what to do today', async () => {

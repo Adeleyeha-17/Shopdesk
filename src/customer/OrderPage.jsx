@@ -29,6 +29,7 @@ import { RateShop } from './RateShop.jsx';
 import { money } from '../lib/moneyApi.js';
 import { useShipment, CourierRider } from '../shared/Shipment.jsx';
 import { useLiveRider, LiveRiderCard } from '../shared/LiveRider.jsx';
+import { ReceiptSheet, receiptFromOrderPage } from '../shared/Receipt.jsx';
 
 // Why an order was cancelled, in the customer's words.
 const CANCELLED = {
@@ -74,6 +75,7 @@ export function OrderPage({ token }) {
   const [reporting, setReporting] = useState(false); // report this shop to ShopDesk
   const [complaining, setComplaining] = useState(false); // report a problem with this order to the shop
   const [cancelling, setCancelling] = useState(false); // "Cancel this order?"
+  const [showReceipt, setShowReceipt] = useState(false);
   const autoOpened = useRef(false);
   const load = useCallback(
     () =>
@@ -331,6 +333,11 @@ export function OrderPage({ token }) {
             Order <span className="ocode">{o.code || '#' + o.order_id}</span>
           </span>
           {late && <span className="chip owe">Running late</span>}
+          {o.receipt && (
+            <button className="linkbtn rc-link" onClick={() => setShowReceipt(true)}>
+              Receipt
+            </button>
+          )}
         </div>
         <h2 style={{ margin: 0 }}>{headline}</h2>
         {o.status === 'cancelled' && (
@@ -527,6 +534,7 @@ export function OrderPage({ token }) {
       {o.mine && o.status === 'delivered' && <RateShop token={token} shopName={o.shop.name} slug={o.shop.slug} />}
 
       {o.mine && uid && <AlertsPrompt who="customer" userId={uid} />}
+      {showReceipt && o.receipt && <ReceiptSheet r={receiptFromOrderPage(o)} onClose={() => setShowReceipt(false)} />}
 
       {o.mine && (o.can_chat || chat) && (
         <section className="card chat-card" ref={chatRef} id="chat">

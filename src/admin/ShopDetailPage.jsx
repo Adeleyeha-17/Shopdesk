@@ -187,6 +187,7 @@ export function ShopDetailPage({ id, d, setModal }) {
                     · {pr.stock} in stock
                     {!pr.active && !pr.hidden_by_admin ? ' · hidden by shop' : ''}
                   </span>
+                  {pr.description && <span className="sub pdesc">{pr.description}</span>}
                   {pr.hidden_by_admin && <span className="chip flag">Hidden by you: {pr.hidden_reason}</span>}
                 </div>
                 {pr.hidden_by_admin ? (

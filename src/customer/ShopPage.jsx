@@ -39,8 +39,9 @@ function Price({ x }) {
   );
 }
 
-// Choosing sizes: every size with its price and stock, and how many of each are in the cart.
-function OptionSheet({ p, cart, set, onClose }) {
+// A product's sheet: what the shop says about it (with a bigger photo), then choosing a size, or how many.
+// Products without a description only open it to choose a size.
+function ProductSheet({ p, cart, set, onClose }) {
   const done = useRef(null);
   // closing slides the sheet down first (a fifth of a second), then it goes
   const [closing, setClosing] = useState(false);
@@ -49,8 +50,8 @@ function OptionSheet({ p, cart, set, onClose }) {
     if (leaving.current) return;
     leaving.current = true;
     setClosing(true);
-    setTimeout(onClose, 200);
-  }, [onClose]);
+    setTimeout(() => onClose(p.id), 200);
+  }, [onClose, p.id]);
   useEffect(() => {
     const key = (e) => e.key === 'Escape' && close();
     window.addEventListener('keydown', key);
@@ -58,71 +59,145 @@ function OptionSheet({ p, cart, set, onClose }) {
     return () => window.removeEventListener('keydown', key);
   }, [close]);
   const word = optionWord(p);
+  const opts = options(p);
+  const about = (p.description || '').trim();
+  const pf = priceFrom(p);
+  const q = cart[p.id] || 0;
   return (
     <div
       className={'overlay bottom' + (closing ? ' closing' : '')}
       onClick={(e) => e.target === e.currentTarget && close()}
     >
       <div className="modal sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
-        <div className="row" style={{ justifyContent: 'flex-start', gap: 12 }}>
-          <img className="thumb" src={photoUrl(p.photo_path)} alt="" />
-          <div>
-            <h2 id="sheetTitle" className="sheet-title">
-              {p.name}
-            </h2>
-            <div className="sub">Choose a {word}</div>
-          </div>
-        </div>
-        <ul className="optpick">
-          {options(p).map((o) => {
-            const k = p.id + ':' + o.id,
-              q = cart[k] || 0;
-            return (
-              // the whole row is a big tap target: tapping it adds one of that size
-              <li
-                key={o.id}
-                className={o.stock > 0 ? (q > 0 ? 'on' : '') : 'out'}
-                onClick={(e) => {
-                  if (o.stock > 0 && q < o.stock && !e.target.closest('button')) set(k, q + 1);
-                }}
-              >
-                <div>
-                  <strong>{o.name}</strong>
-                  <div className="sub num">
-                    <Price x={o} />
-                    {o.stock > 0 && o.stock <= 3 ? ` · ${o.stock} left` : ''}
-                    {o.stock > 0 ? '' : ' · sold out'}
-                  </div>
-                </div>
-                {o.stock > 0 && (
-                  <div className="stepper">
-                    {q > 0 && (
+        {about ? (
+          <>
+            <img className="sheet-photo" src={photoUrl(p.photo_path)} alt={p.name} />
+            <div>
+              <h2 id="sheetTitle" className="sheet-title">
+                {p.name}
+              </h2>
+              <div className="pprice">
+                {opts.length ? (
+                  <>
+                    {pf.from ? <span className="from">from </span> : null}
+                    {naira(pf.price)}
+                    {pf.was ? (
                       <>
-                        <button
-                          className="step"
-                          onClick={() => set(k, q - 1)}
-                          aria-label={`One less ${o.name}`}
-                        >
-                          −
-                        </button>
-                        <span className="qty">{q}</span>
+                        {' '}
+                        <s className="was">{naira(pf.was)}</s>
                       </>
-                    )}
-                    <button
-                      className="step"
-                      data-inc="1"
-                      onClick={() => set(k, Math.min(o.stock, q + 1))}
-                      disabled={q >= o.stock}
-                      aria-label={`Add ${p.name}, ${o.name}`}
-                    >
-                      +
-                    </button>
-                  </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <Price x={p} />
                 )}
-              </li>
-            );
-          })}
-        </ul>
+              </div>
+            </div>
+            <p className="about">{about}</p>
+            {opts.length > 0 && <div className="sub">Choose a {word}</div>}
+          </>
+        ) : (
+          <div className="row" style={{ justifyContent: 'flex-start', gap: 12 }}>
+            <img className="thumb" src={photoUrl(p.photo_path)} alt="" />
+            <div>
+              <h2 id="sheetTitle" className="sheet-title">
+                {p.name}
+              </h2>
+              <div className="sub">Choose a {word}</div>
+            </div>
+          </div>
+        )}
+        {!opts.length && (
+          <ul className="optpick">
+            <li
+              className={p.stock > 0 ? (q > 0 ? 'on' : '') : 'out'}
+              onClick={(e) => {
+                if (p.stock > 0 && q < p.stock && !e.target.closest('button')) set(p.id, q + 1);
+              }}
+            >
+              <div>
+                <strong>{p.stock > 0 ? (q > 0 ? 'In your cart' : 'Add to cart') : 'Sold out'}</strong>
+                <div className="sub num">
+                  <Price x={p} />
+                  {p.stock > 0 && p.stock <= 3 ? ` · ${p.stock} left` : ''}
+                </div>
+              </div>
+              {p.stock > 0 && (
+                <div className="stepper">
+                  {q > 0 && (
+                    <>
+                      <button className="step" onClick={() => set(p.id, q - 1)} aria-label={'One less ' + p.name}>
+                        −
+                      </button>
+                      <span className="qty">{q}</span>
+                    </>
+                  )}
+                  <button
+                    className="step"
+                    data-inc="1"
+                    onClick={() => set(p.id, Math.min(p.stock, q + 1))}
+                    disabled={q >= p.stock}
+                    aria-label={'Add ' + p.name}
+                  >
+                    +
+                  </button>
+                </div>
+              )}
+            </li>
+          </ul>
+        )}
+        {opts.length > 0 && (
+          <ul className="optpick">
+            {opts.map((o) => {
+              const k = p.id + ':' + o.id,
+                q = cart[k] || 0;
+              return (
+                // the whole row is a big tap target: tapping it adds one of that size
+                <li
+                  key={o.id}
+                  className={o.stock > 0 ? (q > 0 ? 'on' : '') : 'out'}
+                  onClick={(e) => {
+                    if (o.stock > 0 && q < o.stock && !e.target.closest('button')) set(k, q + 1);
+                  }}
+                >
+                  <div>
+                    <strong>{o.name}</strong>
+                    <div className="sub num">
+                      <Price x={o} />
+                      {o.stock > 0 && o.stock <= 3 ? ` · ${o.stock} left` : ''}
+                      {o.stock > 0 ? '' : ' · sold out'}
+                    </div>
+                  </div>
+                  {o.stock > 0 && (
+                    <div className="stepper">
+                      {q > 0 && (
+                        <>
+                          <button
+                            className="step"
+                            onClick={() => set(k, q - 1)}
+                            aria-label={`One less ${o.name}`}
+                          >
+                            −
+                          </button>
+                          <span className="qty">{q}</span>
+                        </>
+                      )}
+                      <button
+                        className="step"
+                        data-inc="1"
+                        onClick={() => set(k, Math.min(o.stock, q + 1))}
+                        disabled={q >= o.stock}
+                        aria-label={`Add ${p.name}, ${o.name}`}
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
         <button className="btn" ref={done} onClick={close}>
           Done
         </button>
@@ -177,7 +252,7 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [saved, setSaved] = useState(null); // the customer's saved details, from their last order
   const [editDetails, setEditDetails] = useState(false);
   const [editAddr, setEditAddr] = useState(false);
-  const [picking, setPicking] = useState(null); // the product whose sizes are open
+  const [picking, setPicking] = useState(null); // the product whose sheet is open (its details, or its sizes)
   const [find, setFind] = useState(''); // search this shop's products
   const [inSearch, setInSearch] = useState(false); // the search box is being used
   const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '', area: '' });
@@ -289,7 +364,8 @@ export function ShopPage({ slug, step = 'shop' }) {
   );
   // a shop writes about another order while they browse: a pop-up, and the count on My orders
   const inbox = useInbox(uid, { title: state.shop ? state.shop.name : 'ShopDesk' });
-  const closeSheet = useCallback(() => setPicking(null), []);
+  // a sheet that finishes closing after another one opened leaves the new one open
+  const closeSheet = useCallback((id) => setPicking((x) => (x === id ? null : x)), []);
   // the bar at the bottom on the shop and the cart (not on checkout)
   const tabs = checkout ? null : (
     <CustomerTabs
@@ -339,7 +415,9 @@ export function ShopPage({ slug, step = 'shop' }) {
   subNow.current = sub;
   const sheet = picking && products.find((p) => p.id === picking);
   const words = find.trim().toLowerCase();
-  const shown = words ? products.filter((p) => p.name.toLowerCase().includes(words)) : products;
+  const shown = words
+    ? products.filter((p) => (p.name + ' ' + (p.description || '')).toLowerCase().includes(words))
+    : products;
   const custPays = shop.delivery_paid_by === 'customer';
   const set = (id, q) => {
     setCart((c) => ({ ...c, [id]: Math.max(0, q) }));
@@ -477,10 +555,18 @@ export function ShopPage({ slug, step = 'shop' }) {
                 : cart[p.id] || 0;
               const pf = priceFrom(p);
               const sale = opts.length ? pf.sale : onSale(p);
+              const about = !!(p.description || '').trim(); // the photo and name open its details
+              const details = about ? () => setPicking(p.id) : undefined;
               return (
                 <div className="pcard" key={p.id}>
                   <div className={'pimg' + (p.stock ? '' : ' out')}>
-                    <img src={photoUrl(p.photo_path)} alt={p.name} loading="lazy" />
+                    <img
+                      src={photoUrl(p.photo_path)}
+                      alt={p.name}
+                      loading="lazy"
+                      onClick={details}
+                      className={about ? 'tap' : undefined}
+                    />
                     {sale && p.stock > 0 && <span className="saletag">Sale</span>}
                     {p.stock > 0 && opts.length > 0 && (
                       <div className="pill">
@@ -521,7 +607,9 @@ export function ShopPage({ slug, step = 'shop' }) {
                       </div>
                     )}
                   </div>
-                  <div className="pname">{p.name}</div>
+                  <div className={'pname' + (about ? ' tap' : '')} onClick={details}>
+                    {p.name}
+                  </div>
                   <div className="row">
                     <span className="pprice">
                       {opts.length ? (
@@ -543,10 +631,16 @@ export function ShopPage({ slug, step = 'shop' }) {
                       <span className="sub">{p.stock} left</span>
                     )}
                   </div>
-                  {opts.length > 0 && p.stock > 0 && (
+                  {opts.length > 0 && p.stock > 0 ? (
                     <button className="linkbtn optnames" onClick={() => setPicking(p.id)}>
                       {opts.map((o) => o.name).join(' · ')}
                     </button>
+                  ) : (
+                    about && (
+                      <button className="linkbtn optnames" onClick={details}>
+                        Details
+                      </button>
+                    )
                   )}
                 </div>
               );
@@ -559,7 +653,7 @@ export function ShopPage({ slug, step = 'shop' }) {
         {reporting && (
           <ReportShopForm slug={slug} orders={mine} signedIn={me !== ''} done={() => setReporting(false)} />
         )}
-        {sheet && <OptionSheet p={sheet} cart={cart} set={set} onClose={closeSheet} />}
+        {sheet && <ProductSheet key={sheet.id} p={sheet} cart={cart} set={set} onClose={closeSheet} />}
         <InboxToast inbox={inbox} />
       </Page>
     );

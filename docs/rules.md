@@ -7,6 +7,9 @@ Every rule below is enforced in the database (`supabase/schema.sql`), through ro
 - Stock is held the moment an order is placed, so two customers can't buy the last piece.
 - Products: one price, or one list of choices (Size, Colour, Pack, whatever the shop calls it), each with its own price, optional sale price and stock. A sale price must be lower than the price; customers pay it and see the old price crossed out. Shops change a product's name, photo, prices, choices and stock any time; orders already placed keep the prices and names they were placed with, and a removed choice stays on old orders. All changes go through `save_product`, which checks them; vendors can only hide or show a product directly.
 - An order is marked paid only by the vendor, never by the customer.
+- A product can have a description of up to 300 letters. Customers read it in the product's details on the shop page, and the shop search looks in it too.
+- A receipt exists only once the shop has the money (paid, on its way or delivered). The customer and the shop see the same one; a refund the customer got back is shown on it.
+- Payment reminders: an unpaid order the customer can pay now gets two, from 7am to 9pm Lagos time: 3 hours after it was placed, and 36 hours after (it cancels at 48). None once the customer says they've paid, and none while it waits for its delivery fee.
 - Vendors can't change their own shop's status. Only the admin can suspend or reactivate a shop, with a reason.
 - Only the admin can suspend a shop, close it for good, or delete it. Deleting needs the shop's link name typed and a reason, and the audit log keeps a note.
 - Shop owners can buy from other shops with the same email, but never from their own shop. An email that has shopped can't open a shop: customers only buy for now.

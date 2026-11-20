@@ -1,0 +1,38 @@
+D1 a shop adds a product with a description; customers see it on the shop page (expect the description):
+Leather loafers|Real leather, made in Aba. Runs one size small.
+Slides|
+D2 an older product gets a description later; leaving it out keeps it, an empty one removes it, and a long one is refused (expect the new text twice, then empty, then an error):
+t
+Soft rubber, good for the beach.
+t
+Soft rubber, good for the beach.
+t
+[]
+psql:extras.sql:28: ERROR:  Shorten the description to 300 letters or fewer.
+CONTEXT:  PL/pgSQL function save_product(uuid,jsonb) line N at RAISE
+D3 no receipt until the shop has the money; then it shows the customer, the item with its size, the shop location, and how it was paid (expect null, then the receipt):
+t
+t
+Tolu Ade|false|null|Ikeja, Lagos|Slides · 43|2|16000
+D4 reminders: 3 hours after ordering, in the day only, once (expect said paid, then 0 at night, 1 in the day, the alert, then 0):
+said paid
+0
+1
+pay_reminder|Shoe Hub|SH-61 is waiting for ₦25,000. Pay to keep your order.|true
+0
+D5 the order waiting for its delivery fee and the one the customer says is paid get nothing; once the fee is set it is reminded (expect 0 for Kemi, then 1):
+0
+1
+D6 the last reminder, 36 hours in, says when it cancels; nothing after that (expect 1, the cancel line, reminders 2, then 0):
+1
+SH-61 cancels at <clock> <when> if it isn't paid. Pay ₦25,000 to keep it.
+2|t
+0
+D7 an order first seen after 36 hours gets only the last reminder (expect 1 and reminders 2):
+1
+2
+D8 the shop sees that the customer was reminded on its order (expect true):
+t
+D9 nobody but the database can send reminders (expect 2 permission errors):
+psql:extras.sql:77: ERROR:  permission denied for function remind_buyers
+psql:extras.sql:78: ERROR:  permission denied for function remind_buyers

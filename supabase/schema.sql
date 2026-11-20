@@ -29,7 +29,8 @@
 --      records ........................... a private copy of any shop before it's deleted, find any order by its code
 --  12. live updates ...................... new alerts and chat messages reach the app the moment they're written
 --  13. tidy-up every 10 minutes .......... unpaid orders cancel after 48 hours; refunds with a receipt count as received after 48 hours;
---                                          the email backup goes out every 5 minutes
+--                                          the email backup goes out every 5 minutes; every hour, shop nudges and customers'
+--                                          payment reminders
 --  10. function rights ................... who may call which function
 --  11. photos ............................ product photos (public), and order photos (private: packing, problem and chat photos)
 
@@ -380,6 +381,9 @@ alter table public.reports add column if not exists about text not null default 
 -- Why an order was cancelled (the customer sees it): not paid in 48 hours, by the customer, or the shop's reason.
 alter table public.orders add column if not exists cancel_reason text check (cancel_reason in ('unpaid', 'customer', 'out_of_stock', 'cant_deliver', 'customer_asked', 'other'));
 alter table public.orders add column if not exists cancel_note text not null default '' check (char_length(cancel_note) <= 200);
+-- Payment reminders ShopDesk sent the customer (see remind_buyers): how many, and when the last one went.
+alter table public.orders add column if not exists reminders smallint not null default 0 check (reminders between 0 and 2);
+alter table public.orders add column if not exists reminded_at timestamptz;
 -- A shop message with an account number that isn't the shop's: a payment-scam warning sign, shown to you.
 alter table public.messages add column if not exists flag text check (flag in ('other_account'));
 -- What the customer saw: each order line keeps the product photo from the moment of the order (older orders get today's).
@@ -393,6 +397,8 @@ alter table public.products add constraint products_sale_price_check check (sale
 -- stock. What the list is called ("Size") is the product's option_label. A product with choices takes its price (the lowest)
 -- and its stock (all of them added up) from them; see product_options_sync.
 alter table public.products add column if not exists option_label text not null default '' check (char_length(option_label) <= 20);
+-- What the shop says about a product (optional). Customers read it in the product's details.
+alter table public.products add column if not exists description text not null default '' check (char_length(description) <= 300);
 create table if not exists public.product_options (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
@@ -849,7 +855,7 @@ language sql stable security definer set search_path = public as $$
     'shop', jsonb_build_object('name', s.name, 'slug', s.slug, 'bank', s.bank, 'account_number', s.account_number, 'account_name', s.account_name,
       'allow_part_payment', s.allow_part_payment, 'delivery_paid_by', s.delivery_paid_by) || public.shop_rating(s.id),
     'products', coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name, 'price', p.price, 'sale_price', p.sale_price, 'stock', p.stock,
-        'photo_path', p.photo_path, 'option_label', p.option_label,
+        'photo_path', p.photo_path, 'option_label', p.option_label, 'description', p.description,
         'options', coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'name', o.name, 'price', o.price, 'sale_price', o.sale_price, 'stock', o.stock)
           order by o.sort_order, o.created_at) from public.product_options o where o.product_id = p.id), '[]'::jsonb)) order by p.created_at desc)
       from public.products p where p.shop_id = s.id and p.active and not p.hidden_by_admin), '[]'::jsonb))
@@ -953,8 +959,13 @@ language sql stable security definer set search_path = public as $$
     'saved', o.customer_id is not null, 'mine', o.customer_id is not null and o.customer_id = auth.uid(),
     'to_pay', o.items_total + case when o.delivery_paid_by = 'customer' then coalesce(o.delivery_fee, 0) else 0 end,
     'items', (select jsonb_agg(jsonb_build_object('name', i.name, 'price', i.price, 'qty', i.qty) order by i.id) from public.order_items i where i.order_id = o.id),
-    'shop', jsonb_build_object('name', s.name, 'slug', s.slug, 'bank', s.bank, 'account_number', s.account_number, 'account_name', s.account_name),
+    'shop', jsonb_build_object('name', s.name, 'slug', s.slug, 'bank', s.bank, 'account_number', s.account_number, 'account_name', s.account_name, 'location', s.location),
     'code', public.order_code(s.order_prefix, o.id),
+    -- the receipt, once the shop has the money: who it's for, how it was paid, and any refund the customer got back
+    'receipt', case when o.status in ('paid', 'out', 'delivered') and o.amount_paid > 0 then jsonb_build_object('customer', o.customer_name,
+        'online', exists (select 1 from public.payments pm where pm.order_id = o.id and pm.method = 'online'),
+        'refund', (select jsonb_build_object('amount', coalesce(p.owed_amount, p.refund_amount), 'at', p.refund_received_at) from public.problems p
+          where p.order_id = o.id and p.refund_received_at is not null and coalesce(p.owed_amount, p.refund_amount) > 0)) end,
     'report_until', case when o.status = 'delivered' then o.done_at + interval '3 days' end,
     'can_report', coalesce(o.customer_id = auth.uid(), false) and public.can_report(o),
     'has_problem', exists (select 1 from public.problems p where p.order_id = o.id),
@@ -1581,15 +1592,16 @@ $$;
 -- Adds a product, or changes one, in a single step: name, photo, price and sale price, when to warn, and its choices
 -- (what they're called, and each one's name, price, sale price and stock). Prices can change any time; orders already
 -- placed keep the prices they were placed at. p is
---   { name, photo_path, price, sale_price, stock, low_at, option_label, options: [{ id, name, price, sale_price, stock }] }
+--   { name, description, photo_path, price, sale_price, stock, low_at, option_label, options: [{ id, name, price, sale_price, stock }] }
 -- With choices, price, sale_price and stock come from them. A stock left out (null) stays as it is; anything new needs one.
+-- A description left out stays as it is (an empty one removes it).
 -- A choice left out of the list is removed (orders keep its name). Returns the product's id.
 create or replace function public.save_product(p_product uuid, p jsonb) returns uuid
 language plpgsql security definer set search_path = public as $$
 declare
   v_shop uuid := public.my_shop_id(); v public.products; v_opts jsonb := coalesce(nullif(p->'options', 'null'::jsonb), '[]'::jsonb); o jsonb;
   v_name text := trim(coalesce(p->>'name', '')); v_photo text := trim(coalesce(p->>'photo_path', ''));
-  v_label text := trim(coalesce(p->>'option_label', '')); v_price int; v_sale int; v_stock int; v_low int;
+  v_label text := trim(coalesce(p->>'option_label', '')); v_price int; v_sale int; v_stock int; v_low int; v_desc text;
   v_oname text; v_oprice int; v_osale int; v_ostock int; v_oid uuid; v_seen text[] := '{}'; v_keep uuid[]; i int := 0;
   UUID_RE constant text := '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
 begin
@@ -1600,6 +1612,8 @@ begin
   end if;
   if char_length(v_name) = 0 then raise exception 'Give the product a name.'; end if;
   if char_length(v_name) > 60 then raise exception 'Shorten the name to 60 letters or fewer.'; end if;
+  v_desc := case when p ? 'description' then trim(coalesce(p->>'description', '')) else coalesce(v.description, '') end;
+  if char_length(v_desc) > 300 then raise exception 'Shorten the description to 300 letters or fewer.'; end if;
   if v_photo = '' then v_photo := coalesce(v.photo_path, ''); end if;
   if v_photo = '' then raise exception 'Add a photo. Customers want to see what they''re buying.'; end if;
   if v_photo is distinct from v.photo_path and (split_part(v_photo, '/', 1) <> v_shop::text or char_length(v_photo) not between 5 and 200) then
@@ -1630,10 +1644,10 @@ begin
   end if;
 
   if p_product is null then
-    insert into public.products (shop_id, name, price, sale_price, stock, low_at, photo_path, option_label)
-    values (v_shop, v_name, v_price, v_sale, v_stock, v_low, v_photo, v_label) returning * into v;
+    insert into public.products (shop_id, name, description, price, sale_price, stock, low_at, photo_path, option_label)
+    values (v_shop, v_name, v_desc, v_price, v_sale, v_stock, v_low, v_photo, v_label) returning * into v;
   else
-    update public.products set name = v_name, photo_path = v_photo, low_at = v_low, option_label = v_label, sale_price = v_sale,
+    update public.products set name = v_name, description = v_desc, photo_path = v_photo, low_at = v_low, option_label = v_label, sale_price = v_sale,
       price = case when jsonb_array_length(v_opts) = 0 then v_price else price end,
       stock = case when jsonb_array_length(v_opts) = 0 then coalesce(v_stock, stock) else stock end
     where id = v.id returning * into v;
@@ -2191,6 +2205,7 @@ begin
       from generate_series(date_trunc('week', now()) - interval '11 weeks', date_trunc('week', now()), interval '1 week') w),
     'products', (select coalesce(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name, 'price', p.price, 'sale_price', p.sale_price, 'stock', p.stock, 'active', p.active,
         'hidden_by_admin', p.hidden_by_admin, 'hidden_reason', p.hidden_reason, 'photo_path', p.photo_path, 'created_at', p.created_at, 'option_label', p.option_label,
+        'description', p.description,
         'options', (select coalesce(jsonb_agg(jsonb_build_object('name', o.name, 'price', o.price, 'sale_price', o.sale_price, 'stock', o.stock) order by o.sort_order), '[]'::jsonb)
           from public.product_options o where o.product_id = p.id)) order by p.created_at desc), '[]'::jsonb) from public.products p where p.shop_id = s.id),
     'reports', (select coalesce(jsonb_agg(jsonb_build_object('id', r.id, 'reason', r.reason, 'contact', r.contact, 'created_at', r.created_at, 'resolved_at', r.resolved_at, 'resolved_note', r.resolved_note)
@@ -2387,6 +2402,43 @@ begin
   return n;
 end $$;
 revoke all on function public.nudge_shops(int) from public, anon, authenticated;
+
+-- Reminds customers to pay (the database runs it every hour, with the shop nudges). An unpaid order the customer can pay
+-- right now (its delivery fee is set, and it isn't waiting for the shop to pick a courier) gets two reminders, from 7am to
+-- 9pm Lagos time: 3 hours after it was placed, and 36 hours after (unpaid orders cancel at 48 hours). A reminder that falls
+-- at night goes in the morning; if the second is already due by then, only the second goes. Nothing once the customer says
+-- they've paid, the shop has the money, the order is cancelled or the shop isn't open. p_hour stands in for the Lagos hour, for tests.
+create or replace function public.remind_buyers(p_hour int default null) returns int
+language plpgsql security definer set search_path = public as $$
+declare r record; n int := 0; h int := coalesce(p_hour, extract(hour from now() at time zone 'Africa/Lagos')::int); v_end timestamp; v_last boolean;
+begin
+  if h not between 7 and 20 then return 0; end if;
+  perform set_config('shopdesk.system', 'on', true);
+  for r in
+    select o.id, o.customer_id, o.public_token, o.created_at, s.name, public.order_code(s.order_prefix, o.id) as code,
+      o.items_total + case when o.delivery_paid_by = 'customer' then coalesce(o.delivery_fee, 0) else 0 end as due
+    from public.orders o join public.shops s on s.id = o.shop_id cross join public.settings st
+    where st.id = 1 and o.status = 'awaiting' and o.amount_paid = 0 and not o.customer_says_paid and o.customer_id is not null
+      and s.status = 'active' and o.created_at between now() - interval '48 hours' and now() - interval '3 hours'
+      and not (o.mode = 'delivery' and o.delivery_paid_by = 'customer' and o.delivery_fee is null)
+      and not (st.delivery_on and o.mode = 'delivery' and o.delivery_by <> 'shopdesk' and o.confirmed_at is null)
+      and (o.reminders = 0 or (o.reminders = 1 and o.created_at < now() - interval '36 hours'))
+    order by o.id
+  loop
+    v_last := r.created_at < now() - interval '36 hours';
+    v_end := (r.created_at + interval '48 hours') at time zone 'Africa/Lagos';
+    perform public.notify(r.customer_id, r.id, 'pay_reminder', r.name,
+      case when v_last then r.code || ' cancels at ' || lower(to_char(v_end, 'FMHH12:MIAM'))
+          || case when v_end::date = (now() at time zone 'Africa/Lagos')::date then ' today' else ' tomorrow' end
+          || ' if it isn''t paid. Pay ' || public.naira(r.due) || ' to keep it.'
+        else r.code || ' is waiting for ' || public.naira(r.due) || '. Pay to keep your order.' end,
+      '/o/' || r.public_token);
+    update public.orders set reminders = case when v_last then 2 else 1 end, reminded_at = now() where id = r.id;
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke all on function public.remind_buyers(int) from public, anon, authenticated;
 
 -- ---------- records: your private copies ----------
 -- Everything a shop had, as one copy: the shop, its owner's email, products, every order (with items, payments, the full
@@ -2676,13 +2728,14 @@ begin
     end if;
   end if;
 end $monthly$;
--- Nudges every hour (nudge_shops decides what is due), then the push sender sends them straight away. Needs pg_cron and pg_net.
+-- Nudges and payment reminders every hour (nudge_shops and remind_buyers decide what is due), then the push sender sends
+-- them straight away. Needs pg_cron and pg_net.
 do $nudge$
 begin
   if exists (select 1 from pg_extension where extname = 'pg_cron') and exists (select 1 from pg_extension where extname = 'pg_net') then
     perform cron.unschedule(jobid) from cron.job where jobname = 'shopdesk-nudge';
     perform cron.schedule('shopdesk-nudge', '7 * * * *',
-      $job$select public.nudge_shops(); select net.http_post(url := 'https://buvzjgzoctmpgthelddr.supabase.co/functions/v1/push', body := '{"action":"flush"}'::jsonb)$job$);
+      $job$select public.nudge_shops(); select public.remind_buyers(); select net.http_post(url := 'https://buvzjgzoctmpgthelddr.supabase.co/functions/v1/push', body := '{"action":"flush"}'::jsonb)$job$);
   end if;
 end $nudge$;
 

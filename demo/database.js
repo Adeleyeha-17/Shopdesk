@@ -227,6 +227,7 @@ function seedData() {
     low_at: low,
     photo_path: 'demo/' + key,
     option_label: '',
+    description: '',
     active: true,
     hidden_by_admin: false,
     hidden_reason: '',
@@ -243,6 +244,12 @@ function seedData() {
     P('coconut', 'Coconut oil, 500ml', 4500, 18, 6, 120, 4),
     P('butter', 'Whipped body butter', 6500, 9, 4, 40, 6),
   ];
+  // what the shop wrote about some of them (customers tap the photo or Details to read it)
+  products[0].description =
+    'Raw, unrefined shea butter from Kwara. Softens dry skin and hair. It melts in the heat, so keep it somewhere cool.';
+  products[2].description =
+    'Rosemary, castor and coconut oil. Massage into your scalp three times a week. Most people see new growth in 6 weeks.';
+  products[5].description = 'Vitamin C and niacinamide for dark spots and an even tone. 2 to 3 drops at night, before your cream.';
 
   // Customers: everyone orders with an account. The first dozen come back often.
   const customers = [];
@@ -722,8 +729,48 @@ function seedData() {
       created_at: iso(ago(21)),
     },
   ];
+  // an order placed 5 hours ago and not paid yet: ShopDesk reminded the customer after 3 hours
+  {
+    const c = customers[11];
+    const at = now - 5 * HOUR;
+    const p = products[6];
+    const o = {
+      ...orders[orders.length - 1],
+      id: Math.max(...orders.map((x) => x.id)) + 1,
+      shop_id: shop.id,
+      public_token: uuid(),
+      customer_id: c.id,
+      customer_name: c.name,
+      customer_phone: c.phone,
+      mode: 'pickup',
+      address: '',
+      area: null,
+      source: 'whatsapp',
+      items_total: p.price,
+      delivery_fee: null,
+      delivery_paid_by: 'customer',
+      amount_paid: 0,
+      status: 'awaiting',
+      customer_says_paid: false,
+      customer_says_paid_at: null,
+      created_at: iso(at),
+      confirmed_at: iso(at + 10 * MIN),
+      paid_at: null,
+      out_at: null,
+      done_at: null,
+      deliver_by: null,
+      received_at: null,
+      received_by: null,
+      rider_name: '',
+      rider_phone: '',
+      reminders: 1,
+      reminded_at: iso(at + 3 * HOUR),
+    };
+    orders.push(o);
+    items.push({ id: items.length + 1, order_id: o.id, product_id: p.id, name: p.name, price: p.price, was_price: null, qty: 1, packed: false });
+  }
   return {
-    v: 14,
+    v: 15,
     shop_messages,
     feature_wants: [],
     day: t0,
@@ -788,7 +835,7 @@ try {
   S = null;
 }
 // A fresh sample each day, so "today" always has orders in it.
-if (!S || S.v !== 14 || S.day !== startOfDay(Date.now())) S = seed();
+if (!S || S.v !== 15 || S.day !== startOfDay(Date.now())) S = seed();
 demo.go(S.path || '/');
 let saveTimer = null;
 function save() {
@@ -1275,6 +1322,8 @@ const RPC = {
     const name = String(p.name || '').trim();
     if (!name) fail('Give the product a name.');
     if (name.length > 60) fail('Shorten the name to 60 letters or fewer.');
+    const description = 'description' in p ? String(p.description || '').trim() : (v && v.description) || '';
+    if (description.length > 300) fail('Shorten the description to 300 letters or fewer.');
     const photo = String(p.photo_path || '').trim() || (v ? v.photo_path : '');
     if (!photo) fail("Add a photo. Customers want to see what they're buying.");
     const low = jsonInt(p.low_at) ?? (v ? v.low_at : 2);
@@ -1336,7 +1385,7 @@ const RPC = {
       };
       S.products.push(v);
     }
-    Object.assign(v, { name, photo_path: photo, low_at: low, option_label: label, sale_price: sale });
+    Object.assign(v, { name, description, photo_path: photo, low_at: low, option_label: label, sale_price: sale });
     if (!opts.length) {
       v.price = price;
       if (stock != null) v.stock = stock;
@@ -1538,6 +1587,7 @@ const RPC = {
           stock: p.stock,
           photo_path: p.photo_path,
           option_label: p.option_label || '',
+          description: p.description || '',
           options: optionsOf(p).map((o) => ({
             id: o.id,
             name: o.name,
@@ -1978,8 +2028,21 @@ const RPC = {
         bank: s.bank,
         account_number: s.account_number,
         account_name: s.account_name,
+        location: s.location || '',
       },
       code: codeOf(o),
+      receipt:
+        ['paid', 'out', 'delivered'].includes(o.status) && o.amount_paid > 0
+          ? {
+              customer: o.customer_name,
+              online: S.payments.some((x) => x.order_id === o.id && x.method === 'online'),
+              refund: (() => {
+                const p = problemOf(o);
+                const back = p && p.refund_received_at ? (p.owed_amount ?? p.refund_amount) : null;
+                return back > 0 ? { amount: back, at: p.refund_received_at } : null;
+              })(),
+            }
+          : null,
       report_until: o.status === 'delivered' ? iso(Date.parse(o.done_at) + 3 * DAY) : null,
       can_report: !!o.customer_id && o.customer_id === uid() && canReport(o),
       has_problem: !!problemOf(o),
