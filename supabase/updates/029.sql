@@ -31,6 +31,7 @@ on conflict do nothing;
 alter table public.customer_addresses enable row level security;
 drop policy if exists addresses_own on public.customer_addresses;
 create policy addresses_own on public.customer_addresses for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+revoke all on public.customer_addresses from anon, authenticated;
 grant select, delete on public.customer_addresses to authenticated;
 grant insert (user_id, address, area) on public.customer_addresses to authenticated;
 grant update (address, area, used_at) on public.customer_addresses to authenticated;

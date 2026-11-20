@@ -25,6 +25,6 @@ Phone case
 false
 A7 My orders says when an order was delivered (expect true once delivered):
 t
-A8 visitors cannot ask what someone bought, nor see anyone else addresses (expect a permission error, then 0):
+A8 visitors cannot ask what someone bought, nor see any addresses (expect 2 permission errors):
 psql:addresses.sql:78: ERROR:  permission denied for function my_past_items
-0
+psql:addresses.sql:79: ERROR:  permission denied for table customer_addresses

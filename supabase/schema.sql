@@ -676,6 +676,7 @@ grant select on public.orders, public.order_items, public.payments, public.probl
 grant select, delete on public.customers to authenticated;
 grant insert (user_id, name, phone, address, area) on public.customers to authenticated;
 grant update (name, phone, address, area, updated_at) on public.customers to authenticated;
+revoke all on public.customer_addresses from anon, authenticated;
 grant select, delete on public.customer_addresses to authenticated;
 grant insert (user_id, address, area) on public.customer_addresses to authenticated;
 grant update (address, area, used_at) on public.customer_addresses to authenticated;

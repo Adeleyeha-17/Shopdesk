@@ -73,7 +73,7 @@ update orders set status = 'delivered', done_at = now() where id = (select max(i
 set role authenticated; set request.jwt.claim.sub = 'ce000000-0000-4000-8000-000000000002';
 select (my_orders()->0->>'done_at') is not null;
 
-\echo A8 visitors cannot ask what someone bought, nor see anyone else addresses (expect a permission error, then 0):
+\echo A8 visitors cannot ask what someone bought, nor see any addresses (expect 2 permission errors):
 set role anon; reset request.jwt.claim.sub;
 select my_past_items();
 select count(*) from customer_addresses;
