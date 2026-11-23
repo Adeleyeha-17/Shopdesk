@@ -341,19 +341,25 @@ function allowCheck(uid) {
   return true;
 }
 
+// With a test key, Paystack can't settle to real accounts, so test shops are paid into Paystack's own test account
+// (Zenith Bank, 0000000000). A test subaccount is never reused once the live key is in.
+const TEST_PAYOUT = { code: '057', account: '0000000000' };
 export async function ensureSubaccount(sql, api, shop) {
-  const want = shop.bank + ':' + shop.account_number;
+  const test = api.testKey();
+  const want = (test ? 'test:' : '') + shop.bank + ':' + shop.account_number;
   if (shop.subaccount && shop.subaccount_for === want) return shop.subaccount;
-  const code = await bankCode(api, shop.bank);
-  if (!code || !/^\d{10}$/.test(shop.account_number || '')) throw say('This shop can’t take online payments yet. Pay by transfer to the account above.');
-  const body = { business_name: String(shop.name).slice(0, 100), settlement_bank: code, account_number: shop.account_number, percentage_charge: 0 };
+  const code = test ? TEST_PAYOUT.code : await bankCode(api, shop.bank);
+  if (!code || !/^\d{10}$/.test(shop.account_number || '')) throw say('This shop can’t take online payments yet. Pay by transfer to the account below.');
+  const account = test ? TEST_PAYOUT.account : shop.account_number;
+  const body = { business_name: String(shop.name).slice(0, 100), settlement_bank: code, account_number: account, percentage_charge: 0 };
+  const sameMode = String(shop.subaccount_for || '').startsWith('test:') === test;
   let d;
   try {
-    d = shop.subaccount ? await api.paystack('/subaccount/' + shop.subaccount, body, 'PUT') : await api.paystack('/subaccount', body);
+    d = shop.subaccount && sameMode ? await api.paystack('/subaccount/' + shop.subaccount, body, 'PUT') : await api.paystack('/subaccount', body);
   } catch (e) {
     if (e instanceof Say) throw e;
     console.error('subaccount: ' + e.message);
-    throw say('This shop can’t take online payments yet. Pay by transfer to the account above.');
+    throw say('This shop can’t take online payments yet. Pay by transfer to the account below.');
   }
   const sub = d?.subaccount_code || shop.subaccount;
   await sql`update public.shops set paystack_subaccount = ${sub}, paystack_for = ${want} where id = ${shop.id}`;

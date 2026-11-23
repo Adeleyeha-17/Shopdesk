@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const copy = path.join(os.tmpdir(), 'shopdesk-money-' + process.pid + '.mjs');
 fs.writeFileSync(copy, fs.readFileSync(path.join(here, '../../supabase/functions/money/index.ts'), 'utf8')
   .replace("'npm:postgres@3.4.5'", JSON.stringify(import.meta.resolve('postgres'))));
-const { handle, bankCode, nubanOk, likelyBanks } = await import(pathToFileURL(copy).href);
+const { handle, bankCode, nubanOk, likelyBanks, makeApi, ensureSubaccount } = await import(pathToFileURL(copy).href);
 fs.unlinkSync(copy);
 
 const sql = postgres({ database: process.env.TEST_DB || 'shopdesk_test', max: 3, onnotice: () => {} });
@@ -121,7 +121,7 @@ check('goods to the shop subaccount, delivery and the card fee to ShopDesk', ini
 const psFee = Math.min(Math.ceil(init.amount * 0.015) + 10000, 200000);
 check('after Paystack takes its fee, ShopDesk still has the delivery fee and its own fee', init.transaction_charge - psFee >= 230000, psFee);
 const sub = calls.find((c) => c.url.endsWith('/subaccount'));
-check('the subaccount uses the shop bank details', sub.body.settlement_bank === '999992' && sub.body.account_number === '0123456780', sub.body);
+check('with a test key, the subaccount pays Paystack’s test account', sub.body.settlement_bank === '057' && sub.body.account_number === '0000000000', sub.body);
 
 paidKobo = 1766500;
 const ev = JSON.stringify({ event: 'charge.success', data: { reference: r.reference, amount: paidKobo } });
@@ -166,6 +166,11 @@ check('banks named in the shop form match Paystack (the shortest name wins), and
 r = await post({ action: 'bank', account_number: '2012345678' }, 'shop');
 check('with a test key the account check is off', r.available === false, r);
 ENV.PAYSTACK_SECRET_KEY = 'sk_live_abc';
+const srow = (await sql`select id, name, bank, account_number, paystack_subaccount as subaccount, paystack_for as subaccount_for from shops where id = ${shop.id}`)[0];
+const before = calls.length;
+await ensureSubaccount(sql, makeApi(env, fakeFetch), srow);
+const liveSub = calls.slice(before).find((c) => c.url.endsWith('/subaccount'));
+check('with the live key, a test subaccount is replaced by one with the shop bank details', liveSub?.body.settlement_bank === '999992' && liveSub.body.account_number === '0123456780', liveSub?.body);
 r = await post({ action: 'bank', account_number: '2012345678' }, 'shop');
 check('an account number finds its bank and name', r.available && r.matches.length === 1 && r.matches[0].bank === 'Kuda' && r.matches[0].account_name === 'ADA OKAFOR', r);
 r = await post({ action: 'bank', account_number: '2012345678', bank: 'GTBank' }, 'shop');
