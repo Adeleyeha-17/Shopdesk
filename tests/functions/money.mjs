@@ -107,6 +107,9 @@ check('the area is not added twice', validated.includes('3 Admiralty Way, Lekki 
 r = await post({ action: 'pick', order: ord.id, courier_id: 'kwik', service_code: 'kwik_bike' }, 'shop');
 check('picking sets the fee', r.price === 2250, r);
 
+r = await post({ action: 'pay', token: tok }, 'cust');
+check('with a test key, only a test shop can be paid online', /isn.t on yet/.test(r.error || ''), r);
+await sql.begin(async (tx) => { await tx`select set_config('request.jwt.claim.sub', ${ADMIN}, true)`; await tx`select admin_set_pay_test(${shop.id}, true)`; });
 r = await post({ action: 'pay', token: tok }, 'shop');
 check('only the customer can pay', /Sign in with the account/.test(r.error || ''), r);
 r = await post({ action: 'pay', token: tok }, 'cust');
@@ -161,6 +164,9 @@ const codes = await Promise.all(['Access Bank', 'GTBank', 'UBA', 'First Bank', '
 check('banks named in the shop form match Paystack (the shortest name wins), and Other bank has none', codes.join() === '044,058,033,011,', codes);
 
 r = await post({ action: 'bank', account_number: '2012345678' }, 'shop');
+check('with a test key the account check is off', r.available === false, r);
+ENV.PAYSTACK_SECRET_KEY = 'sk_live_abc';
+r = await post({ action: 'bank', account_number: '2012345678' }, 'shop');
 check('an account number finds its bank and name', r.available && r.matches.length === 1 && r.matches[0].bank === 'Kuda' && r.matches[0].account_name === 'ADA OKAFOR', r);
 r = await post({ action: 'bank', account_number: '2012345678', bank: 'GTBank' }, 'shop');
 check('the bank the shop picked is checked alone', r.available && r.matches.length === 0, r);
@@ -172,7 +178,7 @@ check('phone-number banks are always tried, other banks only when the number fit
 r = await post({ action: 'status' }, 'shop');
 check('only Admin sees the keys status', r.error === 'Not allowed.', r);
 r = await post({ action: 'status' }, 'admin');
-check('Admin sees test mode and the wallet', r.paystack?.mode === 'test' && r.courier?.mode === 'test' && r.courier.balance === 25001, r);
+check('Admin sees live or test mode and the wallet', r.paystack?.mode === 'live' && r.courier?.mode === 'test' && r.courier.balance === 25001, r);
 
 ENV.PAYSTACK_SECRET_KEY = '';
 r = await post({ action: 'bank', account_number: '2012345678' }, 'shop');

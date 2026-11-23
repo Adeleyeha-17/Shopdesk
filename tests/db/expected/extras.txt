@@ -18,14 +18,14 @@ D4 reminders: 3 hours after ordering, in the day only, once (expect said paid, t
 said paid
 0
 1
-pay_reminder|Shoe Hub|SH-61 is waiting for ₦25,000. Pay to keep your order.|true
+pay_reminder|Shoe Hub|SH-62 is waiting for ₦25,000. Pay to keep your order.|true
 0
 D5 the order waiting for its delivery fee and the one the customer says is paid get nothing; once the fee is set it is reminded (expect 0 for Kemi, then 1):
 0
 1
 D6 the last reminder, 36 hours in, says when it cancels; nothing after that (expect 1, the cancel line, reminders 2, then 0):
 1
-SH-61 cancels at <clock> <when> if it isn't paid. Pay ₦25,000 to keep it.
+SH-62 cancels at <clock> <when> if it isn't paid. Pay ₦25,000 to keep it.
 2|t
 0
 D7 an order first seen after 36 hours gets only the last reminder (expect 1 and reminders 2):

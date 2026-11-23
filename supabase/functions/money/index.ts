@@ -15,13 +15,14 @@
 //   POST {"action":"track", "order":id} or {"token":...}     shop or customer: the latest from the courier
 //   POST {"action":"pay", "token":...}                       customer: start paying online, returns the Paystack page
 //   POST {"action":"check", "reference":...}                 customer back from Paystack: was it paid?
-//   POST {"action":"bank", "account_number", "bank"?}        signed in: which bank the account is at, and the name on it
+//   POST {"action":"bank", "account_number", "bank"?}        signed in: which bank the account is at, and the name on it (live key only)
 //   POST {"action":"status"}                                 admin: are the keys set, test or live, courier wallet balance
 //   POST ?hook=paystack                                      Paystack's webhook
 //   POST ?hook=shipbubble                                    Shipbubble's webhook
 //
 // Secrets (Edge Functions -> Secrets): PAYSTACK_SECRET_KEY and SHIPBUBBLE_API_KEY. Test keys while testing, live keys once the
-// accounts are approved. SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_DB_URL are provided by Supabase.
+// accounts are approved. While the Paystack key is a test key, only test shops (marked in Admin) can be paid online, and the
+// account-name check on the shop form is off, so a test payment can never mark a real shop's order as paid. SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_DB_URL are provided by Supabase.
 // Deploy with "Verify JWT" turned off (the function checks who is asking itself, and the webhooks have no sign-in).
 import postgres from 'npm:postgres@3.4.5';
 
@@ -89,12 +90,14 @@ export function makeApi(env, fetcher) {
     if (!key) throw say('Paying online isn’t set up yet. Pay by transfer for now.');
     return call(PAYSTACK, path, key, body, method);
   };
+  // a test key (sk_test_…): only test shops can be paid online
+  const testKey = () => !!get('PAYSTACK_SECRET_KEY') && !get('PAYSTACK_SECRET_KEY').startsWith('sk_live_');
   const ship = (path, body) => {
     const key = get('SHIPBUBBLE_API_KEY');
     if (!key) throw say('ShopDesk Delivery isn’t set up yet. Use your own rider for now.');
     return call(SHIPBUBBLE, path, key, body);
   };
-  return { paystack, ship, get };
+  return { paystack, ship, get, testKey };
 }
 
 // ---------- ShopDesk Delivery ----------
@@ -476,6 +479,10 @@ const ACTIONS = {
   async pay({ sql, api, uid, body }) {
     const token = String(body.token || '');
     if (!/^[0-9a-f-]{36}$/i.test(token)) throw say('Order not found.');
+    if (api.testKey()) {
+      const t = (await sql`select s.pay_test from public.orders o join public.shops s on s.id = o.shop_id where o.public_token = ${token}::uuid`)[0];
+      if (!t?.pay_test) throw say('Paying online isn’t on yet. Pay by transfer for now.');
+    }
     const ref = 'SD' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomUUID().slice(0, 8).toUpperCase();
     const r = await asUser(sql, uid, (tx) => one(tx`select public.money_start_payment(${token}::uuid, ${ref}) as r`));
     return startPayment(sql, api, r, token, ref);
@@ -493,7 +500,7 @@ const ACTIONS = {
   // The shop typed its account number: which bank is it, and whose name is on it. bank: the one the shop picked, if any.
   async bank({ api, uid, body }) {
     if (!uid) throw say('Sign in again.');
-    if (!api.get('PAYSTACK_SECRET_KEY')) return { available: false };
+    if (!api.get('PAYSTACK_SECRET_KEY') || api.testKey()) return { available: false };
     const num = String(body.account_number || '').replace(/\D/g, '');
     if (!/^\d{10}$/.test(num)) throw say('Enter the 10-digit account number.');
     if (!allowCheck(uid)) throw say('Too many checks. Try again in a few minutes.');

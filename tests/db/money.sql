@@ -122,3 +122,25 @@ select money_paid('SDTEST-0002', 2269100);
 select * from online_payments;
 reset role;
 select admin_save_settings('{"online_pay_on": false, "delivery_on": false}') from (select set_config('request.jwt.claim.sub', 'c9000000-0000-4000-8000-000000000009', false)) x;
+reset role; select id as mshop from shops where slug = 'moneybags' \gset
+\echo M17 with Pay online off, a shop is not paid online and is in Shops near you (expect false, t); only Admin marks a test shop (expect Not allowed):
+set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
+select place_order('moneybags', '{"name":"Ada Obi","phone":"08035556666","mode":"pickup"}',
+  jsonb_build_array(jsonb_build_object('product_id', :'bag', 'qty', 1)))->>'token' as tok4 \gset
+select order_money(:'tok4')->>'online';
+select exists (select 1 from jsonb_array_elements(shops_near()) x where x->>'slug' = 'moneybags');
+set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000003';
+select admin_set_pay_test(:'mshop', true);
+\echo M18 a test shop can be paid online while it is off for everyone, and leaves Shops near you (expect true, true, 10000 and true, f, t):
+set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000009';
+select admin_set_pay_test(:'mshop', true);
+select admin_shop_detail(:'mshop')->'shop'->>'pay_test';
+set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
+select order_money(:'tok4')->>'online';
+reset role; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
+select r->>'amount', r->'shop'->>'test' from money_start_payment(:'tok4', 'SDTEST-0018') r;
+set role authenticated;
+select exists (select 1 from jsonb_array_elements(shops_near()) x where x->>'slug' = 'moneybags');
+reset role;
+select count(*) > 0 from audit_log where action = 'pay_test' and shop_id = :'mshop';
+select admin_set_pay_test(:'mshop', false) from (select set_config('request.jwt.claim.sub', 'c9000000-0000-4000-8000-000000000009', false)) x;

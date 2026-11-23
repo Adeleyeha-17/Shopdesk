@@ -1,6 +1,6 @@
 B1 a shop owner buys from another shop with the same email; the seller hears a normal new order (expect the order total, then the alert):
 10000
-new_order|New order PP-57
+new_order|New order PP-58
 B2 the account now runs a shop and buys, and knows its own link; its buyer details are saved (expect true true wigpalace, then 1):
 true|true|wigpalace
 1

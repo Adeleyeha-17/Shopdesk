@@ -135,6 +135,11 @@ export function MoneyPage({ say }) {
               <span className="num">{ck && ck.balance != null ? naira(ck.balance) : ck && ck.set ? '…' : 'None'}</span>
             </div>
           </div>
+          {pk && pk.set && pk.mode !== 'live' && (
+            <p className="note">
+              With a test key, only test shops can be paid online. Mark one with Make test shop on its page.
+            </p>
+          )}
           {keys && keys.error && <p className="err">{keys.error}</p>}
           {ck && ck.error && <p className="err">{ck.error}</p>}
           <p className="note">

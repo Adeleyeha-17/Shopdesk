@@ -1,4 +1,5 @@
-// One shop in detail: its numbers, details, products (hide/show), reports and history.
+// One shop in detail: its numbers, details, products (hide/show), reports and history. A shop can be marked as a test shop
+// for paying online: it can be paid online while Pay online is off for everyone, and it stays out of Shops near you.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -24,6 +25,14 @@ export function ShopDetailPage({ id, d, setModal }) {
   useEffect(() => {
     load();
   }, [load, d]);
+  const [busy, setBusy] = useState(false);
+  async function setTest(on) {
+    setBusy(true);
+    const { error } = await supabase.rpc('admin_set_pay_test', { p_shop: id, p_on: on });
+    setBusy(false);
+    if (error) setErr(errText(error));
+    else load();
+  }
   if (err)
     return (
       <>
@@ -48,6 +57,7 @@ export function ShopDetailPage({ id, d, setModal }) {
             {STATUS[s.status]}
             {s.status === 'active' ? ' · taking orders' : ''} · /
             {s.slug}
+            {s.pay_test && ' · test shop for paying online'}
           </span>
         </div>
         <div className="btns end">
@@ -93,6 +103,9 @@ export function ShopDetailPage({ id, d, setModal }) {
           )}
           <button className="btn small ghost" onClick={() => setModal({ kind: 'support', shop: s })}>
             Support view
+          </button>
+          <button className="btn small ghost" disabled={busy} onClick={() => setTest(!s.pay_test)}>
+            {s.pay_test ? 'Stop testing' : 'Make test shop'}
           </button>
         </div>
       </div>

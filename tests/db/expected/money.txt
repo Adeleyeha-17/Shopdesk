@@ -84,3 +84,16 @@ M14 nobody calls the payment steps from the app directly (expect permission deni
 psql:money.sql:121: ERROR:  permission denied for function money_paid
 psql:money.sql:122: ERROR:  permission denied for table online_payments
 
+M17 with Pay online off, a shop is not paid online and is in Shops near you (expect false, t); only Admin marks a test shop (expect Not allowed):
+false
+t
+psql:money.sql:133: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_set_pay_test(uuid,boolean) line N at RAISE
+M18 a test shop can be paid online while it is off for everyone, and leaves Shops near you (expect true, true, 10000 and true, f, t):
+
+true
+true
+10000|true
+f
+t
+
