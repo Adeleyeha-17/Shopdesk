@@ -341,21 +341,15 @@ function allowCheck(uid) {
   return true;
 }
 
-// With a test key, Paystack can't settle to real accounts, so test shops are paid into Paystack's own test account
-// (Zenith Bank, 0000000000). A test subaccount is never reused once the live key is in.
-const TEST_PAYOUT = { code: '057', account: '0000000000' };
 export async function ensureSubaccount(sql, api, shop) {
-  const test = api.testKey();
-  const want = (test ? 'test:' : '') + shop.bank + ':' + shop.account_number;
+  const want = shop.bank + ':' + shop.account_number;
   if (shop.subaccount && shop.subaccount_for === want) return shop.subaccount;
-  const code = test ? TEST_PAYOUT.code : await bankCode(api, shop.bank);
+  const code = await bankCode(api, shop.bank);
   if (!code || !/^\d{10}$/.test(shop.account_number || '')) throw say('This shop can’t take online payments yet. Pay by transfer to the account below.');
-  const account = test ? TEST_PAYOUT.account : shop.account_number;
-  const body = { business_name: String(shop.name).slice(0, 100), settlement_bank: code, account_number: account, percentage_charge: 0 };
-  const sameMode = String(shop.subaccount_for || '').startsWith('test:') === test;
+  const body = { business_name: String(shop.name).slice(0, 100), settlement_bank: code, account_number: shop.account_number, percentage_charge: 0 };
   let d;
   try {
-    d = shop.subaccount && sameMode ? await api.paystack('/subaccount/' + shop.subaccount, body, 'PUT') : await api.paystack('/subaccount', body);
+    d = shop.subaccount ? await api.paystack('/subaccount/' + shop.subaccount, body, 'PUT') : await api.paystack('/subaccount', body);
   } catch (e) {
     if (e instanceof Say) throw e;
     console.error('subaccount: ' + e.message);
@@ -367,7 +361,9 @@ export async function ensureSubaccount(sql, api, shop) {
 }
 
 export async function startPayment(sql, api, r, token, ref) {
-  const sub = await ensureSubaccount(sql, api, r.shop);
+  // With a test key there is no split: Paystack won't make subaccounts for a business it hasn't activated, and test money
+  // never settles anyway. The whole test payment goes to ShopDesk's test balance.
+  const sub = api.testKey() ? null : await ensureSubaccount(sql, api, r.shop);
   // The customer pays the goods (and delivery), plus ShopDesk's fee, plus Paystack's fee when fee > 0. ShopDesk's share is
   // the delivery fee and both fees, and Paystack takes its fee from ShopDesk's share, so the shop's share is exactly what
   // the shop is owed.
@@ -378,12 +374,11 @@ export async function startPayment(sql, api, r, token, ref) {
     amount: (r.amount + fee + service) * 100,
     currency: 'NGN',
     reference: ref,
-    subaccount: sub,
-    bearer: fee > 0 || (r.delivery_part > 0 && r.fee_by === 'shopdesk') ? 'account' : 'subaccount',
+    ...(sub && { subaccount: sub, bearer: fee > 0 || (r.delivery_part > 0 && r.fee_by === 'shopdesk') ? 'account' : 'subaccount' }),
     callback_url: SITE + '/o/' + token,
     metadata: { order_id: r.order_id, shop: r.shop.slug, delivery_part: r.delivery_part, card_fee: fee, shopdesk_fee: service, cancel_action: SITE + '/o/' + token },
   };
-  if (r.delivery_part + fee + service > 0) body.transaction_charge = (r.delivery_part + fee + service) * 100;
+  if (sub && r.delivery_part + fee + service > 0) body.transaction_charge = (r.delivery_part + fee + service) * 100;
   try {
     const d = await api.paystack('/transaction/initialize', body);
     return { url: d.authorization_url, reference: ref };
