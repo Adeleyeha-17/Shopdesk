@@ -1447,8 +1447,9 @@ a.card.profile > div { flex: 1; }
 .promo-codes .btns { margin-top: 6px; }
 .promo-code-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .promo-code-top .mono { font-size: 16px; letter-spacing: .5px; }
-.promo-new { display: grid; gap: 4px; background: var(--soft); border-radius: 12px; padding: 14px; margin-top: 8px; }
+.promo-new { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; background: var(--soft); border-radius: 12px; padding: 14px; margin-top: 8px; }
 .promo-new .seg { margin: 6px 0 8px; }
 .promo-new .seg button { flex: 1; }
 .promo-new input { background: var(--bg); }
-.promo-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.promo-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.promo-new input { min-width: 0; width: 100%; box-sizing: border-box; }
