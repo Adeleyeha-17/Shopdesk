@@ -1433,23 +1433,60 @@ a.card.profile > div { flex: 1; }
 .co-shopnote { margin: 14px 0 0; }
 .co-shopnote textarea { resize: vertical; }
 /* order page: "Ask someone to pay"; the shop's order card: the customer's note and the discount */
-.ask-pay { display: grid; gap: 2px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); justify-items: start; }
-.ask-pay .ok { margin-top: 6px; }
+/* "Ask someone to pay": one tappable row under the payment details */
+.ask-pay { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.ask-pay:active { background: var(--soft); }
+.ask-ic { width: 22px; height: 22px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ask-go { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ask-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.ask-text strong { font-size: 15px; }
+.ask-text .sub { font-size: 13px; line-height: 18px; }
+/* the order's discount code and note, as tidy rows under the items */
+.o-extras { display: grid; gap: 8px; margin: 10px 0 4px; }
+.o-off { display: flex; justify-content: space-between; font-size: 14px; color: var(--good); font-weight: 600; }
+.o-note { display: grid; gap: 2px; background: var(--soft); border-radius: 12px; padding: 10px 12px; font-size: 14px; line-height: 20px; }
+.o-note .label { font-size: 12px; }
 .order-note { background: var(--soft); border-radius: 10px; padding: 9px 12px; font-size: 14px; line-height: 20px; margin: 8px 0; }
 .order-off .sub, .order-off .num { color: var(--good); }
-/* Shop tab > Sales and discount codes */
+/* Shop tab > Sales and discount codes: short summary rows; the forms open only when asked */
 .promos .promo-block + .promo-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
-.promos .promo-block > .note { margin-top: 0; }
-.promos .sale-banner { margin: 10px 0; }
-.promo-state { margin: 4px 0 10px; }
-.promo-codes { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 10px; }
-.promo-codes li { display: grid; gap: 4px; background: var(--soft); border-radius: 12px; padding: 12px 14px; }
-.promo-codes .btns { margin-top: 6px; }
-.promo-code-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.promo-code-top .mono { font-size: 16px; letter-spacing: .5px; }
-.promo-new { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; background: var(--soft); border-radius: 12px; padding: 14px; margin-top: 8px; }
-.promo-new .seg { margin: 6px 0 8px; }
-.promo-new .seg button { flex: 1; }
-.promo-new input { background: var(--bg); }
+.promo-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.promo-head .sub { margin: 2px 0 0; }
+.promo-title { margin: 0; font-weight: 700; font-size: 15px; }
+.promos .sale-banner { margin: 12px 0 0; }
+.sale-banner.off { opacity: .5; }
+.promo-empty { margin: 10px 0 0; }
+.promo-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; background: var(--soft); border-radius: 14px; padding: 14px; margin-top: 12px; }
+.promo-form input { background: var(--bg); min-width: 0; width: 100%; box-sizing: border-box; }
+.promo-form .sale-banner { margin: 6px 0 4px; }
+.promo-form .seg { margin: 6px 0 8px; }
+.promo-form .seg button { flex: 1; }
+.promo-form .btns { align-items: center; margin-top: 6px; }
+.promo-remove { margin-left: auto; }
 .promo-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
-.promo-new input { min-width: 0; width: 100%; box-sizing: border-box; }
+.promo-codes { list-style: none; margin: 12px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.promo-codes li { display: grid; gap: 3px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.promo-code-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.promo-code-top .mono { font-size: 16px; letter-spacing: .6px; }
+.promo-state { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--soft); color: var(--muted); }
+.promo-state.on { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+.promo-what { font-size: 14px; }
+.promo-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.promo-acts { display: flex; gap: 14px; }
+.promo-acts .linkbtn { font-size: 13px; }
+/* the pay link page: a clean summary card, then one card for paying */
+.pl-sum { padding-bottom: 14px; }
+.pl-kicker { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+.pl-order { margin: 4px 0 0; font-size: 16px; font-weight: 700; }
+.pl-lines { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.pl-lines li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.pl-qty { color: var(--muted); font-variant-numeric: tabular-nums; }
+.pl-name { min-width: 0; overflow-wrap: anywhere; }
+.pl-off, .pl-off .num { color: var(--good); }
+.pl-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 12px; font-weight: 700; }
+.pl-total .num { font-size: 22px; }
+.pl-pay { display: grid; gap: 8px; }
+.pl-pay > .btn { width: 100%; }
+.pl-fee { text-align: center; }
+.pl-pay .or { margin: 6px 0; }
+.pl-hint { margin: 2px 0 0; }

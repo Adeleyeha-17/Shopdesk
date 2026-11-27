@@ -341,15 +341,16 @@ language sql stable security definer set search_path = public as $$
   from public.orders o join public.shops s on s.id = o.shop_id cross join public.settings st where o.pay_token = p_pay and st.id = 1;
 $$;
 
--- Someone else pays with the pay link: their email goes to Paystack for the receipt.
-create or replace function public.money_start_link_payment(p_pay uuid, p_ref text, p_email text) returns jsonb
+-- Someone else pays with the pay link. If they're signed in (p_payer), Paystack's receipt goes to their account email;
+-- otherwise to a ShopDesk address (never to the customer: the receipt shows the payer's card).
+create or replace function public.money_start_link_payment(p_pay uuid, p_ref text, p_payer uuid) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare v_id bigint; v_email text := lower(trim(coalesce(p_email, '')));
+declare v_id bigint; v_email text;
 begin
   select id into v_id from public.orders where pay_token = p_pay;
   if not found then raise exception 'This pay link isn''t right. Ask for a new one.'; end if;
-  if v_email !~ '^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$' or char_length(v_email) > 120 then raise exception 'Enter your email for the receipt.'; end if;
-  return public.money_start(v_id, p_ref, v_email);
+  select email into v_email from auth.users where id = p_payer;
+  return public.money_start(v_id, p_ref, coalesce(v_email, 'paid' || v_id || '@shopdesk.com.ng'));
 end $$;
 
 -- Receipt emails: what the email needs about the order.
@@ -401,7 +402,7 @@ create trigger orders_receipt after update of status on public.orders for each r
 
 revoke all on function public.check_coupon(text, text, int), public.shop_coupons(),
   public.save_coupon(bigint, text, text, int, int, date, int, boolean), public.delete_coupon(bigint), public.order_extras(uuid),
-  public.get_pay_link(uuid), public.money_start_link_payment(uuid, text, text), public.receipt_json(bigint), public.receipt_claim(int),
+  public.get_pay_link(uuid), public.money_start_link_payment(uuid, text, uuid), public.receipt_json(bigint), public.receipt_claim(int),
   public.receipt_unclaim(bigint[]), public.orders_receipt() from public, anon, authenticated;
 grant execute on function public.check_coupon(text, text, int), public.shop_coupons(),
   public.save_coupon(bigint, text, text, int, int, date, int, boolean), public.delete_coupon(bigint) to authenticated;

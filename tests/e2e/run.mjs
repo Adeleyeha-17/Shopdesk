@@ -895,8 +895,8 @@ await step('the shop page shows its sale banner; at checkout a code comes off th
   await p.locator('.co-off:has-text("BF15")').waitFor();
   await p.locator('#coNote').fill('Please call when it is ready');
   await p.locator('button:has-text("Place order")').click();
-  await see('Your note: “Please call when it is ready”');
-  await see('Code BF15:');
+  await see('Please call when it is ready');
+  await p.locator('.o-off:has-text("BF15")').waitFor();
   code3 = (await text()).match(/Order ([A-Z]{2,4}-\d+)/)[1];
   await as('Shop owner');
   await nav('Orders');
@@ -910,7 +910,7 @@ await step('the customer asks someone to pay: the pay link shows the items and a
   await as('Customer');
   await tab('Orders').click();
   await p.locator(`a:has-text("${code3}")`).click();
-  await p.locator('.ask-pay button:has-text("Ask someone to pay")').waitFor();
+  await p.locator('button.ask-pay:has-text("Ask someone to pay")').waitFor();
   const pay = await p.evaluate(([key, code]) => {
     const S = JSON.parse(localStorage.getItem(key));
     const o = S.orders.find((x) => String(code).endsWith('-' + x.id));
@@ -918,11 +918,11 @@ await step('the customer asks someone to pay: the pay link shows the items and a
   }, [KEY, code3]);
   expect(!!pay.token, 'the order has no pay link');
   await patch((S) => { S.money_off = false; }, '/pay/' + pay.token);
-  await see('Someone asked you to pay');
+  await see('Payment request');
   const page = await text();
   expect(!page.includes(pay.phone) && !page.includes(pay.name), 'the pay link shows the customer details');
-  await p.locator('#plEmail').fill('friend@example.com');
-  await p.locator('.pay-online button.btn').click();
+  expect((await p.locator('input[type="email"]').count()) === 0, 'the pay link asks for an email');
+  await p.locator('.pl-pay > button.btn').click();
   await p.locator('.demo-paystack .dp-pay').click();
   await p.locator('.paid-done h2:text-is("Payment successful")').waitFor();
 });
@@ -931,7 +931,7 @@ await step('the shop sees how its codes did and makes a new one in the Shop tab'
   await as('Shop owner');
   await nav('Shop');
   await see('Sales and discount codes');
-  await p.locator('.promo-codes li:has-text("BF15"):has-text("Used 1")').waitFor();
+  await p.locator('.promo-codes li:has-text("BF15"):has-text("Used 1/100")').waitFor();
   await p.locator('.promos button:has-text("New code")').click();
   await p.locator('#cpCode').fill('xmas10');
   await p.locator('#cpValue').fill('10');

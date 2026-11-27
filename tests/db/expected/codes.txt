@@ -59,12 +59,11 @@ C10 the pay link is only for the customer, and shows no address or phone (expect
 t
 t
 18000|t|f
-C11 someone else pays online with the link: their email goes to Paystack (expect an error without an email, then the payer email):
-psql:codes.sql:93: ERROR:  Enter your email for the receipt.
-CONTEXT:  PL/pgSQL function money_start_link_payment(uuid,text,text) line N at RAISE
-payer@example.com
+C11 someone else pays online with the link, never asked for an email: a signed-in payer gets the receipt at their account email, anyone else at a ShopDesk address, never the customer (expect ShopDesk address, other@example.com, an error):
+t
+other@example.com
 psql:codes.sql:95: ERROR:  This pay link isn't right. Ask for a new one.
-CONTEXT:  PL/pgSQL function money_start_link_payment(uuid,text,text) line N at RAISE
+CONTEXT:  PL/pgSQL function money_start_link_payment(uuid,text,uuid) line N at RAISE
 C12 paying in full queues the "payment confirmed" email; the sender gets the order with the customer email (expect paid, then placed and paid for Femi):
 t
 placed paid

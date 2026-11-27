@@ -1,6 +1,6 @@
 // /pay/<pay token>: a customer sent this link to someone so they pay the order. It shows the shop, the items and what's
-// left to pay, never the customer's address or phone. The payer can transfer to the shop, or pay online with just their
-// email (Paystack sends them the receipt). No ShopDesk account needed.
+// left to pay, never the customer's address or phone. The payer can transfer to the shop, or pay online. No ShopDesk
+// account needed and no email asked: if they're signed in, Paystack's receipt goes to their account email.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -9,11 +9,8 @@ import { money } from '../lib/moneyApi.js';
 import { Page } from '../shared/Page.jsx';
 import { Skeleton } from '../shared/Skeleton.jsx';
 
-const EMAIL_OK = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
-
 export function PayLinkPage({ token }) {
   const [o, setO] = useState(undefined);
-  const [email, setEmail] = useState('');
   const [paying, setPaying] = useState(false);
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState('');
@@ -45,14 +42,10 @@ export function PayLinkPage({ token }) {
   }, [load]);
 
   async function payOnline() {
-    if (!EMAIL_OK.test(email.trim())) {
-      setErr('Enter your email. Paystack sends your receipt there.');
-      return;
-    }
     setErr('');
     setPaying(true);
     try {
-      const r = await money('paylink', { pay: token, email: email.trim() });
+      const r = await money('paylink', { pay: token });
       window.location.assign(r.url);
     } catch (e) {
       setErr(e.message);
@@ -104,77 +97,67 @@ export function PayLinkPage({ token }) {
         </section>
       ) : (
         <>
-          <section className="card">
-            <p className="note" style={{ marginTop: 0 }}>
-              Someone asked you to pay for their order from <strong>{o.shop.name}</strong> on ShopDesk.
-            </p>
-            <span className="order-id">
+          <section className="card pl-sum">
+            <p className="pl-kicker">Payment request</p>
+            <p className="pl-order">
               Order <span className="ocode">{o.code}</span>
-            </span>
-            <ul className="paid-items">
+            </p>
+            <ul className="pl-lines">
               {items.map((i, n) => (
                 <li key={n}>
-                  <span>
-                    {i.qty} × {i.name}
-                  </span>
-                  <span>{naira(i.qty * i.price)}</span>
+                  <span className="pl-qty">{i.qty}×</span>
+                  <span className="pl-name">{i.name}</span>
+                  <span className="num">{naira(i.qty * i.price)}</span>
                 </li>
               ))}
               {o.discount > 0 && (
-                <li>
-                  <span>Discount{o.coupon ? ' · ' + o.coupon : ''}</span>
-                  <span>−{naira(o.discount)}</span>
+                <li className="pl-off">
+                  <span className="pl-qty" />
+                  <span className="pl-name">Discount{o.coupon ? ' · ' + o.coupon : ''}</span>
+                  <span className="num">−{naira(o.discount)}</span>
                 </li>
               )}
               {o.delivery_fee > 0 && (
                 <li>
-                  <span>Delivery</span>
-                  <span>{naira(o.delivery_fee)}</span>
+                  <span className="pl-qty" />
+                  <span className="pl-name">Delivery</span>
+                  <span className="num">{naira(o.delivery_fee)}</span>
                 </li>
               )}
             </ul>
-            <div className="row co-total">
+            <div className="pl-total">
               <span>{o.amount_paid > 0 ? 'Left to pay' : 'To pay'}</span>
               <strong className="num">{naira(left)}</strong>
             </div>
           </section>
           {o.fee_pending ? (
-            <p className="note">The shop is still adding the delivery fee. Open this link again in a little while.</p>
-          ) : (
             <section className="card">
+              <p className="note" style={{ margin: 0 }}>
+                The shop is still adding the delivery fee. Open this link again in a little while.
+              </p>
+            </section>
+          ) : (
+            <section className="card pl-pay">
               {o.online && (
-                <div className="pay-online">
-                  <div className="field">
-                    <label htmlFor="plEmail">Your email (for the receipt)</label>
-                    <input
-                      id="plEmail"
-                      type="email"
-                      inputMode="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                    />
-                  </div>
+                <>
                   <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
                     {paying ? 'Opening Paystack…' : `Pay ${naira(left + fee)} online`}
                   </button>
-                  {fee > 0 && <span className="sub">Includes {naira(fee)} service fee</span>}
-                  {!o.online_only && (
-                    <div className="or">
-                      <span>or transfer {naira(left)} to the shop</span>
-                    </div>
-                  )}
+                  {fee > 0 && <span className="sub pl-fee">Includes {naira(fee)} service fee</span>}
+                </>
+              )}
+              {o.online && !o.online_only && (
+                <div className="or">
+                  <span>or pay by transfer</span>
                 </div>
               )}
               {o.online_only && !o.online && (
-                <p className="note">Paying online isn’t available for this order right now. Let the person who sent this link know.</p>
+                <p className="note" style={{ margin: 0 }}>
+                  Paying online isn’t available for this order right now. Let the person who sent this link know.
+                </p>
               )}
               {!o.online_only && (
                 <>
-                  <p className="note">
-                    Pay <strong>{naira(left)}</strong> in one transfer to:
-                  </p>
                   <div className="slip pay-slip">
                     <div className="pay-line">
                       <div>
@@ -187,7 +170,7 @@ export function PayLinkPage({ token }) {
                     </div>
                     <div className="pay-line">
                       <div>
-                        <div className="label">Transfer note (narration)</div>
+                        <div className="label">Transfer note</div>
                         <span className="acct">{o.code}</span>
                       </div>
                       <button className="btn small" onClick={() => copyText(o.code, setCopied, 'Code copied.')}>
@@ -195,14 +178,14 @@ export function PayLinkPage({ token }) {
                       </button>
                     </div>
                     <div>
-                      <div className="label">Bank and name</div>
+                      <div className="label">Bank</div>
                       <span>
                         {o.shop.bank} · {o.shop.account_name}
                       </span>
                     </div>
                   </div>
-                  <p className="note">
-                    Put <strong>{o.code}</strong> in the transfer note. The shop confirms the order once the money lands.
+                  <p className="sub pl-hint">
+                    Send exactly {naira(left)} with {o.code} as the note. The shop confirms once it lands.
                   </p>
                 </>
               )}

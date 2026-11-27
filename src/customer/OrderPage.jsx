@@ -79,17 +79,25 @@ function AskToPay({ o, left }) {
     copyText(text, setDone, 'Link copied. Send it to whoever is paying.');
   }
   return (
-    <div className="ask-pay">
-      <button className="linkbtn" onClick={share}>
-        Ask someone to pay
+    <>
+      <button className="ask-pay" onClick={share}>
+        <svg className="ask-ic" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M16 6l-4-4-4 4M12 2v13M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+        </svg>
+        <span className="ask-text">
+          <strong>Ask someone to pay</strong>
+          <span className="sub">Send a link. They see the items and amount, not your address or phone.</span>
+        </span>
+        <svg className="ask-go" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
       </button>
-      <span className="sub">They see the items and the amount, not your address or phone.</span>
       {done && (
         <p className="ok" role="status">
           {done}
         </p>
       )}
-    </div>
+    </>
   );
 }
 
@@ -434,13 +442,22 @@ export function OrderPage({ token }) {
           </p>
         )}
         <p className="note">{items}</p>
-        {o.discount > 0 && (
-          <p className="note">
-            {o.coupon ? `Code ${o.coupon}: ` : 'Discount: '}
-            {naira(o.discount)} off
-          </p>
+        {(o.discount > 0 || o.note) && (
+          <div className="o-extras">
+            {o.discount > 0 && (
+              <div className="o-off">
+                <span>{o.coupon ? 'Code ' + o.coupon : 'Discount'}</span>
+                <span className="num">−{naira(o.discount)}</span>
+              </div>
+            )}
+            {o.note && (
+              <div className="o-note">
+                <span className="label">Your note to the shop</span>
+                <span>{o.note}</span>
+              </div>
+            )}
+          </div>
         )}
-        {o.note && <p className="note">Your note: “{o.note}”</p>}
         {pay && pay.delivery_by === 'shopdesk' && pay.courier && !sh && o.status !== 'cancelled' && (
           <p className="note">Delivered by {pay.courier} with ShopDesk Delivery.</p>
         )}

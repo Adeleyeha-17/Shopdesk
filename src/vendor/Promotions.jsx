@@ -11,7 +11,14 @@ const dayText = (d) =>
   new Date(d + 'T12:00:00').toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short' });
 const offText = (c) => (c.kind === 'percent' ? `${c.value}% off` : `${naira(c.value)} off`);
 
+const TAG = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M3 12l9-9h8v8l-9 9zM15.5 8.5h.01" />
+  </svg>
+);
+
 function Banner({ shop, reloadShop, say }) {
+  const [editing, setEditing] = useState(false);
   const [text, setText] = useState(shop.banner || '');
   const [until, setUntil] = useState(shop.banner_until || '');
   const [busy, setBusy] = useState(false);
@@ -35,42 +42,77 @@ function Banner({ shop, reloadShop, say }) {
         setText('');
         setUntil('');
       }
+      setEditing(false);
       say(clear ? 'Banner removed.' : 'Banner saved.');
       reloadShop();
     }
   }
+  if (!editing)
+    return (
+      <div className="promo-block">
+        <div className="promo-head">
+          <div>
+            <p className="promo-title">Sale banner</p>
+            <p className="sub">
+              {!shop.banner
+                ? 'One line at the top of your shop page.'
+                : showing
+                  ? shop.banner_until
+                    ? `Showing until ${dayText(shop.banner_until)}`
+                    : 'Showing now'
+                  : 'Ended. Edit it to show it again.'}
+            </p>
+          </div>
+          <button className="btn small ghost" onClick={() => setEditing(true)}>
+            {shop.banner ? 'Edit' : 'Add'}
+          </button>
+        </div>
+        {shop.banner && (
+          <div className={'sale-banner' + (showing ? '' : ' off')}>
+            {TAG}
+            <span>{shop.banner}</span>
+          </div>
+        )}
+      </div>
+    );
   return (
     <div className="promo-block">
-      <p className="label">Sale banner</p>
-      <p className="note">One line at the top of your shop page, like “Sale ends Sunday” or “Free delivery this week”.</p>
-      {text.trim() && (
-        <div className="sale-banner" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M3 12l9-9h8v8l-9 9zM15.5 8.5h.01" />
-          </svg>
-          <span>{text.trim()}</span>
+      <p className="promo-title">Sale banner</p>
+      <div className="promo-form">
+        <div className="field">
+          <label htmlFor="bnText">Banner</label>
+          <input
+            id="bnText"
+            value={text}
+            maxLength={80}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="e.g. Black Friday: 20% off with code BF20"
+            autoFocus
+          />
         </div>
-      )}
-      <div className="field">
-        <label htmlFor="bnText">Banner</label>
-        <input id="bnText" value={text} maxLength={80} onChange={(e) => setText(e.target.value)} placeholder="e.g. Black Friday: 20% off with code BF20" />
-      </div>
-      <div className="field">
-        <label htmlFor="bnUntil">Show until (optional)</label>
-        <input id="bnUntil" type="date" value={until} min={today()} onChange={(e) => setUntil(e.target.value)} />
-      </div>
-      <p className="sub promo-state">
-        {showing ? (shop.banner_until ? `Showing until ${dayText(shop.banner_until)}.` : 'Showing now.') : 'Not showing.'}
-      </p>
-      <div className="btns">
-        <button className="btn small" onClick={() => save(false)} disabled={busy}>
-          Save banner
-        </button>
-        {shop.banner && (
-          <button className="btn small ghost" onClick={() => save(true)} disabled={busy}>
-            Remove
-          </button>
+        <div className="field">
+          <label htmlFor="bnUntil">Show until (optional)</label>
+          <input id="bnUntil" type="date" value={until} min={today()} onChange={(e) => setUntil(e.target.value)} />
+        </div>
+        {text.trim() && (
+          <div className="sale-banner" aria-hidden="true">
+            {TAG}
+            <span>{text.trim()}</span>
+          </div>
         )}
+        <div className="btns">
+          <button className="btn small" onClick={() => save(false)} disabled={busy}>
+            Save
+          </button>
+          <button className="btn small ghost" onClick={() => setEditing(false)} disabled={busy}>
+            Cancel
+          </button>
+          {shop.banner && (
+            <button className="linkbtn bad promo-remove" onClick={() => save(true)} disabled={busy}>
+              Remove
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -105,7 +147,7 @@ function NewCode({ onDone, say }) {
     }
   }
   return (
-    <div className="promo-new">
+    <div className="promo-form">
       <div className="field">
         <label htmlFor="cpCode">Code</label>
         <input
@@ -194,50 +236,18 @@ function Codes({ say }) {
   }
   return (
     <div className="promo-block">
-      <p className="label">Discount codes</p>
-      <p className="note">Customers type the code at checkout. Post it on your status or Instagram.</p>
-      {list === null ? (
-        <p className="sub">Loading…</p>
-      ) : (
-        list.length > 0 && (
-          <ul className="promo-codes">
-            {list.map((c) => {
-              const live = c.active && !c.ended && !(c.max_uses && c.uses >= c.max_uses);
-              return (
-                <li key={c.id}>
-                  <div className="promo-code-top">
-                    <strong className="mono">{c.code}</strong>
-                    <span className={'chip' + (live ? ' paid' : '')}>
-                      {live ? 'On' : c.ended ? 'Ended' : c.active ? 'Used up' : 'Off'}
-                    </span>
-                  </div>
-                  <span className="sub">
-                    {offText(c)}
-                    {c.min_total > 0 ? ` · orders of ${naira(c.min_total)}+` : ''}
-                    {c.ends_on ? ` · until ${dayText(c.ends_on)}` : ''}
-                  </span>
-                  <span className="sub">
-                    Used {c.uses}
-                    {c.max_uses ? ` of ${c.max_uses}` : ''} time{(c.max_uses || c.uses) === 1 ? '' : 's'}
-                    {c.off > 0 ? ` · ${naira(c.off)} off in total` : ''}
-                  </span>
-                  <div className="btns">
-                    {!c.ended && (
-                      <button className="btn small ghost" onClick={() => toggle(c)}>
-                        {c.active ? 'Switch off' : 'Switch on'}
-                      </button>
-                    )}
-                    <button className="btn small ghost" onClick={() => remove(c)}>
-                      Delete
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )
-      )}
-      {adding ? (
+      <div className="promo-head">
+        <div>
+          <p className="promo-title">Discount codes</p>
+          <p className="sub">Customers type the code at checkout.</p>
+        </div>
+        {!adding && (
+          <button className="btn small ghost" onClick={() => setAdding(true)}>
+            New code
+          </button>
+        )}
+      </div>
+      {adding && (
         <NewCode
           say={say}
           onDone={() => {
@@ -245,10 +255,49 @@ function Codes({ say }) {
             load();
           }}
         />
+      )}
+      {list === null ? (
+        <p className="sub">Loading…</p>
+      ) : list.length === 0 ? (
+        !adding && <p className="sub promo-empty">No codes yet. Make one and post it on your status or Instagram.</p>
       ) : (
-        <button className="btn small" onClick={() => setAdding(true)}>
-          New code
-        </button>
+        <ul className="promo-codes">
+          {list.map((c) => {
+            const live = c.active && !c.ended && !(c.max_uses && c.uses >= c.max_uses);
+            return (
+              <li key={c.id}>
+                <div className="promo-code-top">
+                  <strong className="mono">{c.code}</strong>
+                  <span className={'promo-state' + (live ? ' on' : '')}>
+                    {live ? 'On' : c.ended ? 'Ended' : c.active ? 'Used up' : 'Off'}
+                  </span>
+                </div>
+                <span className="promo-what">
+                  {offText(c)}
+                  {c.min_total > 0 ? ` · ${naira(c.min_total)}+ orders` : ''}
+                  {c.ends_on ? ` · ends ${dayText(c.ends_on)}` : ''}
+                </span>
+                <div className="promo-foot">
+                  <span className="sub">
+                    Used {c.uses}
+                    {c.max_uses ? `/${c.max_uses}` : ''}
+                    {c.off > 0 ? ` · ${naira(c.off)} off` : ''}
+                  </span>
+                  <span className="promo-acts">
+                    {!c.ended && (
+                      <button className="linkbtn" onClick={() => toggle(c)}>
+                        {c.active ? 'Switch off' : 'Switch on'}
+                      </button>
+                    )}
+                    <button className="linkbtn bad" onClick={() => remove(c)}>
+                      Delete
+                    </button>
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

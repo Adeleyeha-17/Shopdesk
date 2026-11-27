@@ -14,7 +14,7 @@
 //   POST {"action":"book", "order":id}                       shop: book the courier for a paid, packed order
 //   POST {"action":"track", "order":id} or {"token":...}     shop or customer: the latest from the courier
 //   POST {"action":"pay", "token":...}                       customer: start paying online, returns the Paystack page
-//   POST {"action":"paylink", "pay":..., "email":...}        anyone with the order's pay link: pay it online for the customer
+//   POST {"action":"paylink", "pay":...}                   anyone with the order's pay link: pay it online for the customer
 //   POST {"action":"check", "reference":...}                 customer back from Paystack: was it paid?
 //   POST {"action":"bank", "account_number", "bank"?}        signed in: which bank the account is at, and the name on it (live key only)
 //   POST {"action":"status"}                                 admin: are the keys set, test or live, courier wallet balance
@@ -491,8 +491,9 @@ const ACTIONS = {
     return startPayment(sql, api, r, '/o/' + token, ref);
   },
 
-  // Someone else pays with the pay link the customer sent them. No sign-in: the link is the secret.
-  async paylink({ sql, api, body }) {
+  // Someone else pays with the pay link the customer sent them. No sign-in needed: the link is the secret. If they are
+  // signed in to ShopDesk, Paystack's receipt goes to their account email; nobody is asked to type one.
+  async paylink({ sql, api, uid, body }) {
     const pay = String(body.pay || '');
     if (!/^[0-9a-f-]{36}$/i.test(pay)) throw say('This pay link isn’t right. Ask for a new one.');
     if (api.testKey()) {
@@ -501,7 +502,7 @@ const ACTIONS = {
       if (!t.pay_test) throw say('Paying online isn’t on yet. Pay by transfer for now.');
     }
     const ref = 'SD' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomUUID().slice(0, 8).toUpperCase();
-    const r = (await sql`select public.money_start_link_payment(${pay}::uuid, ${ref}, ${String(body.email || '').slice(0, 120)}) as r`)[0].r;
+    const r = (await sql`select public.money_start_link_payment(${pay}::uuid, ${ref}, ${uid || null}::uuid) as r`)[0].r;
     return startPayment(sql, api, r, '/pay/' + pay, ref);
   },
 

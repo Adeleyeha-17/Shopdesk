@@ -88,11 +88,11 @@ reset role; select pay_token as pf from orders where customer_name = 'Femi' \gse
 set role anon;
 select get_pay_link(:'pf')->>'to_pay', get_pay_link(:'pf')->>'code' is not null, get_pay_link(:'pf')::text ~ 'Femi|0803|address';
 
-\echo C11 someone else pays online with the link: their email goes to Paystack (expect an error without an email, then the payer email):
+\echo C11 someone else pays online with the link, never asked for an email: a signed-in payer gets the receipt at their account email, anyone else at a ShopDesk address, never the customer (expect ShopDesk address, other@example.com, an error):
 reset role; update shops set pay_test = true where slug = 'kemishoes';
-select money_start_link_payment(:'pf', 'SDTEST-C11A', '');
-select money_start_link_payment(:'pf', 'SDTEST-C11B', 'Payer@Example.com')->>'email';
-select money_start_link_payment(gen_random_uuid(), 'SDTEST-C11C', 'payer@example.com');
+select (money_start_link_payment(:'pf', 'SDTEST-C11A', null)->>'email') ~ '^paid[0-9]+@shopdesk\.com\.ng$';
+select money_start_link_payment(:'pf', 'SDTEST-C11B', 'c0de0000-0000-4000-8000-000000000004')->>'email';
+select money_start_link_payment(gen_random_uuid(), 'SDTEST-C11C', null);
 
 \echo C12 paying in full queues the "payment confirmed" email; the sender gets the order with the customer email (expect paid, then placed and paid for Femi):
 select money_paid('SDTEST-C11B', 1800000 + 100000)->>'order_id' is not null;
@@ -103,6 +103,6 @@ select count(*) from receipt_emails where sent_at is null;
 \echo C13 the push function helpers stay private (expect 3 errors):
 set role authenticated;
 select receipt_claim(5);
-select money_start_link_payment(:'pf', 'SDTEST-C13', 'a@b.co');
+select money_start_link_payment(:'pf', 'SDTEST-C13', null);
 select coupon_for((select id from shops limit 1), 'X', 1, null);
 reset role;

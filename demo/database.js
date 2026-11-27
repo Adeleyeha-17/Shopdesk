@@ -1870,9 +1870,8 @@ const RPC = {
       service: SERVICE,
     };
   },
-  pay_link_online: ({ p_pay, p_email }) => {
+  pay_link_online: ({ p_pay }) => {
     const o = S.orders.find((x) => x.pay_token === p_pay) || fail('This pay link isn’t right. Ask for a new one.');
-    if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(String(p_email || '').trim())) fail('Enter your email for the receipt.');
     return RPC.customer_pay_online({ p_token: o.public_token, p_any: true });
   },
   // ---------- Pay online and ShopDesk Delivery (switched on in the demo; the real ones are off until Admin turns them on) ----------
@@ -2995,7 +2994,7 @@ const MONEY = {
   book: (b) => ['hand_to_courier', { p_order: b.order }],
   track: (b) => ['set_courier_progress', { p_order: b.order, p_token: b.token }],
   pay: (b) => ['customer_pay_online', { p_token: b.token }],
-  paylink: (b) => ['pay_link_online', { p_pay: b.pay, p_email: b.email }],
+  paylink: (b) => ['pay_link_online', { p_pay: b.pay }],
   check: (b) => ['customer_paid_online', { p_ref: b.reference }],
   bank: (b) => ['demo_find_account', { p_number: b.account_number, p_bank: b.bank }],
 };

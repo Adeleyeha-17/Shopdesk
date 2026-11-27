@@ -387,6 +387,7 @@ export function renderEmail(p, cfg = {}, now = new Date()) {
 }
 
 // ---------- receipts: "order placed" and "payment confirmed", to the customer, always ----------
+const MONO = `'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace`;
 const naira = (n) => '₦' + new Intl.NumberFormat('en-NG').format(Math.round(Number(n) || 0));
 const dayTime = (iso) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', weekday: 'short', day: 'numeric', month: 'short',
   hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso)).replace(/\s?([ap])m/i, (m, x) => x.toLowerCase() + 'm');
@@ -405,21 +406,28 @@ export function renderReceipt(r) {
   const subject = placed ? `Order ${r.code} placed with ${r.shop}` : `Payment confirmed for ${r.code} · ${r.shop}`;
   const heading = placed ? 'Thanks for your order' : 'Payment confirmed';
   const intro = placed
-    ? `Hi ${first}, ${r.shop} has your order ${r.code}.`
-    : `Hi ${first}, ${r.shop} has your money for ${r.code} and is getting your order ready.`;
+    ? r.fee_pending
+      ? `Hi ${first}, ${r.shop} has your order and will add the delivery fee next.`
+      : `Hi ${first}, ${r.shop} has your order. Pay to confirm it.`
+    : `Hi ${first}, ${r.shop} has your money and is getting your order ready.`;
   const row = (label, amount, strong) => `<tr><td class="${strong ? 'ink' : 'muted'}" style="padding:4px 0;font-size:${strong ? 16 : 14}px;line-height:21px;color:${strong ? C.ink : C.muted};${strong ? 'font-weight:800;' : ''}">${esc(label)}</td>
     <td class="${strong ? 'ink' : 'muted'}" align="right" style="padding:4px 0;font-size:${strong ? 16 : 14}px;line-height:21px;color:${strong ? C.ink : C.muted};white-space:nowrap;${strong ? 'font-weight:800;' : ''}">${esc(amount)}</td></tr>`;
-  const lines = items.map((i) => `<tr><td class="ink line" style="padding:8px 0;border-top:1px solid ${C.line};font-size:15px;line-height:21px;color:${C.ink}">${esc(i.qty)} × ${esc(i.name)}</td>
-    <td class="ink line" align="right" style="padding:8px 0;border-top:1px solid ${C.line};font-size:15px;line-height:21px;color:${C.ink};white-space:nowrap">${esc(naira(i.qty * i.price))}</td></tr>`).join('');
+  const cell = `padding:11px 0;border-top:1px solid ${C.line};font-size:15px;line-height:21px;vertical-align:top`;
+  const lines = items.map((i) => `<tr><td class="muted line" width="30" style="${cell};color:${C.muted}">${esc(i.qty)}×</td>
+    <td class="ink line" style="${cell};color:${C.ink}">${esc(i.name)}</td>
+    <td class="ink line" align="right" style="${cell};color:${C.ink};white-space:nowrap;padding-left:12px">${esc(naira(i.qty * i.price))}</td></tr>`).join('');
   const sums = [];
-  if (r.discount > 0) sums.push(row('Discount' + (r.coupon ? ' (' + r.coupon + ')' : ''), '−' + naira(r.discount)));
+  if (r.discount > 0)
+    sums.push(`<tr><td style="padding:4px 0;font-size:14px;line-height:21px;color:${C.good}">Discount${r.coupon ? ' · ' + esc(r.coupon) : ''}</td>
+      <td align="right" style="padding:4px 0;font-size:14px;line-height:21px;color:${C.good};white-space:nowrap">−${esc(naira(r.discount))}</td></tr>`);
   if (r.mode === 'pickup') sums.push(row('Pick-up', 'Free'));
   else if (r.fee_pending) sums.push(row('Delivery', 'The shop adds it'));
   else if (r.delivery_paid_by === 'customer' && r.delivery_fee > 0) sums.push(row('Delivery', naira(r.delivery_fee)));
   else sums.push(row('Delivery', 'Free'));
   sums.push(row(placed ? 'Total' : 'Paid', naira(placed ? r.to_pay : r.amount_paid || r.to_pay), true));
-  const box = (inner) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px"><tr>
-      <td class="note" style="background:${C.soft};border-radius:12px;padding:14px 16px;font-size:14px;line-height:21px">${inner}</td></tr></table>`;
+  const label = (t) => `<div class="muted" style="font-size:12px;line-height:16px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:${C.muted};margin-bottom:6px">${esc(t)}</div>`;
+  const box = (inner, title) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px"><tr>
+      <td class="note" style="background:${C.soft};border-radius:14px;padding:14px 16px;font-size:14px;line-height:21px">${title ? label(title) : ''}${inner}</td></tr></table>`;
   let how = '';
   let howText = '';
   if (placed) {
@@ -430,19 +438,25 @@ export function renderReceipt(r) {
       how = box(`<div class="ink" style="color:${C.ink};font-weight:700">Pay ${esc(naira(left))} online</div><div class="muted" style="color:${C.muted}">Open your order to pay.</div>`);
       howText = `Pay ${naira(left)} online: open your order to pay.`;
     } else {
-      how = box(`<div class="ink" style="color:${C.ink};font-weight:700">Pay ${esc(naira(left))} in one transfer</div>
-        <div class="muted" style="color:${C.muted};margin-top:6px">${esc(r.bank)}</div>
-        <div class="ink" style="color:${C.ink};font-size:22px;line-height:30px;font-weight:800;letter-spacing:1px">${esc(r.account_number)}</div>
-        <div class="muted" style="color:${C.muted}">${esc(r.account_name)}</div>
-        <div class="muted" style="color:${C.muted};margin-top:8px">Put <strong class="ink" style="color:${C.ink}">${esc(r.code)}</strong> in the transfer note. Pay by ${esc(dayTime(r.pay_by))}, or the order cancels itself.</div>`);
+      how = box(`<div class="ink" style="color:${C.ink};font-size:24px;line-height:32px;font-weight:800;letter-spacing:1.5px;font-family:${MONO}">${esc(r.account_number)}</div>
+        <div class="muted" style="color:${C.muted}">${esc(r.bank)} · ${esc(r.account_name)}</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr>
+          <td class="muted" style="font-size:14px;line-height:21px;color:${C.muted}">Amount</td>
+          <td class="ink" align="right" style="font-size:14px;line-height:21px;color:${C.ink};font-weight:700">${esc(naira(left))}</td></tr>
+          <tr><td class="muted" style="font-size:14px;line-height:21px;color:${C.muted}">Transfer note</td>
+          <td class="ink" align="right" style="font-size:14px;line-height:21px;color:${C.ink};font-weight:700;font-family:${MONO}">${esc(r.code)}</td></tr>
+          <tr><td class="muted" style="font-size:14px;line-height:21px;color:${C.muted}">Pay by</td>
+          <td class="ink" align="right" style="font-size:14px;line-height:21px;color:${C.ink}">${esc(dayTime(r.pay_by))}</td></tr></table>`, 'How to pay');
       howText = `Pay ${naira(left)} in one transfer to ${r.bank} ${r.account_number} (${r.account_name}). Put ${r.code} in the transfer note. Pay by ${dayTime(r.pay_by)}.`;
     }
   } else {
     const where = r.mode === 'pickup' ? 'Pick-up from the shop. We’ll tell you when it’s ready.' : 'Delivery to ' + r.address + '. We’ll tell you when it’s on the way.';
-    how = box(`<div class="muted" style="color:${C.muted}">${esc(where)}</div>`);
+    how = r.mode === 'pickup'
+      ? box(`<div class="ink" style="color:${C.ink}">From ${esc(r.shop)}</div><div class="muted" style="color:${C.muted}">We’ll tell you when it’s ready to pick up.</div>`, 'Pick-up')
+      : box(`<div class="ink" style="color:${C.ink}">${esc(r.address)}</div><div class="muted" style="color:${C.muted}">We’ll tell you when it’s on the way.</div>`, 'Delivery to');
     howText = where;
   }
-  const note = r.note ? `<p class="muted" style="margin:14px 0 0;font-size:14px;line-height:21px;color:${C.muted}">Your note: “${esc(r.note)}”</p>` : '';
+  const note = r.note ? box(`<div class="ink" style="color:${C.ink}">${esc(r.note)}</div>`, 'Your note to the shop') : '';
   const safety = 'Only pay into the account on your order page. ShopDesk never asks for your sign-in code.';
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(subject)}</title>
@@ -468,8 +482,11 @@ export function renderReceipt(r) {
   </td></tr>
   <tr><td class="card" style="background:${C.card};border-radius:18px;padding:26px 24px 24px">
     ${placed ? '' : `<div style="width:44px;height:44px;border-radius:22px;background:#dcfce7;color:${C.good};font-size:24px;line-height:44px;text-align:center;font-weight:800;margin-bottom:12px">&#10003;</div>`}
+    ${placed ? `<div style="display:inline-block;background:#fef3c7;color:#92400e;border-radius:999px;padding:4px 10px;font-size:12px;line-height:16px;font-weight:700;margin-bottom:12px">${r.fee_pending ? 'Waiting for the delivery fee' : 'Waiting for your payment'}</div>` : ''}
     <h1 class="ink" style="margin:0;font-size:23px;line-height:29px;font-weight:800;letter-spacing:-0.3px;color:${C.ink}">${esc(heading)}</h1>
-    <p class="muted" style="margin:6px 0 14px;font-size:15px;line-height:22px;color:${C.muted}">${esc(intro)}</p>
+    <p class="muted" style="margin:6px 0 4px;font-size:15px;line-height:22px;color:${C.muted}">${esc(intro)}</p>
+    <p class="muted" style="margin:0 0 18px;font-size:13px;line-height:19px;color:${C.muted}">Order <span style="font-family:${MONO}">${esc(r.code)}</span> · ${esc(dayTime(placed ? r.at : r.paid_at || r.at))}</p>
+    ${label('Order summary')}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${lines}</table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="line" style="border-top:1px solid ${C.line};margin-top:2px;padding-top:6px">${sums.join('')}</table>
     ${how}${note}
