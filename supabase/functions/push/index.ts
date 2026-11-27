@@ -2,7 +2,8 @@
 // ShopDesk push sender (a Supabase Edge Function named "push").
 // The app calls it right after anything happens (a new order, money in, a message...). It takes the alerts that haven't
 // been sent yet from the database and sends each one to the phones of the person it's for, as a phone notification.
-// It also sends the email backup: one email with what someone missed when they haven't opened ShopDesk for 10 minutes.
+// It also sends the email backup: one email with what someone missed when they haven't opened ShopDesk for 10 minutes,
+// and the customer's receipts ("order placed", "payment confirmed") straight away.
 //   POST {"action":"key"}    -> {"key": "<public key>"}, which phones need to turn alerts on
 //   POST {"action":"flush"}  -> sends whatever is waiting (phone alerts, then any emails due); safe to call any time, by anyone
 //   POST {"action":"email"}  -> sends only the emails due (the database calls this every 5 minutes)
@@ -385,6 +386,115 @@ export function renderEmail(p, cfg = {}, now = new Date()) {
   return { subject, html, text, unsub };
 }
 
+// ---------- receipts: "order placed" and "payment confirmed", to the customer, always ----------
+const naira = (n) => '₦' + new Intl.NumberFormat('en-NG').format(Math.round(Number(n) || 0));
+const dayTime = (iso) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', weekday: 'short', day: 'numeric', month: 'short',
+  hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso)).replace(/\s?([ap])m/i, (m, x) => x.toLowerCase() + 'm');
+
+// The email for one receipt, or null when it would only confuse (the order was cancelled, or is already paid when the
+// "order placed" email finally goes).
+export function renderReceipt(r) {
+  if (!r || r.status === 'cancelled') return null;
+  const placed = r.kind === 'placed';
+  if (placed && !['awaiting', 'part'].includes(r.status)) return null;
+  const first = String(r.name || '').trim().split(/\s+/)[0] || 'there';
+  const items = r.items || [];
+  const gross = items.reduce((a, i) => a + i.qty * i.price, 0);
+  const left = Math.max(0, r.to_pay - (r.amount_paid || 0));
+  const target = SITE + '/o/' + r.token;
+  const subject = placed ? `Order ${r.code} placed with ${r.shop}` : `Payment confirmed for ${r.code} · ${r.shop}`;
+  const heading = placed ? 'Thanks for your order' : 'Payment confirmed';
+  const intro = placed
+    ? `Hi ${first}, ${r.shop} has your order ${r.code}.`
+    : `Hi ${first}, ${r.shop} has your money for ${r.code} and is getting your order ready.`;
+  const row = (label, amount, strong) => `<tr><td class="${strong ? 'ink' : 'muted'}" style="padding:4px 0;font-size:${strong ? 16 : 14}px;line-height:21px;color:${strong ? C.ink : C.muted};${strong ? 'font-weight:800;' : ''}">${esc(label)}</td>
+    <td class="${strong ? 'ink' : 'muted'}" align="right" style="padding:4px 0;font-size:${strong ? 16 : 14}px;line-height:21px;color:${strong ? C.ink : C.muted};white-space:nowrap;${strong ? 'font-weight:800;' : ''}">${esc(amount)}</td></tr>`;
+  const lines = items.map((i) => `<tr><td class="ink line" style="padding:8px 0;border-top:1px solid ${C.line};font-size:15px;line-height:21px;color:${C.ink}">${esc(i.qty)} × ${esc(i.name)}</td>
+    <td class="ink line" align="right" style="padding:8px 0;border-top:1px solid ${C.line};font-size:15px;line-height:21px;color:${C.ink};white-space:nowrap">${esc(naira(i.qty * i.price))}</td></tr>`).join('');
+  const sums = [];
+  if (r.discount > 0) sums.push(row('Discount' + (r.coupon ? ' (' + r.coupon + ')' : ''), '−' + naira(r.discount)));
+  if (r.mode === 'pickup') sums.push(row('Pick-up', 'Free'));
+  else if (r.fee_pending) sums.push(row('Delivery', 'The shop adds it'));
+  else if (r.delivery_paid_by === 'customer' && r.delivery_fee > 0) sums.push(row('Delivery', naira(r.delivery_fee)));
+  else sums.push(row('Delivery', 'Free'));
+  sums.push(row(placed ? 'Total' : 'Paid', naira(placed ? r.to_pay : r.amount_paid || r.to_pay), true));
+  const box = (inner) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px"><tr>
+      <td class="note" style="background:${C.soft};border-radius:12px;padding:14px 16px;font-size:14px;line-height:21px">${inner}</td></tr></table>`;
+  let how = '';
+  let howText = '';
+  if (placed) {
+    if (r.fee_pending) {
+      how = box(`<div class="ink" style="color:${C.ink};font-weight:700">Wait for the delivery fee</div><div class="muted" style="color:${C.muted}">${esc(r.shop)} adds it next. We’ll tell you when to pay.</div>`);
+      howText = `Wait for the delivery fee: ${r.shop} adds it next. We’ll tell you when to pay.`;
+    } else if (r.online_only) {
+      how = box(`<div class="ink" style="color:${C.ink};font-weight:700">Pay ${esc(naira(left))} online</div><div class="muted" style="color:${C.muted}">Open your order to pay.</div>`);
+      howText = `Pay ${naira(left)} online: open your order to pay.`;
+    } else {
+      how = box(`<div class="ink" style="color:${C.ink};font-weight:700">Pay ${esc(naira(left))} in one transfer</div>
+        <div class="muted" style="color:${C.muted};margin-top:6px">${esc(r.bank)}</div>
+        <div class="ink" style="color:${C.ink};font-size:22px;line-height:30px;font-weight:800;letter-spacing:1px">${esc(r.account_number)}</div>
+        <div class="muted" style="color:${C.muted}">${esc(r.account_name)}</div>
+        <div class="muted" style="color:${C.muted};margin-top:8px">Put <strong class="ink" style="color:${C.ink}">${esc(r.code)}</strong> in the transfer note. Pay by ${esc(dayTime(r.pay_by))}, or the order cancels itself.</div>`);
+      howText = `Pay ${naira(left)} in one transfer to ${r.bank} ${r.account_number} (${r.account_name}). Put ${r.code} in the transfer note. Pay by ${dayTime(r.pay_by)}.`;
+    }
+  } else {
+    const where = r.mode === 'pickup' ? 'Pick-up from the shop. We’ll tell you when it’s ready.' : 'Delivery to ' + r.address + '. We’ll tell you when it’s on the way.';
+    how = box(`<div class="muted" style="color:${C.muted}">${esc(where)}</div>`);
+    howText = where;
+  }
+  const note = r.note ? `<p class="muted" style="margin:14px 0 0;font-size:14px;line-height:21px;color:${C.muted}">Your note: “${esc(r.note)}”</p>` : '';
+  const safety = 'Only pay into the account on your order page. ShopDesk never asks for your sign-in code.';
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(subject)}</title>
+<style>
+  body{margin:0;padding:0}
+  a{color:inherit}
+  @media (prefers-color-scheme: dark){
+    .bg{background:#0d0e10!important}.card{background:#17181b!important}.ink{color:#f2f3f5!important}.muted{color:#9ea3ab!important}
+    .line{border-color:#25272b!important}.btn{background:#f2f3f5!important}.btn a{color:#0d0e10!important}
+    .logo{background:#f2f3f5!important;color:#0d0e10!important}.note{background:#25272b!important}
+  }
+</style></head>
+<body class="bg" style="margin:0;padding:0;background:${C.bg}">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${esc(intro)}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg" style="background:${C.bg};font-family:${FONT};color:${C.ink}">
+<tr><td align="center" style="padding:28px 12px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px">
+  <tr><td style="padding:0 6px 14px">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      <td class="logo" style="width:28px;height:28px;background:${C.ink};border-radius:8px;color:#ffffff;font-weight:800;font-size:17px;text-align:center;line-height:28px;font-family:${FONT}">S</td>
+      <td class="ink" style="padding-left:9px;font-weight:800;font-size:18px;letter-spacing:-0.3px;color:${C.ink};font-family:${FONT}">ShopDesk</td>
+    </tr></table>
+  </td></tr>
+  <tr><td class="card" style="background:${C.card};border-radius:18px;padding:26px 24px 24px">
+    ${placed ? '' : `<div style="width:44px;height:44px;border-radius:22px;background:#dcfce7;color:${C.good};font-size:24px;line-height:44px;text-align:center;font-weight:800;margin-bottom:12px">&#10003;</div>`}
+    <h1 class="ink" style="margin:0;font-size:23px;line-height:29px;font-weight:800;letter-spacing:-0.3px;color:${C.ink}">${esc(heading)}</h1>
+    <p class="muted" style="margin:6px 0 14px;font-size:15px;line-height:22px;color:${C.muted}">${esc(intro)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${lines}</table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="line" style="border-top:1px solid ${C.line};margin-top:2px;padding-top:6px">${sums.join('')}</table>
+    ${how}${note}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px"><tr>
+      <td class="btn" align="center" style="background:${C.ink};border-radius:12px">
+        <a href="${esc(target)}" style="display:block;padding:14px 18px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;font-family:${FONT}">View order</a>
+      </td></tr></table>
+    <p class="muted" style="margin:16px 0 0;font-size:13px;line-height:19px;color:${C.muted}">&#128274; ${esc(safety)}</p>
+  </td></tr>
+  <tr><td class="muted" style="padding:18px 10px 0;text-align:center;font-size:12px;line-height:18px;color:${C.muted}">
+    You get this because you ordered from ${esc(r.shop)} on ShopDesk.<br>
+    <a href="${SITE}" class="muted" style="color:${C.muted};text-decoration:none">shopdesk.com.ng</a>
+  </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`;
+  const text = [heading, '', intro, '', ...items.map((i) => `${i.qty} × ${i.name}  ${naira(i.qty * i.price)}`),
+    ...(r.discount > 0 ? [`Discount${r.coupon ? ' (' + r.coupon + ')' : ''}  −${naira(r.discount)}`] : []),
+    r.mode === 'pickup' ? 'Pick-up  Free' : r.fee_pending ? 'Delivery  The shop adds it'
+      : r.delivery_paid_by === 'customer' && r.delivery_fee > 0 ? 'Delivery  ' + naira(r.delivery_fee) : 'Delivery  Free',
+    `${placed ? 'Total' : 'Paid'}  ${naira(placed ? r.to_pay : r.amount_paid || r.to_pay)}`, '', howText,
+    ...(r.note ? ['', 'Your note: ' + r.note] : []), '', 'View order: ' + target, '', safety].join('\n');
+  return { subject, html, text };
+}
+
 // ---------- sending: plain SMTP over SSL (port 465), no extra packages ----------
 function b64(bytes) {
   let s = '';
@@ -415,8 +525,8 @@ export function buildMessage({ from, to, subject, html, text, unsub, now = new D
     'Date: ' + now.toUTCString(),
     'Message-ID: <' + crypto.randomUUID() + '@shopdesk.com.ng>',
     'MIME-Version: 1.0',
-    'List-Unsubscribe: <' + unsub + '>',
-    ...(unsub.includes('?unsub=') ? ['List-Unsubscribe-Post: List-Unsubscribe=One-Click'] : []),
+    ...(unsub ? ['List-Unsubscribe: <' + unsub + '>'] : []),
+    ...(unsub && unsub.includes('?unsub=') ? ['List-Unsubscribe-Post: List-Unsubscribe=One-Click'] : []),
     'Auto-Submitted: auto-generated',
     'X-Auto-Response-Suppress: All',
     'Content-Type: multipart/alternative; boundary="' + b + '"',
@@ -500,13 +610,28 @@ const EMAIL_OK = /^[^\s@<>"(),;:]+@[^\s@<>"(),;:]+\.[^\s@<>"(),;:]+$/;
 export async function sendEmails(sql, opts = {}) {
   const cfg = opts.mail !== undefined ? opts.mail : mailConfig();
   if (!cfg) return { emails: 0, failed: 0, off: 'no email account set up' };
+  const receipts = (await sql`select public.receipt_claim(20) as c`)[0].c || [];
   const people = (await sql`select public.email_claim(20) as c`)[0].c || [];
-  if (!people.length) return { emails: 0, failed: 0 };
+  if (!people.length && !receipts.length) return { emails: 0, failed: 0 };
   let s = null, emails = 0, failed = 0, why = '';
   try {
     s = await smtpOpen(cfg);
   } catch (e) {
     why = e.message;
+  }
+  for (const r of receipts) {
+    try {
+      if (!s) throw new Error(why || 'No mail connection.');
+      const m = renderReceipt(r);
+      if (!m || !EMAIL_OK.test(r.email || '')) continue;
+      await s.send(cfg.from, r.email, buildMessage({ from: cfg.from, to: r.email, subject: m.subject, html: m.html, text: m.text }));
+      emails++;
+    } catch (e) {
+      failed++;
+      console.error('receipt: ' + e.message);
+      const forGood = e.stage === 'to' && e.code >= 500;
+      if (!forGood) await sql`select public.receipt_unclaim(${[r.id]}::bigint[])`;
+    }
   }
   for (const p of people) {
     const ids = p.alerts.map((a) => a.id);

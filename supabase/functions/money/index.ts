@@ -14,6 +14,7 @@
 //   POST {"action":"book", "order":id}                       shop: book the courier for a paid, packed order
 //   POST {"action":"track", "order":id} or {"token":...}     shop or customer: the latest from the courier
 //   POST {"action":"pay", "token":...}                       customer: start paying online, returns the Paystack page
+//   POST {"action":"paylink", "pay":..., "email":...}        anyone with the order's pay link: pay it online for the customer
 //   POST {"action":"check", "reference":...}                 customer back from Paystack: was it paid?
 //   POST {"action":"bank", "account_number", "bank"?}        signed in: which bank the account is at, and the name on it (live key only)
 //   POST {"action":"status"}                                 admin: are the keys set, test or live, courier wallet balance
@@ -360,7 +361,8 @@ export async function ensureSubaccount(sql, api, shop) {
   return sub;
 }
 
-export async function startPayment(sql, api, r, token, ref) {
+// back: the page Paystack returns to (the order page, or the pay link page).
+export async function startPayment(sql, api, r, back, ref) {
   // With a test key there is no split: Paystack won't make subaccounts for a business it hasn't activated, and test money
   // never settles anyway. The whole test payment goes to ShopDesk's test balance.
   const sub = api.testKey() ? null : await ensureSubaccount(sql, api, r.shop);
@@ -375,8 +377,8 @@ export async function startPayment(sql, api, r, token, ref) {
     currency: 'NGN',
     reference: ref,
     ...(sub && { subaccount: sub, bearer: fee > 0 || (r.delivery_part > 0 && r.fee_by === 'shopdesk') ? 'account' : 'subaccount' }),
-    callback_url: SITE + '/o/' + token,
-    metadata: { order_id: r.order_id, shop: r.shop.slug, delivery_part: r.delivery_part, card_fee: fee, shopdesk_fee: service, cancel_action: SITE + '/o/' + token },
+    callback_url: SITE + back,
+    metadata: { order_id: r.order_id, shop: r.shop.slug, delivery_part: r.delivery_part, card_fee: fee, shopdesk_fee: service, cancel_action: SITE + back },
   };
   if (sub && r.delivery_part + fee + service > 0) body.transaction_charge = (r.delivery_part + fee + service) * 100;
   try {
@@ -486,7 +488,21 @@ const ACTIONS = {
     }
     const ref = 'SD' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomUUID().slice(0, 8).toUpperCase();
     const r = await asUser(sql, uid, (tx) => one(tx`select public.money_start_payment(${token}::uuid, ${ref}) as r`));
-    return startPayment(sql, api, r, token, ref);
+    return startPayment(sql, api, r, '/o/' + token, ref);
+  },
+
+  // Someone else pays with the pay link the customer sent them. No sign-in: the link is the secret.
+  async paylink({ sql, api, body }) {
+    const pay = String(body.pay || '');
+    if (!/^[0-9a-f-]{36}$/i.test(pay)) throw say('This pay link isn’t right. Ask for a new one.');
+    if (api.testKey()) {
+      const t = (await sql`select s.pay_test from public.orders o join public.shops s on s.id = o.shop_id where o.pay_token = ${pay}::uuid`)[0];
+      if (!t) throw say('This pay link isn’t right. Ask for a new one.');
+      if (!t.pay_test) throw say('Paying online isn’t on yet. Pay by transfer for now.');
+    }
+    const ref = 'SD' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomUUID().slice(0, 8).toUpperCase();
+    const r = (await sql`select public.money_start_link_payment(${pay}::uuid, ${ref}, ${String(body.email || '').slice(0, 120)}) as r`)[0].r;
+    return startPayment(sql, api, r, '/pay/' + pay, ref);
   },
 
   async check({ sql, api, body }) {

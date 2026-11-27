@@ -146,6 +146,8 @@ await step('the customer pays online only: one short service fee line, no totals
   await pause(500);
   await p.locator('.pay-online button').click();
   await p.locator('.demo-paystack .dp-pay').click();
+  await p.locator('.paid-done h2:text-is("Payment successful")').waitFor();
+  await p.locator('.paid-done button:has-text("View order")').click();
   await p.locator('h2:text-is("Paid · being packed")').waitFor();
 });
 
@@ -870,6 +872,71 @@ await step('a shop page shows its rating and opens its ratings page, and has a N
   await p.locator('.back-btn').click();
   await p.locator('.near-pill').click();
   await see('Shops near you');
+});
+
+// ---------------- the note for the shop, discount codes, the sale banner and pay links (update 032) ----------------
+let code3 = '';
+await step('the shop page shows its sale banner; at checkout a code comes off the total and a note goes to the shop', async () => {
+  await as('Customer');
+  await patch(() => {}, '/bimpes-beauty');
+  await p.locator('.sale-banner:has-text("BF15")').waitFor();
+  const add = p.locator('.pcard:not(:has(.pname:text-is("Hair growth oil"))) button[data-inc]').first();
+  for (let i = 0; i < 4; i++) await add.click();
+  await tab('Cart').click();
+  await p.locator('button:has-text("Checkout")').click();
+  await see('Place order');
+  await p.locator('button[role="radio"]:has-text("pick it up")').click();
+  await p.locator('button:has-text("Have a discount code?")').click();
+  await p.locator('input[aria-label="Discount code"]').fill('nope');
+  await p.locator('.co-code button:has-text("Apply")').click();
+  await see('doesn’t work in this shop');
+  await p.locator('input[aria-label="Discount code"]').fill('bf15');
+  await p.locator('.co-code button:has-text("Apply")').click();
+  await p.locator('.co-off:has-text("BF15")').waitFor();
+  await p.locator('#coNote').fill('Please call when it is ready');
+  await p.locator('button:has-text("Place order")').click();
+  await see('Your note: “Please call when it is ready”');
+  await see('Code BF15:');
+  code3 = (await text()).match(/Order ([A-Z]{2,4}-\d+)/)[1];
+  await as('Shop owner');
+  await nav('Orders');
+  await p.locator('input[placeholder^="Search"]').fill(code3);
+  const c = p.locator(`article.card:has-text("${code3}")`).first();
+  await c.locator('.order-note:has-text("Please call when it is ready")').waitFor();
+  await c.locator('.order-off:has-text("BF15")').waitFor();
+});
+
+await step('the customer asks someone to pay: the pay link shows the items and amount, not their details, and pays online', async () => {
+  await as('Customer');
+  await tab('Orders').click();
+  await p.locator(`a:has-text("${code3}")`).click();
+  await p.locator('.ask-pay button:has-text("Ask someone to pay")').waitFor();
+  const pay = await p.evaluate(([key, code]) => {
+    const S = JSON.parse(localStorage.getItem(key));
+    const o = S.orders.find((x) => String(code).endsWith('-' + x.id));
+    return { token: o.pay_token, name: o.customer_name, phone: o.customer_phone };
+  }, [KEY, code3]);
+  expect(!!pay.token, 'the order has no pay link');
+  await patch((S) => { S.money_off = false; }, '/pay/' + pay.token);
+  await see('Someone asked you to pay');
+  const page = await text();
+  expect(!page.includes(pay.phone) && !page.includes(pay.name), 'the pay link shows the customer details');
+  await p.locator('#plEmail').fill('friend@example.com');
+  await p.locator('.pay-online button.btn').click();
+  await p.locator('.demo-paystack .dp-pay').click();
+  await p.locator('.paid-done h2:text-is("Payment successful")').waitFor();
+});
+
+await step('the shop sees how its codes did and makes a new one in the Shop tab', async () => {
+  await as('Shop owner');
+  await nav('Shop');
+  await see('Sales and discount codes');
+  await p.locator('.promo-codes li:has-text("BF15"):has-text("Used 1")').waitFor();
+  await p.locator('.promos button:has-text("New code")').click();
+  await p.locator('#cpCode').fill('xmas10');
+  await p.locator('#cpValue').fill('10');
+  await p.locator('.promos button:has-text("Save code")').click();
+  await p.locator('.promo-codes li:has-text("XMAS10")').waitFor();
 });
 
 await step('no errors in the page', async () => {

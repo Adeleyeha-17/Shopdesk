@@ -21,6 +21,8 @@ export function receiptFromOrderPage(o) {
     fee: o.delivery_fee,
     feeBy: o.delivery_paid_by,
     paid: o.amount_paid,
+    discount: o.discount || 0,
+    coupon: o.coupon || '',
     online: !!o.receipt.online,
     refund: o.receipt.refund || null,
   };
@@ -43,6 +45,8 @@ export function receiptFromShopOrder(o, shop, problem, online) {
     fee: o.delivery_fee,
     feeBy: o.delivery_paid_by,
     paid: o.amount_paid,
+    discount: o.discount || 0,
+    coupon: o.coupon_code || '',
     online: !!online,
     refund: back > 0 ? { amount: back, at: problem.refund_received_at } : null,
   };
@@ -57,13 +61,15 @@ function linesOf(r) {
   }));
   const itemsTotal = r.items.reduce((a, i) => a + i.qty * i.price, 0);
   const extra = [];
+  const off = r.discount || 0;
+  if (off > 0) extra.push({ label: 'Discount' + (r.coupon ? ' · ' + r.coupon : ''), amount: '−' + naira(off) });
   let charged = 0;
   if (r.mode === 'pickup') extra.push({ label: 'Pick-up', amount: 'Free' });
   else if (r.feeBy === 'customer' && r.fee > 0) {
     charged = r.fee;
     extra.push({ label: 'Delivery', amount: naira(r.fee) });
   } else extra.push({ label: 'Delivery', amount: 'Free' });
-  const fee = r.paid - itemsTotal - charged;
+  const fee = r.paid - (itemsTotal - off) - charged;
   if (fee > 0) extra.push({ label: 'Service fee', amount: naira(fee) });
   const how = r.online ? 'Paid online' : `Bank transfer, confirmed by ${r.shop}`;
   const refund = r.refund ? `Refunded ${naira(r.refund.amount)} on ${dateOf(r.refund.at)}` : '';

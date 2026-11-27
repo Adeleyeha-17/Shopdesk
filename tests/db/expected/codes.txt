@@ -1,0 +1,76 @@
+C1 a shop makes codes; bad ones get a plain reason (expect 2 ids, then 5 errors):
+t
+t
+psql:codes.sql:18: ERROR:  You already have a code called TENOFF.
+CONTEXT:  PL/pgSQL function save_coupon(bigint,text,text,integer,integer,date,integer,boolean) line N at RAISE
+psql:codes.sql:19: ERROR:  A code needs 3 to 20 letters or numbers, with no spaces.
+CONTEXT:  PL/pgSQL function save_coupon(bigint,text,text,integer,integer,date,integer,boolean) line N at RAISE
+psql:codes.sql:20: ERROR:  The percentage needs to be from 1 to 90.
+CONTEXT:  PL/pgSQL function save_coupon(bigint,text,text,integer,integer,date,integer,boolean) line N at RAISE
+psql:codes.sql:21: ERROR:  The end date has already passed.
+CONTEXT:  PL/pgSQL function save_coupon(bigint,text,text,integer,integer,date,integer,boolean) line N at RAISE
+psql:codes.sql:23: ERROR:  Only shops can make discount codes.
+CONTEXT:  PL/pgSQL function save_coupon(bigint,text,text,integer,integer,date,integer,boolean) line N at RAISE
+C2 only the shop sees its codes (expect 2 for Kemi, 0 for Tolu):
+2
+0
+C3 the storefront says the shop has codes; the code box checks a code (expect true, then 2000 off 20000, then 2 errors):
+true
+2000|2000
+psql:codes.sql:34: ERROR:  This code is for orders of ₦15,000 or more.
+CONTEXT:  PL/pgSQL function coupon_for(uuid,text,integer,uuid) line N at RAISE
+PL/pgSQL function check_coupon(text,text,integer) line N at assignment
+psql:codes.sql:35: ERROR:  That code doesn't work in this shop.
+CONTEXT:  PL/pgSQL function coupon_for(uuid,text,integer,uuid) line N at RAISE
+PL/pgSQL function check_coupon(text,text,integer) line N at assignment
+C4 an order with a code and a note: the total is after the discount, the shop is told, a receipt email is queued (expect 18000 | 2000 | TENOFF | note):
+18000 | 2000 | TENOFF | Please wrap it as a gift
+Tolu · ₦18,000 · pick-up · note
+placed
+C5 each customer uses a code once; a cancelled order gives the use back (expect an error, then an order after cancelling):
+psql:codes.sql:47: ERROR:  You've already used this code.
+CONTEXT:  PL/pgSQL function coupon_for(uuid,text,integer,uuid) line N at RAISE
+PL/pgSQL function place_order(text,jsonb,jsonb) line N at assignment
+9000
+C6 a code with 2 uses is used up after 2 orders; the minimum order counts the real prices (expect error, 18000, 18000, used up):
+psql:codes.sql:53: ERROR:  This code is for orders of ₦15,000 or more.
+CONTEXT:  PL/pgSQL function coupon_for(uuid,text,integer,uuid) line N at RAISE
+PL/pgSQL function place_order(text,jsonb,jsonb) line N at assignment
+18000
+18000
+psql:codes.sql:58: ERROR:  That code has been used up.
+CONTEXT:  PL/pgSQL function coupon_for(uuid,text,integer,uuid) line N at RAISE
+PL/pgSQL function place_order(text,jsonb,jsonb) line N at assignment
+C7 the shop sees how each code did; a switched-off or ended code stops working (expect TENOFF 1 uses, FLAT2K 2 uses 4000 off, then 2 errors):
+FLAT2K 2 uses 4000 off, TENOFF 1 uses 1000 off
+t
+psql:codes.sql:66: ERROR:  That code doesn't work in this shop.
+CONTEXT:  PL/pgSQL function coupon_for(uuid,text,integer,uuid) line N at RAISE
+PL/pgSQL function check_coupon(text,text,integer) line N at assignment
+psql:codes.sql:67: ERROR:  That code has ended.
+CONTEXT:  PL/pgSQL function coupon_for(uuid,text,integer,uuid) line N at RAISE
+PL/pgSQL function check_coupon(text,text,integer) line N at assignment
+C8 a ₦ off code always leaves ₦100 to pay (expect 100):
+100
+C9 the sale banner shows until its date (expect the banner, then nothing once it has passed):
+Sale ends Sunday
+none
+C10 the pay link is only for the customer, and shows no address or phone (expect a link for Femi, none for others, no address):
+t
+t
+18000|t|f
+C11 someone else pays online with the link: their email goes to Paystack (expect an error without an email, then the payer email):
+psql:codes.sql:93: ERROR:  Enter your email for the receipt.
+CONTEXT:  PL/pgSQL function money_start_link_payment(uuid,text,text) line N at RAISE
+payer@example.com
+psql:codes.sql:95: ERROR:  This pay link isn't right. Ask for a new one.
+CONTEXT:  PL/pgSQL function money_start_link_payment(uuid,text,text) line N at RAISE
+C12 paying in full queues the "payment confirmed" email; the sender gets the order with the customer email (expect paid, then placed and paid for Femi):
+t
+placed paid
+placed femi@example.com true, paid femi@example.com true
+0
+C13 the push function helpers stay private (expect 3 errors):
+psql:codes.sql:105: ERROR:  permission denied for function receipt_claim
+psql:codes.sql:106: ERROR:  permission denied for function money_start_link_payment
+psql:codes.sql:107: ERROR:  permission denied for function coupon_for

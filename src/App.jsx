@@ -2,6 +2,7 @@
 //   /              the vendor's app (sign in, set up your shop, then Sales / Orders / Stock / Shop)
 //   /admin         ShopDesk Admin (only your owner account)
 //   /privacy       privacy notice and shop rules
+//   /pay/<token>   a pay link: someone else pays a customer's order (shop, items and amount only)
 //   /legal         the legal pages: /terms (Terms of Use), /prohibited (prohibited items), /privacy
 //   /shops         a customer's shops (every shop they've opened or ordered from)
 //   /orders        a customer's own orders
@@ -24,6 +25,7 @@ import { RatingsPage } from './customer/RatingsPage.jsx';
 import { ShopPage } from './customer/ShopPage.jsx';
 import { RiderPage } from './rider/RiderPage.jsx';
 import { OrderPage } from './customer/OrderPage.jsx';
+import { PayLinkPage } from './customer/PayLinkPage.jsx';
 import { MyOrdersPage } from './customer/MyOrdersPage.jsx';
 import { OrderHistoryPage } from './customer/OrderHistory.jsx';
 import { HelpPage } from './customer/HelpPage.jsx';
@@ -113,6 +115,8 @@ function Pages() {
   if (p === '/email-off') return <EmailOffPage />;
   const o = p.match(/^\/o\/([0-9a-f-]{36})$/i);
   if (o) return <OrderPage token={o[1]} />;
+  const pl = p.match(/^\/pay\/([0-9a-f-]{36})$/i);
+  if (pl) return <PayLinkPage token={pl[1]} />;
   const rider = p.match(/^\/r\/([0-9a-f-]{36})$/i);
   if (rider) return <RiderPage token={rider[1]} />;
   const r = p.match(/^\/([a-z0-9-]{3,30})\/ratings$/i);

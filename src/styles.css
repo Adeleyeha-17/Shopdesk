@@ -1405,3 +1405,50 @@ a.card.profile > div { flex: 1; }
 .faq-who { padding: 12px 16px 6px; }
 .faq-who + details summary { padding-top: 12px; }
 .linkbtn.bad { color: var(--bad); }
+/* "Payment successful", straight after paying online */
+.paid-done { text-align: center; padding: 28px 20px; display: grid; gap: 10px; justify-items: center; }
+.paid-done h2 { margin: 4px 0 0; }
+.paid-tick { width: 64px; height: 64px; border-radius: 50%; background: color-mix(in srgb, var(--good) 16%, transparent); display: grid; place-items: center; animation: paid-pop .35s ease-out both; }
+.paid-tick svg { width: 34px; height: 34px; fill: none; stroke: var(--good); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.paid-amt { font: 800 30px var(--body); margin: 0; font-variant-numeric: tabular-nums; }
+.paid-items { list-style: none; margin: 4px 0; padding: 12px 0; width: 100%; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); display: grid; gap: 6px; text-align: left; font-size: 14px; }
+.paid-items li { display: flex; justify-content: space-between; gap: 12px; }
+.paid-items li span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.paid-actions { display: grid; gap: 8px; width: 100%; margin-top: 6px; }
+.paid-actions .btn { text-align: center; text-decoration: none; }
+@keyframes paid-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .paid-tick { animation: none; } }
+/* a shop's sale banner, at the top of its page */
+.sale-banner { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 11px 14px; border-radius: 12px; background: color-mix(in srgb, var(--wait) 16%, var(--bg)); color: var(--ink); font-weight: 700; font-size: 14px; line-height: 19px; }
+.sale-banner svg { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: var(--wait); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+/* checkout: the discount code and the note for the shop */
+.co-off span:first-child { color: var(--good); font-size: 14px; }
+.co-off .num { color: var(--good); }
+.co-off .linkbtn { font-size: 13px; margin-left: 4px; }
+.co-code { margin-top: 12px; }
+.co-code-row { display: flex; gap: 8px; }
+.co-code-row input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: .5px; }
+.co-code .err { margin: 6px 0 0; }
+.co-code-note { margin: 8px 0 0; }
+.co-shopnote { margin: 14px 0 0; }
+.co-shopnote textarea { resize: vertical; }
+/* order page: "Ask someone to pay"; the shop's order card: the customer's note and the discount */
+.ask-pay { display: grid; gap: 2px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); justify-items: start; }
+.ask-pay .ok { margin-top: 6px; }
+.order-note { background: var(--soft); border-radius: 10px; padding: 9px 12px; font-size: 14px; line-height: 20px; margin: 8px 0; }
+.order-off .sub, .order-off .num { color: var(--good); }
+/* Shop tab > Sales and discount codes */
+.promos .promo-block + .promo-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.promos .promo-block > .note { margin-top: 0; }
+.promos .sale-banner { margin: 10px 0; }
+.promo-state { margin: 4px 0 10px; }
+.promo-codes { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 10px; }
+.promo-codes li { display: grid; gap: 4px; background: var(--soft); border-radius: 12px; padding: 12px 14px; }
+.promo-codes .btns { margin-top: 6px; }
+.promo-code-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.promo-code-top .mono { font-size: 16px; letter-spacing: .5px; }
+.promo-new { display: grid; gap: 4px; background: var(--soft); border-radius: 12px; padding: 14px; margin-top: 8px; }
+.promo-new .seg { margin: 6px 0 8px; }
+.promo-new .seg button { flex: 1; }
+.promo-new input { background: var(--bg); }
+.promo-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

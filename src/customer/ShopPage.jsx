@@ -258,7 +258,12 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [picking, setPicking] = useState(null); // the product whose sheet is open (its details, or its sizes)
   const [find, setFind] = useState(''); // search this shop's products
   const [inSearch, setInSearch] = useState(false); // the search box is being used
-  const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '', area: '' });
+  const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '', area: '', note: '' });
+  const [codeOpen, setCodeOpen] = useState(false); // the discount code box
+  const [codeIn, setCodeIn] = useState('');
+  const [coupon, setCoupon] = useState(null); // the code that worked: { code, kind, value, min_total }
+  const [codeMsg, setCodeMsg] = useState('');
+  const [codeBusy, setCodeBusy] = useState(false);
   const [areaOpen, setAreaOpen] = useState(false);
   const [areaPicked, setAreaPicked] = useState(false); // they chose the area themselves: typing doesn't change it
   // where this customer came from (Instagram, TikTok, a WhatsApp link...), for the shop's report
@@ -419,6 +424,10 @@ export function ShopPage({ slug, step = 'shop' }) {
     else if (cart[p.id] > 0) lines.push({ key: p.id, p, q: cart[p.id], price: payPrice(p), name: p.name });
   });
   const sub = lines.reduce((a, l) => a + l.q * l.price, 0);
+  // what the code takes off, worked out the same way as the database (which checks it again when the order is placed)
+  const off = !coupon || sub < coupon.min_total ? 0
+    : Math.max(0, Math.min(coupon.kind === 'percent' ? Math.floor((sub * coupon.value) / 100) : coupon.value, sub - 100));
+  const due = sub - off;
   subNow.current = sub;
   const sheet = picking && products.find((p) => p.id === picking);
   const words = find.trim().toLowerCase();
@@ -451,6 +460,25 @@ export function ShopPage({ slug, step = 'shop' }) {
   const detailsForm = editDetails || !(saved && saved.name && saved.phone);
   const addrForm = editAddr || !(form.address && (addrs.length || (saved && saved.address)));
 
+  async function applyCode() {
+    const c = codeIn.replace(/\s/g, '').toUpperCase();
+    if (c.length < 3) {
+      setCodeMsg('Type the code.');
+      return;
+    }
+    setCodeBusy(true);
+    setCodeMsg('');
+    const { data, error } = await supabase.rpc('check_coupon', { p_slug: slug, p_code: c, p_total: sub });
+    setCodeBusy(false);
+    if (error) {
+      setCodeMsg(errText(error));
+      return;
+    }
+    setCoupon(data);
+    setCodeOpen(false);
+    setCodeIn('');
+  }
+
   async function place() {
     const items = lines.map((l) => ({ product_id: l.p.id, ...(l.o ? { option_id: l.o.id } : {}), qty: l.q }));
     if (!items.length) {
@@ -476,7 +504,7 @@ export function ShopPage({ slug, step = 'shop' }) {
     setMsg('');
     const { data, error } = await supabase.rpc('place_order', {
       p_slug: slug,
-      p_customer: { ...form, source: sourceFor(slug) },
+      p_customer: { ...form, source: sourceFor(slug), ...(coupon && off > 0 ? { coupon: coupon.code } : {}) },
       p_items: items,
     });
     setBusy(false);
@@ -511,6 +539,14 @@ export function ShopPage({ slug, step = 'shop' }) {
           </a>
         }
       >
+        {shop.banner && (
+          <div className="sale-banner" role="note">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 12l9-9h8v8l-9 9zM15.5 8.5h.01" />
+            </svg>
+            <span>{shop.banner}</span>
+          </div>
+        )}
         <div className="shop-intro">
           <h2>{shop.name}</h2>
           <p className="note">
@@ -979,6 +1015,17 @@ export function ShopPage({ slug, step = 'shop' }) {
                 <span className="sub">Items</span>
                 <span className="num">{naira(sub)}</span>
               </div>
+              {off > 0 && (
+                <div className="row co-off">
+                  <span>
+                    Discount · {coupon.code}{' '}
+                    <button className="linkbtn" onClick={() => setCoupon(null)}>
+                      Remove
+                    </button>
+                  </span>
+                  <span className="num">−{naira(off)}</span>
+                </div>
+              )}
               <div className="row">
                 <span className="sub">Delivery</span>
                 <span>{feeText}</span>
@@ -986,10 +1033,57 @@ export function ShopPage({ slug, step = 'shop' }) {
               <div className="row co-total">
                 <span>Total</span>
                 <span className="num">
-                  {naira(sub)}
+                  {naira(due)}
                   {plusDelivery ? ' + delivery' : ''}
                 </span>
               </div>
+            </div>
+            {coupon && off === 0 && (
+              <p className="note co-code-note">
+                {coupon.code} is for orders of {naira(coupon.min_total)} or more.{' '}
+                <button className="linkbtn" onClick={() => setCoupon(null)}>
+                  Remove
+                </button>
+              </p>
+            )}
+            {shop.has_coupons && !coupon && (
+              <div className="co-code">
+                {codeOpen ? (
+                  <>
+                    <div className="co-code-row">
+                      <input
+                        aria-label="Discount code"
+                        placeholder="Discount code"
+                        value={codeIn}
+                        onChange={(e) => setCodeIn(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && applyCode()}
+                        maxLength={20}
+                        autoCapitalize="characters"
+                        autoFocus
+                      />
+                      <button className="btn small" onClick={applyCode} disabled={codeBusy}>
+                        {codeBusy ? 'Checking…' : 'Apply'}
+                      </button>
+                    </div>
+                    {codeMsg && <p className="err">{codeMsg}</p>}
+                  </>
+                ) : (
+                  <button className="linkbtn" onClick={() => setCodeOpen(true)}>
+                    Have a discount code?
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="field co-shopnote">
+              <label htmlFor="coNote">Note for {shop.name} (optional)</label>
+              <textarea
+                id="coNote"
+                rows={2}
+                maxLength={200}
+                value={form.note}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+                placeholder="e.g. Please wrap it as a gift"
+              />
             </div>
             <div className="co-note">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1014,7 +1108,7 @@ export function ShopPage({ slug, step = 'shop' }) {
             <div className="co-bar-row">
               <div className="co-bar-total">
                 <span>Total</span>
-                <strong className="num">{naira(sub)}</strong>
+                <strong className="num">{naira(due)}</strong>
                 {plusDelivery && <span>+ delivery</span>}
               </div>
               <button className="btn" onClick={place} disabled={busy || !sub}>

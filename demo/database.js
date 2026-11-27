@@ -34,6 +34,7 @@ const RESERVED = [
   'legal',
   'terms',
   'prohibited',
+  'pay',
 ];
 
 // ---------- small tools ----------
@@ -223,6 +224,9 @@ function seedData() {
     last_active_at: iso(now),
     paid_until: null,
     monthly_goal: 1500000,
+    // a sale banner and a discount code to try (update 032)
+    banner: 'Black Friday: 15% off with code BF15',
+    banner_until: new Date(now + 3 * DAY).toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }),
   };
   const P = (key, name, price, stock, low, daysAgo, pop) => ({
     id: uuid(),
@@ -782,8 +786,14 @@ function seedData() {
     .map((c) => ({ id: uuid(), user_id: c.user_id, address: c.address, area: c.area || '', used_at: iso(now - DAY), created_at: iso(now - 30 * DAY) }));
   addrRows.push({ id: uuid(), user_id: CUSTOMER.id, address: '3rd floor, 14 Admiralty Way, Lekki Phase 1', area: 'Lekki Phase 1',
     used_at: iso(now - 9 * DAY), created_at: iso(now - 60 * DAY) });
+  const coupons = [
+    { id: 1, shop_id: shop.id, code: 'BF15', kind: 'percent', value: 15, min_total: 5000, max_uses: 100, active: true, created_at: iso(now - DAY),
+      ends_on: new Date(now + 3 * DAY).toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) },
+    { id: 2, shop_id: shop.id, code: 'WELCOME1K', kind: 'amount', value: 1000, min_total: 8000, max_uses: null, active: true, created_at: iso(now - 30 * DAY), ends_on: null },
+  ];
   return {
-    v: 16,
+    v: 17,
+    coupons,
     customer_addresses: addrRows,
     shop_messages,
     feature_wants: [],
@@ -849,7 +859,7 @@ try {
   S = null;
 }
 // A fresh sample each day, so "today" always has orders in it.
-if (!S || S.v !== 16 || S.day !== startOfDay(Date.now())) S = seed();
+if (!S || S.v !== 17 || S.day !== startOfDay(Date.now())) S = seed();
 demo.go(S.path || '/');
 let saveTimer = null;
 function save() {
@@ -921,6 +931,22 @@ function customerOrder(token) {
   return o;
 }
 const toPay = (o) => o.items_total + (o.delivery_paid_by === 'customer' ? o.delivery_fee || 0 : 0);
+// discount codes and pay links (update 032)
+const todayLagos = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+const couponOff = (c, total) => Math.max(0, Math.min(c.kind === 'percent' ? Math.floor((total * c.value) / 100) : c.value, total - 100));
+function couponFor(s, code, total, user) {
+  const k = String(code || '').replace(/\s/g, '').toUpperCase();
+  const c = (S.coupons || []).find((x) => x.shop_id === s.id && x.code === k);
+  if (!c || !c.active) fail('That code doesn’t work in this shop.');
+  if (c.ends_on && c.ends_on < todayLagos()) fail('That code has ended.');
+  const used = S.orders.filter((o) => o.coupon_id === c.id && o.status !== 'cancelled');
+  if (c.max_uses && used.length >= c.max_uses) fail('That code has been used up.');
+  if (user && used.some((o) => o.customer_id === user)) fail('You’ve already used this code.');
+  if (total < c.min_total) fail(`This code is for orders of ${naira(c.min_total)} or more.`);
+  if (couponOff(c, total) <= 0) fail('This order is too small for that code.');
+  return c;
+}
+const payTokenOf = (o) => o.pay_token || (o.pay_token = uuid());
 const codeOf = (o) => `${(S.shops.find((s) => s.id === o.shop_id) || {}).order_prefix || 'SD'}-${o.id}`;
 const unpacked = (o) => S.order_items.some((i) => i.order_id === o.id && !i.packed);
 const problemOf = (o) => S.problems.find((p) => p.order_id === o.id) || null;
@@ -1170,15 +1196,15 @@ function demoPaystack(ref, done) {
   wrap.querySelector('.dp-shop').textContent = s.name;
   wrap.querySelector('.dp-amt').textContent = naira(p.amount + p.fee + p.service);
   wrap.querySelector('.dp-pay').textContent = 'Pay ' + naira(p.amount + p.fee + p.service);
-  const close = () => {
+  const close = (paid) => {
     wrap.remove();
-    if (done) done();
+    if (done) done(paid === true);
   };
-  wrap.querySelector('.dp-cancel').onclick = close;
+  wrap.querySelector('.dp-cancel').onclick = () => close(false);
   wrap.querySelector('.dp-pay').onclick = async () => {
     wrap.querySelector('.dp-pay').textContent = 'Paying…';
     await rpc('customer_paid_online', { p_ref: ref });
-    close();
+    close(true);
   };
   document.body.appendChild(wrap);
 }
@@ -1588,6 +1614,8 @@ const RPC = {
         account_name: s.account_name,
         allow_part_payment: s.allow_part_payment,
         delivery_paid_by: s.delivery_paid_by,
+        banner: s.banner && (!s.banner_until || s.banner_until >= todayLagos()) ? s.banner : null,
+        has_coupons: (S.coupons || []).some((c) => c.shop_id === s.id && c.active && (!c.ends_on || c.ends_on >= todayLagos())),
         ...ratingOf(s.id),
       },
       products: S.products
@@ -1698,6 +1726,11 @@ const RPC = {
       rider_name: '',
       rider_phone: '',
       customer_details_purged: false,
+      note: String(c.note || '').trim().replace(/\s+/g, ' ').slice(0, 200),
+      discount: 0,
+      coupon_id: null,
+      coupon_code: '',
+      pay_token: uuid(),
     };
     const old = S.customers.find((x) => x.user_id === uid());
     const row = {
@@ -1732,21 +1765,115 @@ const RPC = {
       });
       o.items_total += pay * qty;
     });
+    if (String(c.coupon || '').trim()) {
+      const cp = couponFor(s, c.coupon, o.items_total, uid());
+      o.discount = couponOff(cp, o.items_total);
+      o.items_total -= o.discount;
+      o.coupon_id = cp.id;
+      o.coupon_code = cp.code;
+    }
     S.orders.push(o);
     notify(
       s.owner_id,
       o.id,
       'new_order',
       `New order ${codeOf(o)}`,
-      `${o.customer_name} · ${naira(o.items_total)}${mode === 'pickup' ? ' · pick-up' : ''}`,
+      `${o.customer_name} · ${naira(o.items_total)}${mode === 'pickup' ? ' · pick-up' : ''}${o.note ? ' · note' : ''}`,
       `/?order=${o.id}#orders`,
     );
     return {
       order_id: o.id,
       token: o.public_token,
       items_total: o.items_total,
+      discount: o.discount,
       delivery_pending: mode === 'delivery' && s.delivery_paid_by === 'customer',
     };
+  },
+  // ---------- discount codes, pay links (update 032) ----------
+  check_coupon: ({ p_slug, p_code, p_total }) => {
+    if (!uid()) fail('Sign in to use a code.');
+    const s = S.shops.find((x) => x.slug === String(p_slug).toLowerCase()) || fail('Shop not found.');
+    const c = couponFor(s, p_code, Math.max(0, p_total || 0), uid());
+    return { code: c.code, kind: c.kind, value: c.value, min_total: c.min_total, discount: couponOff(c, p_total) };
+  },
+  shop_coupons: () => {
+    const s = myShop();
+    if (!s) return [];
+    return (S.coupons || [])
+      .filter((c) => c.shop_id === s.id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .map((c) => {
+        const used = S.orders.filter((o) => o.coupon_id === c.id && o.status !== 'cancelled');
+        return { ...c, ended: !!c.ends_on && c.ends_on < todayLagos(), uses: used.length, off: used.reduce((a, o) => a + (o.discount || 0), 0) };
+      });
+  },
+  save_coupon: ({ p_id, p_code, p_kind, p_value, p_min, p_ends, p_max, p_active }) => {
+    const s = myShop() || fail('Only shops can make discount codes.');
+    const code = String(p_code || '').replace(/\s/g, '').toUpperCase();
+    if (!/^[A-Z0-9]{3,20}$/.test(code)) fail('A code needs 3 to 20 letters or numbers, with no spaces.');
+    if (!['percent', 'amount'].includes(p_kind)) fail('Choose a percentage or an amount off.');
+    if (p_kind === 'percent' && !(p_value >= 1 && p_value <= 90)) fail('The percentage needs to be from 1 to 90.');
+    if (p_kind === 'amount' && !(p_value >= 50 && p_value <= 10000000)) fail('The amount off needs to be ₦50 or more.');
+    if (p_max != null && !(p_max >= 1 && p_max <= 100000)) fail('Uses need to be 1 or more, or left empty for no limit.');
+    if (p_ends && p_ends < todayLagos()) fail('The end date has already passed.');
+    S.coupons = S.coupons || [];
+    if (S.coupons.some((c) => c.shop_id === s.id && c.code === code && c.id !== p_id)) fail(`You already have a code called ${code}.`);
+    const row = { code, kind: p_kind, value: p_value, min_total: p_min || 0, ends_on: p_ends || null, max_uses: p_max ?? null, active: p_active !== false };
+    if (p_id == null) {
+      const c = { id: Math.max(0, ...S.coupons.map((x) => x.id)) + 1, shop_id: s.id, created_at: nowIso(), ...row };
+      S.coupons.push(c);
+      return c.id;
+    }
+    const c = S.coupons.find((x) => x.id === p_id && x.shop_id === s.id) || fail('Code not found.');
+    Object.assign(c, row);
+    return c.id;
+  },
+  delete_coupon: ({ p_id }) => {
+    const s = myShop();
+    const i = (S.coupons || []).findIndex((c) => c.id === p_id && s && c.shop_id === s.id);
+    if (i < 0) fail('Code not found.');
+    S.orders.forEach((o) => o.coupon_id === p_id && (o.coupon_id = null));
+    S.coupons.splice(i, 1);
+    return null;
+  },
+  order_extras: ({ p_token }) => {
+    const o = S.orders.find((x) => x.public_token === p_token);
+    if (!o) return null;
+    return {
+      note: o.note || '',
+      discount: o.discount || 0,
+      coupon: o.coupon_code || '',
+      pay_token: o.customer_id === uid() && ['awaiting', 'part'].includes(o.status) ? payTokenOf(o) : null,
+    };
+  },
+  get_pay_link: ({ p_pay }) => {
+    const o = S.orders.find((x) => x.pay_token === p_pay);
+    if (!o) return null;
+    const s = shopOf(o);
+    const left = toPay(o) - o.amount_paid;
+    const feePending = o.mode === 'delivery' && o.delivery_paid_by === 'customer' && o.delivery_fee == null;
+    return {
+      code: codeOf(o),
+      status: o.status,
+      mode: o.mode,
+      shop: { name: s.name, slug: s.slug, bank: s.bank, account_number: s.account_number, account_name: s.account_name },
+      items: S.order_items.filter((i) => i.order_id === o.id).map((i) => ({ name: i.name, qty: i.qty, price: i.price })),
+      discount: o.discount || 0,
+      coupon: o.coupon_code || '',
+      delivery_fee: o.delivery_paid_by === 'customer' ? o.delivery_fee : null,
+      fee_pending: feePending,
+      to_pay: toPay(o),
+      amount_paid: o.amount_paid,
+      online: !S.money_off && s.bank !== 'Other bank' && ['awaiting', 'part'].includes(o.status) && !feePending,
+      online_only: o.delivery_by === 'shopdesk',
+      fee: onlineFee(left + SERVICE),
+      service: SERVICE,
+    };
+  },
+  pay_link_online: ({ p_pay, p_email }) => {
+    const o = S.orders.find((x) => x.pay_token === p_pay) || fail('This pay link isn’t right. Ask for a new one.');
+    if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(String(p_email || '').trim())) fail('Enter your email for the receipt.');
+    return RPC.customer_pay_online({ p_token: o.public_token, p_any: true });
   },
   // ---------- Pay online and ShopDesk Delivery (switched on in the demo; the real ones are off until Admin turns them on) ----------
   money_switches: () => (S.money_off ? { online: false, delivery: false, fee_by: 'customer' } : { online: true, delivery: true, fee_by: 'customer' }),
@@ -1954,8 +2081,9 @@ const RPC = {
     const matches = at.filter((b) => !p_bank || b === p_bank).map((b) => ({ bank: b, account_name: name }));
     return { available: true, matches };
   },
-  customer_pay_online: ({ p_token }) => {
-    const o = customerOrder(p_token);
+  customer_pay_online: ({ p_token, p_any }) => {
+    // p_any: someone else paying with the order's pay link
+    const o = p_any ? S.orders.find((x) => x.public_token === p_token) : customerOrder(p_token);
     if (!['awaiting', 'part'].includes(o.status)) fail('This order is already paid or closed.');
     if (o.mode === 'delivery' && o.delivery_paid_by === 'customer' && o.delivery_fee == null)
       fail('Wait for the shop to confirm your order and its delivery fee.');
@@ -2867,6 +2995,7 @@ const MONEY = {
   book: (b) => ['hand_to_courier', { p_order: b.order }],
   track: (b) => ['set_courier_progress', { p_order: b.order, p_token: b.token }],
   pay: (b) => ['customer_pay_online', { p_token: b.token }],
+  paylink: (b) => ['pay_link_online', { p_pay: b.pay, p_email: b.email }],
   check: (b) => ['customer_paid_online', { p_ref: b.reference }],
   bank: (b) => ['demo_find_account', { p_number: b.account_number, p_bank: b.bank }],
 };

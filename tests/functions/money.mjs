@@ -115,6 +115,15 @@ check('only the customer can pay', /Sign in with the account/.test(r.error || ''
 r = await post({ action: 'pay', token: tok }, 'cust');
 const testInit = calls.filter((c) => c.url.endsWith('/transaction/initialize')).pop()?.body;
 check('with a test key, the whole payment goes to ShopDesk (no split)', r.url && testInit.amount === 1766500 && !testInit.subaccount && !testInit.transaction_charge && !calls.some((c) => c.url.includes('/subaccount')), testInit);
+const payTok = (await sql`select pay_token from orders where public_token = ${tok}::uuid`)[0].pay_token;
+r = await post({ action: 'paylink', pay: payTok, email: '' }, null);
+check('a pay link needs the payer email for the receipt', /Enter your email/.test(r.error || ''), r);
+r = await post({ action: 'paylink', pay: payTok, email: 'Friend@Example.com' }, null);
+const linkInit = calls.filter((c) => c.url.endsWith('/transaction/initialize')).pop()?.body;
+check('someone else pays with the pay link, without signing in, and comes back to the pay link page',
+  r.url && linkInit.email === 'friend@example.com' && linkInit.amount === 1766500 && linkInit.callback_url.endsWith('/pay/' + payTok), linkInit);
+r = await post({ action: 'paylink', pay: crypto.randomUUID(), email: 'friend@example.com' }, null);
+check('a wrong pay link is refused', /pay link isn.t right/.test(r.error || ''), r);
 ENV.PAYSTACK_SECRET_KEY = 'sk_live_abc';
 r = await post({ action: 'pay', token: tok }, 'cust');
 ENV.PAYSTACK_SECRET_KEY = 'sk_test_abc';

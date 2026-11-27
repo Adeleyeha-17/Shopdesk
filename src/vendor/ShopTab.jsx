@@ -1,5 +1,5 @@
 // The Shop tab: the shop's order link, the chat with ShopDesk, buying from other shops (with the same account),
-// ShopDesk Delivery and paying online (once switched on), its details, its rules (payment and delivery) and sign out.
+// ShopDesk Delivery and paying online (once switched on), its sale banner and discount codes, its details, its rules (payment and delivery) and sign out.
 import React, { useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { signOut } from '../lib/alerts.js';
@@ -8,6 +8,7 @@ import { ThemePicker } from '../shared/ThemePicker.jsx';
 import { errText, copyText } from '../lib/helpers.js';
 import { ShopFields, checkShop, shopRow } from './shopForm.jsx';
 import { MoneyCards } from './MoneyCards.jsx';
+import { Promotions } from './Promotions.jsx';
 import { ShopDeskCard } from './ShopDeskChat.jsx';
 import { markShared } from './GetStarted.jsx';
 import { TabIcon } from '../shared/TabIcon.jsx';
@@ -103,6 +104,7 @@ export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread, un
         </a>
       </section>
       <MoneyCards shop={shop} reloadShop={reloadShop} say={say} />
+      <Promotions shop={shop} reloadShop={reloadShop} say={say} />
       <section className="card">
         <h2>Your shop</h2>
         <ShopFields v={v} set={setV} />

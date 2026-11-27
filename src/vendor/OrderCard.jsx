@@ -270,6 +270,13 @@ export function OrderCard({
         <span className={'chip ' + chip[0]}>{chip[1]}</span>
       </div>
       <ItemList o={o} products={products} packing={packing} ticks={ticks} onTick={tick} />
+      {o.discount > 0 && (
+        <div className="row order-off">
+          <span className="sub">Discount{o.coupon_code ? ' · code ' + o.coupon_code : ''}</span>
+          <span className="num">−{naira(o.discount)}</span>
+        </div>
+      )}
+      {o.note && <div className="order-note">Note: “{o.note}”</div>}
       <div className="items">
         {where}
         <MapPin o={o} />

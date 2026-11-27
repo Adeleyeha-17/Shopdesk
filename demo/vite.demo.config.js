@@ -23,7 +23,8 @@ const FIXES = [
   // the rider link opens the rider page inside the demo
   ['src/vendor/RiderLive.jsx', 'const demoOpen = null;', 'const demoOpen = (l) => (window.__demo.go(new URL(l).pathname), window.dispatchEvent(new Event("popstate")), window.scrollTo(0, 0));', 1],
   // Pay online opens a pretend checkout instead of Paystack's page
-  ['src/customer/OrderPage.jsx', 'window.location.assign(r.url);', 'window.__demoPay(r.url, () => (setPaying(false), load()));', 1],
+  ['src/customer/OrderPage.jsx', 'window.location.assign(r.url);', 'window.__demoPay(r.url, (paid) => (setPaying(false), paid && setJustPaid(true), load()));', 1],
+  ['src/customer/PayLinkPage.jsx', 'window.location.assign(r.url);', 'window.__demoPay(r.url, (paid) => (setPaying(false), paid && setJustPaid(true), load()));', 1],
   [
     'src/vendor/VendorApp.jsx',
     "window.history.replaceState(window.history.state, '', '#' + tab);",

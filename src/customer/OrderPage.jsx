@@ -61,12 +61,88 @@ function headlineFor(o, pickup, feeWait) {
   return 'Waiting for your payment';
 }
 
+// "Ask someone to pay": a link to send to someone else. It shows them the shop, the items and the amount, never your
+// address or phone, and they can pay by transfer or online without an account.
+function AskToPay({ o, left }) {
+  const [done, setDone] = useState('');
+  const url = window.location.origin + '/pay/' + o.pay_token;
+  const text = `Please help me pay ${naira(left)} for my order from ${o.shop.name}: ${url}`;
+  async function share() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Pay for my order', text });
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+    }
+    copyText(text, setDone, 'Link copied. Send it to whoever is paying.');
+  }
+  return (
+    <div className="ask-pay">
+      <button className="linkbtn" onClick={share}>
+        Ask someone to pay
+      </button>
+      <span className="sub">They see the items and the amount, not your address or phone.</span>
+      {done && (
+        <p className="ok" role="status">
+          {done}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Straight after paying online: a clear "it worked" screen before the order itself.
+function PaidScreen({ o, pickup, onView }) {
+  const items = o.items || [];
+  return (
+    <section className="card paid-done" role="status">
+      <div className="paid-tick" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M5 12.5l4.5 4.5L19 7.5" />
+        </svg>
+      </div>
+      <h2>Payment successful</h2>
+      <p className="paid-amt">{naira(o.amount_paid || o.to_pay)}</p>
+      <p className="note">
+        Order <span className="ocode">{o.code || '#' + o.order_id}</span> · {o.shop.name}
+      </p>
+      {items.length > 0 && (
+        <ul className="paid-items">
+          {items.map((i, n) => (
+            <li key={n}>
+              <span>
+                {i.qty} × {i.name}
+              </span>
+              <span>{naira(i.qty * i.price)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="note">
+        {o.shop.name} has been told and is getting it ready.{' '}
+        {pickup ? 'We’ll let you know when it’s ready to pick up.' : 'We’ll let you know when it’s on the way.'}
+      </p>
+      <div className="paid-actions">
+        <button className="btn" onClick={onView}>
+          View order
+        </button>
+        <a className="btn ghost" href={'/' + o.shop.slug}>
+          Keep shopping
+        </a>
+      </div>
+    </section>
+  );
+}
+
 export function OrderPage({ token }) {
   const [o, setO] = useState(undefined);
   const [copied, setCopied] = useState('');
   const [err, setErr] = useState('');
   const [loadErr, setLoadErr] = useState(null);
   const [msg, setMsg] = useState('');
+  const [justPaid, setJustPaid] = useState(false); // back from Paystack with the payment through: the success screen
   const [busy, setBusy] = useState(false);
   const [who, setWho] = useState(undefined);
   const [uid, setUid] = useState(null);
@@ -80,12 +156,16 @@ export function OrderPage({ token }) {
   const autoOpened = useRef(false);
   const load = useCallback(
     () =>
-      supabase.rpc('get_order_public', { p_token: token }).then(({ data, error }) => {
+      Promise.all([
+        supabase.rpc('get_order_public', { p_token: token }),
+        supabase.rpc('order_extras', { p_token: token }),
+      ]).then(([{ data, error }, x]) => {
         // a refresh that fails keeps the order on screen; only a first load that fails shows "Try again"
         if (error) setLoadErr(error);
         else {
           setLoadErr(null);
-          setO(data);
+          // the note, the discount code and the pay link (for the customer) come separately
+          setO(data ? { ...data, ...((x && x.data) || {}) } : data);
         }
       }),
     [token],
@@ -193,7 +273,7 @@ export function OrderPage({ token }) {
     money('check', { reference: ref })
       .then((r) => {
         if (r.paid) {
-          setMsg('Payment received. The shop is packing your order.');
+          setJustPaid(true);
           kick();
         } else setErr("We couldn't see that payment yet. If money left your account, it shows here shortly.");
         load();
@@ -326,6 +406,12 @@ export function OrderPage({ token }) {
       )}
     </div>
   );
+  if (justPaid)
+    return (
+      <Page title={o.shop.name} titleHref={'/' + o.shop.slug} back="/orders" tabs={tabs}>
+        <PaidScreen o={o} pickup={pickup} onView={() => setJustPaid(false)} />
+      </Page>
+    );
   return (
     <Page title={o.shop.name} titleHref={'/' + o.shop.slug} back="/orders" tabs={tabs}>
       <section className="card">
@@ -348,6 +434,13 @@ export function OrderPage({ token }) {
           </p>
         )}
         <p className="note">{items}</p>
+        {o.discount > 0 && (
+          <p className="note">
+            {o.coupon ? `Code ${o.coupon}: ` : 'Discount: '}
+            {naira(o.discount)} off
+          </p>
+        )}
+        {o.note && <p className="note">Your note: “{o.note}”</p>}
         {pay && pay.delivery_by === 'shopdesk' && pay.courier && !sh && o.status !== 'cancelled' && (
           <p className="note">Delivered by {pay.courier} with ShopDesk Delivery.</p>
         )}
@@ -471,6 +564,7 @@ export function OrderPage({ token }) {
                   </button>
                 )
               ))}
+            {o.pay_token && <AskToPay o={o} left={left} />}
           </section>
         ))}
       {o.can_cancel &&

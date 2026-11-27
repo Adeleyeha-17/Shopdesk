@@ -191,7 +191,7 @@ psql:orders.sql:260: ERROR:  permission denied for function place_order
 R15 a shop owner cannot order from their own shop (Rose), but can buy from another shop, even with a turned-down shop of their own (Tunde) (expect 1 error, then an order):
 psql:orders.sql:263: ERROR:  This is your own shop. You can't order from it.
 CONTEXT:  PL/pgSQL function place_order(text,jsonb,jsonb) line N at RAISE
-{"token": "<id>", "order_id": 8, "items_total": 15000, "delivery_pending": false}
+{"token": "<id>", "discount": 0, "order_id": 8, "items_total": 15000, "delivery_pending": false}
 R16 a shop owner cannot claim an order from their own shop, but can save their buyer details (expect 0 claimed, then 1 saved):
 0
 1
@@ -206,7 +206,7 @@ false|true
 R19 a brand-new email can still open a shop, and can then buy from other shops (expect f f, pending, an order):
 false|false
 pending
-{"token": "<id>", "order_id": 9, "items_total": 15000, "delivery_pending": false}
+{"token": "<id>", "discount": 0, "order_id": 9, "items_total": 15000, "delivery_pending": false}
 R20 nobody can call the role checks directly, and visitors cannot ask what an account is (expect permission denied x3):
 psql:orders.sql:287: ERROR:  permission denied for function has_shop
 psql:orders.sql:287: ERROR:  permission denied for function has_shopped
