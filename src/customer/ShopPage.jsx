@@ -258,7 +258,7 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [picking, setPicking] = useState(null); // the product whose sheet is open (its details, or its sizes)
   const [find, setFind] = useState(''); // search this shop's products
   const [inSearch, setInSearch] = useState(false); // the search box is being used
-  const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '', area: '', note: '' });
+  const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '', area: '', note: '', payer: 'me' });
   const [codeOpen, setCodeOpen] = useState(false); // the discount code box
   const [codeIn, setCodeIn] = useState('');
   const [coupon, setCoupon] = useState(null); // the code that worked: { code, kind, value, min_total }
@@ -525,6 +525,14 @@ export function ShopPage({ slug, step = 'shop' }) {
     rememberOrder(data.token);
     clearCart(slug);
     kick();
+    // someone else paying: the order page opens on the pay link to send them
+    if (form.payer === 'other') {
+      try {
+        sessionStorage.setItem('sd-ask-' + data.token, '1');
+      } catch {
+        /* without storage the pay link is still at the bottom of the order */
+      }
+    }
     navigate('/o/' + data.token);
   }
 
@@ -985,6 +993,21 @@ export function ShopPage({ slug, step = 'shop' }) {
                 onClose={() => setAreaOpen(false)}
               />
             )}
+          </section>
+          <section className="card boxed co-card" aria-label="Who's paying">
+            <h2 className="co-title">Who’s paying?</h2>
+            <div className="choices tiles" role="radiogroup" aria-label="Who's paying">
+              <button className="choice" role="radio" aria-checked={form.payer !== 'other'} onClick={() => setForm({ ...form, payer: 'me' })}>
+                <strong>Myself</strong>
+                <span>Pay on the next page</span>
+                <i aria-hidden="true" />
+              </button>
+              <button className="choice" role="radio" aria-checked={form.payer === 'other'} onClick={() => setForm({ ...form, payer: 'other' })}>
+                <strong>Someone else</strong>
+                <span>Get a link to send them</span>
+                <i aria-hidden="true" />
+              </button>
+            </div>
           </section>
           <section className="card boxed co-card" aria-label="Your order">
             <div className="row">

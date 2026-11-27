@@ -894,7 +894,10 @@ await step('the shop page shows its sale banner; at checkout a code comes off th
   await p.locator('.co-code button:has-text("Apply")').click();
   await p.locator('.co-off:has-text("BF15")').waitFor();
   await p.locator('#coNote').fill('Please call when it is ready');
+  await p.locator('button[role="radio"]:has-text("Someone else")').click();
   await p.locator('button:has-text("Place order")').click();
+  await p.locator('.ask-first button:has-text("Send pay link")').waitFor();
+  await p.locator('.ask-first button:has-text("Not now")').click();
   await see('Please call when it is ready');
   await p.locator('.o-off:has-text("BF15")').waitFor();
   code3 = (await text()).match(/Order ([A-Z]{2,4}-\d+)/)[1];

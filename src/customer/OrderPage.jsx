@@ -63,7 +63,7 @@ function headlineFor(o, pickup, feeWait) {
 
 // "Ask someone to pay": a link to send to someone else. It shows them the shop, the items and the amount, never your
 // address or phone, and they can pay by transfer or online without an account.
-function AskToPay({ o, left }) {
+function AskToPay({ o, left, big }) {
   const [done, setDone] = useState('');
   const url = window.location.origin + '/pay/' + o.pay_token;
   const text = `Please help me pay ${naira(left)} for my order from ${o.shop.name}: ${url}`;
@@ -78,6 +78,19 @@ function AskToPay({ o, left }) {
     }
     copyText(text, setDone, 'Link copied. Send it to whoever is paying.');
   }
+  if (big)
+    return (
+      <>
+        <button className="btn" onClick={share}>
+          Send pay link
+        </button>
+        {done && (
+          <p className="ok" role="status">
+            {done}
+          </p>
+        )}
+      </>
+    );
   return (
     <>
       <button className="ask-pay" onClick={share}>
@@ -151,6 +164,17 @@ export function OrderPage({ token }) {
   const [loadErr, setLoadErr] = useState(null);
   const [msg, setMsg] = useState('');
   const [justPaid, setJustPaid] = useState(false); // back from Paystack with the payment through: the success screen
+  // straight from checkout with "Someone else" paying: the pay link to send comes first
+  const [askFirst, setAskFirst] = useState(() => {
+    try {
+      const k = 'sd-ask-' + token;
+      const on = sessionStorage.getItem(k) === '1';
+      sessionStorage.removeItem(k);
+      return on;
+    } catch {
+      return false;
+    }
+  });
   const [busy, setBusy] = useState(false);
   const [who, setWho] = useState(undefined);
   const [uid, setUid] = useState(null);
@@ -422,6 +446,21 @@ export function OrderPage({ token }) {
     );
   return (
     <Page title={o.shop.name} titleHref={'/' + o.shop.slug} back="/orders" tabs={tabs}>
+      {askFirst && o.pay_token && left > 0 && (
+        <section className="card ask-first">
+          <div className="row">
+            <h2>Send the pay link</h2>
+            <button className="linkbtn" onClick={() => setAskFirst(false)}>
+              Not now
+            </button>
+          </div>
+          <p className="note">
+            Your order is in. Send this link to whoever is paying: they see the items and {naira(left)}, not your address or
+            phone, and can pay by transfer or online.
+          </p>
+          <AskToPay o={o} left={left} big />
+        </section>
+      )}
       <section className="card">
         <div className="row">
           <span className="order-id">

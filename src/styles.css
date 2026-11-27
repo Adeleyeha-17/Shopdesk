@@ -1490,3 +1490,9 @@ a.card.profile > div { flex: 1; }
 .pl-fee { text-align: center; }
 .pl-pay .or { margin: 6px 0; }
 .pl-hint { margin: 2px 0 0; }
+/* straight after checkout with "Someone else" paying */
+.ask-first { border: 1.5px solid var(--ink); border-radius: 18px; padding: 16px; margin-bottom: 16px; }
+.ask-first .row { align-items: center; }
+.ask-first h2 { margin: 0; font-size: 18px; }
+.ask-first .note { margin: 6px 0 12px; }
+.ask-first .btn { width: 100%; }
