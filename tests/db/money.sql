@@ -144,3 +144,20 @@ select exists (select 1 from jsonb_array_elements(shops_near()) x where x->>'slu
 reset role;
 select count(*) > 0 from audit_log where action = 'pay_test' and shop_id = :'mshop';
 select admin_set_pay_test(:'mshop', false) from (select set_config('request.jwt.claim.sub', 'c9000000-0000-4000-8000-000000000009', false)) x;
+\echo M19 ways to pay online: Paystack alone at first; Admin adds Monnify; a made-up one and a non-admin are refused; a test shop gets all three (expect paystack; monnify and paystack; a check error; Not allowed; the same two; permission denied for the payout accounts; all three):
+set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
+select order_money(:'tok4')->>'gateways';
+reset role; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000009';
+select admin_save_settings('{"pay_gateways": ["monnify", "paystack"]}');
+select admin_money()->'settings'->>'pay_gateways';
+select admin_save_settings('{"pay_gateways": ["bitcoin"]}');
+set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000003';
+select admin_save_settings('{"pay_gateways": ["flutterwave"]}');
+set role authenticated; set request.jwt.claim.sub = 'c9000000-0000-4000-8000-000000000002';
+select order_money(:'tok4')->>'gateways';
+select * from shop_payouts;
+reset role;
+select admin_set_pay_test(:'mshop', true) from (select set_config('request.jwt.claim.sub', 'c9000000-0000-4000-8000-000000000009', false)) x;
+set role anon; select order_money(:'tok4')->>'gateways';
+reset role;
+select admin_set_pay_test(:'mshop', false), admin_save_settings('{"pay_gateways": ["paystack"]}') from (select set_config('request.jwt.claim.sub', 'c9000000-0000-4000-8000-000000000009', false)) x;

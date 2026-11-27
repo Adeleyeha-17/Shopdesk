@@ -76,7 +76,7 @@ Both are off until switched on in **Admin → Payments & delivery**, and the app
 
 Setup:
 
-1. Run the updates in order, `supabase/updates/016.sql` to `031.sql` (020 removes the monthly plan and invites; 021 makes every payment full and adds visitor alerts; 022 adds the ShopDesk chat and "I want this"; 023 adds videos to the ShopDesk chat, in a private `chat-videos` bucket; 024 puts the full link in the approval message; 025 adds ShopDesk's 48-hour decision, ShopDesk in the order chat while it decides, and Admin → Customers; 026 lets shop owners buy from other shops and shows their buying in the Sales tab; 027 adds product descriptions, receipts for paid orders and customers' payment reminders; 028 brings each shop's last-active time up to date; 029 adds saved delivery addresses and Buy again; 030 reserves the link names carts, legal, terms and prohibited; 031 adds test shops for paying online), or the full `schema.sql`.
+1. Run the updates in order, `supabase/updates/016.sql` to `033.sql` (020 removes the monthly plan and invites; 021 makes every payment full and adds visitor alerts; 022 adds the ShopDesk chat and "I want this"; 023 adds videos to the ShopDesk chat, in a private `chat-videos` bucket; 024 puts the full link in the approval message; 025 adds ShopDesk's 48-hour decision, ShopDesk in the order chat while it decides, and Admin → Customers; 026 lets shop owners buy from other shops and shows their buying in the Sales tab; 027 adds product descriptions, receipts for paid orders and customers' payment reminders; 028 brings each shop's last-active time up to date; 029 adds saved delivery addresses and Buy again; 030 reserves the link names carts, legal, terms and prohibited; 031 adds test shops for paying online; 032 adds discount codes, the sale banner, notes for the shop, pay links and receipt emails; 033 adds Monnify and Flutterwave beside Paystack), or the full `schema.sql`.
 2. **Edge Functions → Deploy a new function**, named `money`, with the contents of `supabase/functions/money/index.ts`. Turn **Enforce JWT verification** off: the function checks who is asking itself, and the webhooks carry no sign-in.
 3. Set these secrets under **Edge Functions → Secrets**. Use test keys while testing and swap in live keys once the accounts are approved:
 
@@ -84,16 +84,30 @@ Setup:
 |---|---|
 | `PAYSTACK_SECRET_KEY` | Paystack secret key (`sk_test_…`, later `sk_live_…`) |
 | `SHIPBUBBLE_API_KEY` | Shipbubble API key (`sb_sandbox_…`, later `sb_prod_…`) |
+| `MONNIFY_API_KEY` | Monnify API key (`MK_TEST_…`, later `MK_PROD_…`), from **Developer → API Keys & Contracts** |
+| `MONNIFY_SECRET_KEY` | Monnify secret key, from the same page |
+| `MONNIFY_CONTRACT_CODE` | Monnify contract code, from the same page |
+| `FLW_SECRET_KEY` | Flutterwave secret key (`FLWSECK_TEST-…`, later `FLWSECK-…`), from **Settings → API Keys** |
+| `FLW_WEBHOOK_HASH` | Any long random text; put the same text in Flutterwave's webhook **Secret hash** |
+
+Monnify and Flutterwave are optional: leave their secrets out and they stay off.
 
 4. Set the webhook URLs:
    - Paystack (**Settings → API Keys & Webhooks**): `https://<project>.supabase.co/functions/v1/money?hook=paystack`
    - Shipbubble (**Settings → Webhooks**): `https://<project>.supabase.co/functions/v1/money?hook=shipbubble`
+   - Monnify (**Developer → Webhook URLs**, Transaction completion): `https://<project>.supabase.co/functions/v1/money?hook=monnify`
+   - Flutterwave (**Settings → Webhooks**): `https://<project>.supabase.co/functions/v1/money?hook=flutterwave`
+
+   A Monnify or Flutterwave message alone never marks an order paid: the function asks the gateway about the payment first.
 5. In Paystack, leave **Settings → Preferences → Pass fees to customers** off: the money function already adds the fee.
 6. Top up the Shipbubble wallet, then switch each one on in **Admin → Payments & delivery**. The page shows whether the keys are test or live and the wallet balance.
+7. Under **Ways to pay online** on the same page, switch on each gateway customers can pick. With more than one on, the order page and pay links show **Choose how to pay**.
 
-Testing Pay online before going live: with a test key (`sk_test_…`), only **test shops** can be paid online, and the account-name check on the shop form is off. Mark a shop with **Make test shop** on its page in Admin: it can be paid online even while Pay online is off for everyone, and it stays out of Shops near you. Pay with Paystack's test card on its checkout page. When the live key is in, take the mark off (**Stop testing**) and switch Pay online on.
+Each gateway pays the shop's share straight into the shop's own bank account, and ShopDesk's share (delivery, fees) to ShopDesk: Paystack with a subaccount, Monnify with a sub account and a split on each payment, Flutterwave with a subaccount and a flat split. ShopDesk makes the shop's account at each gateway the first time a customer pays that shop that way. Monnify turns on sub accounts and split payments for a business only when asked: email Monnify support from the business account before switching Monnify on.
 
-The money function's checks run in `tests/functions/money.mjs` (after `tests/db/run.sh`), with Paystack, Shipbubble and sign-in faked.
+Testing Pay online before going live: with a test key (`sk_test_…`), only **test shops** can be paid online, and the account-name check on the shop form is off. Mark a shop with **Make test shop** on its page in Admin: it can be paid online even while Pay online is off for everyone, and it stays out of Shops near you. Pay with the gateway's test card on its checkout page; test shops can try every gateway that has keys. When the live key is in, take the mark off (**Stop testing**) and switch Pay online on.
+
+The money function's checks run in `tests/functions/money.mjs` (after `tests/db/run.sh`), with Paystack, Monnify, Flutterwave, Shipbubble and sign-in faked.
 
 ## 9. Hardening checklist
 

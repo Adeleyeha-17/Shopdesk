@@ -1,11 +1,13 @@
 // /pay/<pay token>: a customer sent this link to someone so they pay the order. It shows the shop, the items and what's
 // left to pay, never the customer's address or phone. The payer can transfer to the shop, or pay online. No ShopDesk
-// account needed and no email asked: if they're signed in, Paystack's receipt goes to their account email.
+// account needed and no email asked: if they're signed in, the receipt goes to their account email. When Admin has more
+// than one way to pay online switched on (Paystack, Monnify, Flutterwave), the payer picks one.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { copyText, errText } from '../lib/helpers.js';
 import { money } from '../lib/moneyApi.js';
+import { PayWays, WAYS, waysOf, lastWay, keepWay, backFromPay } from '../shared/PayWays.jsx';
 import { Page } from '../shared/Page.jsx';
 import { Skeleton } from '../shared/Skeleton.jsx';
 
@@ -15,6 +17,7 @@ export function PayLinkPage({ token }) {
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState('');
   const [justPaid, setJustPaid] = useState(false);
+  const [via, setVia] = useState('');
   const load = useCallback(
     () =>
       supabase.rpc('get_pay_link', { p_pay: token }).then(({ data, error }) => {
@@ -26,13 +29,16 @@ export function PayLinkPage({ token }) {
   useEffect(() => {
     load();
   }, [load]);
-  // back from Paystack
+  // back from paying online
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
-    const ref = q.get('reference') || q.get('trxref');
-    if (!ref) return;
+    const back = backFromPay(window.location.search);
+    if (!back) return;
     window.history.replaceState(window.history.state, '', window.location.pathname);
-    money('check', { reference: ref })
+    if (back.stopped) {
+      setErr("The payment wasn't finished. Nothing was taken. Try again when you're ready.");
+      return;
+    }
+    money('check', { reference: back.ref })
       .then((r) => {
         if (r.paid) setJustPaid(true);
         else setErr("We couldn't see that payment yet. If money left your account, it shows here shortly.");
@@ -41,11 +47,14 @@ export function PayLinkPage({ token }) {
       .catch((e) => setErr(e.message));
   }, [load]);
 
+  const ways = waysOf(o);
+  const way = ways.includes(via) ? via : lastWay(ways);
   async function payOnline() {
     setErr('');
     setPaying(true);
+    keepWay(way);
     try {
-      const r = await money('paylink', { pay: token });
+      const r = await money('paylink', { pay: token, via: way });
       window.location.assign(r.url);
     } catch (e) {
       setErr(e.message);
@@ -140,8 +149,11 @@ export function PayLinkPage({ token }) {
             <section className="card pl-pay">
               {o.online && (
                 <>
+                  <PayWays ways={ways} value={way} onChange={setVia} disabled={paying} />
                   <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
-                    {paying ? 'Opening Paystack…' : `Pay ${naira(left + fee)} online`}
+                    {paying
+                      ? `Opening ${WAYS[way].name}…`
+                      : `Pay ${naira(left + fee)} ${ways.length > 1 ? 'with ' + WAYS[way].name : 'online'}`}
                   </button>
                   {fee > 0 && <span className="sub pl-fee">Includes {naira(fee)} service fee</span>}
                 </>

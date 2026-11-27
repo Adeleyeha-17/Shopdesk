@@ -144,7 +144,13 @@ await step('the customer pays online only: one short service fee line, no totals
   expect((await p.locator('text=Account number').count()) === 0, 'transfer details still show');
   expect((await p.locator('button:has-text("sent the money")').count()) === 0, "I've sent the money still shows");
   await pause(500);
-  await p.locator('.pay-online button').click();
+  // the three ways to pay online, the last one used picked first
+  const ways = await p.locator('.pay-ways .choice strong').allInnerTexts();
+  expect(ways.join() === 'Paystack,Monnify,Flutterwave', 'the ways to pay are ' + ways.join());
+  await p.locator('.pay-ways .choice:has-text("Monnify")').click();
+  expect(/with Monnify$/.test(await p.locator('.pay-online > button.btn').innerText()), 'the pay button does not say Monnify');
+  await p.locator('.pay-online > button.btn').click();
+  expect((await p.locator('.demo-paystack .dp-brand').innerText()) === 'monnify', 'the checkout is not Monnify');
   await p.locator('.demo-paystack .dp-pay').click();
   await p.locator('.paid-done h2:text-is("Payment successful")').waitFor();
   await p.locator('.paid-done button:has-text("View order")').click();
@@ -925,7 +931,10 @@ await step('the customer asks someone to pay: the pay link shows the items and a
   const page = await text();
   expect(!page.includes(pay.phone) && !page.includes(pay.name), 'the pay link shows the customer details');
   expect((await p.locator('input[type="email"]').count()) === 0, 'the pay link asks for an email');
-  await p.locator('.pl-pay > button.btn').click();
+  expect((await p.locator('.pay-ways .choice[aria-checked="true"] strong').innerText()) === 'Monnify', 'the way used last is not picked');
+  await p.locator('.pay-ways .choice:has-text("Flutterwave")').click();
+  await p.locator('.pl-pay > button.btn:has-text("with Flutterwave")').click();
+  expect((await p.locator('.demo-paystack .dp-brand').innerText()) === 'flutterwave', 'the checkout is not Flutterwave');
   await p.locator('.demo-paystack .dp-pay').click();
   await p.locator('.paid-done h2:text-is("Payment successful")').waitFor();
 });

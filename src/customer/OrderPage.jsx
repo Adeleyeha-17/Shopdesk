@@ -4,8 +4,8 @@
 // (see ProblemBox.jsx). Only the customer who placed the order can do these. The page updates itself the moment
 // the shop does anything, and has a chat with the shop (/o/<link>#chat opens it; it also opens by itself when the shop
 // has written). An unpaid order can be cancelled by the customer, and cancels itself if it isn't paid in 48 hours.
-// When Admin has switched them on: Pay online (Paystack; back on this page with ?reference=...) and ShopDesk Delivery
-// tracking.
+// When Admin has switched them on: Pay online (Paystack, Monnify or Flutterwave, back on this page with the payment
+// reference in the address) and ShopDesk Delivery tracking.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
@@ -27,6 +27,7 @@ import { myTokens } from './savedOrders.js';
 import { ReportProblemForm, CustomerProblem } from './ProblemBox.jsx';
 import { RateShop } from './RateShop.jsx';
 import { money } from '../lib/moneyApi.js';
+import { PayWays, WAYS, waysOf, lastWay, keepWay, backFromPay } from '../shared/PayWays.jsx';
 import { useShipment, CourierRider } from '../shared/Shipment.jsx';
 import { useLiveRider, LiveRiderCard } from '../shared/LiveRider.jsx';
 import { ReceiptSheet, receiptFromOrderPage } from '../shared/Receipt.jsx';
@@ -163,7 +164,8 @@ export function OrderPage({ token }) {
   const [err, setErr] = useState('');
   const [loadErr, setLoadErr] = useState(null);
   const [msg, setMsg] = useState('');
-  const [justPaid, setJustPaid] = useState(false); // back from Paystack with the payment through: the success screen
+  const [justPaid, setJustPaid] = useState(false); // back from paying online with the payment through: the success screen
+  const [via, setVia] = useState(''); // the way to pay online the customer picked (empty: the one they used last)
   // straight from checkout with "Someone else" paying: the pay link to send comes first
   const [askFirst, setAskFirst] = useState(() => {
     try {
@@ -296,12 +298,16 @@ export function OrderPage({ token }) {
     const t = setInterval(refreshShip, 60000);
     return () => clearInterval(t);
   }, [shipping, refreshShip]);
-  // back from Paystack: check the payment, then tidy the address bar
+  // back from paying online: check the payment, then tidy the address bar
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
-    const ref = q.get('reference') || q.get('trxref');
-    if (!ref) return;
+    const back = backFromPay(window.location.search);
+    if (!back) return;
     window.history.replaceState(window.history.state, '', window.location.pathname + window.location.hash);
+    if (back.stopped) {
+      setErr("The payment wasn't finished. Nothing was taken. Try again when you're ready.");
+      return;
+    }
+    const ref = back.ref;
     money('check', { reference: ref })
       .then((r) => {
         if (r.paid) {
@@ -312,11 +318,14 @@ export function OrderPage({ token }) {
       })
       .catch((e) => setErr(e.message));
   }, [load]);
+  const ways = waysOf(pay);
+  const way = ways.includes(via) ? via : lastWay(ways);
   async function payOnline() {
     setPaying(true);
     setErr('');
+    keepWay(way);
     try {
-      const r = await money('pay', { token });
+      const r = await money('pay', { token, via: way });
       window.location.assign(r.url);
     } catch (e) {
       setErr(e.message);
@@ -539,10 +548,11 @@ export function OrderPage({ token }) {
             )}
             {pay && pay.online && canAct && (
               <div className="pay-online">
+                <PayWays ways={ways} value={way} onChange={setVia} disabled={paying} />
                 <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
                   {paying
-                    ? 'Opening Paystack…'
-                    : `Pay ${naira(left + serviceFee(pay))}${onlineOnly ? '' : ' online'}`}
+                    ? `Opening ${WAYS[way].name}…`
+                    : `Pay ${naira(left + serviceFee(pay))}${ways.length > 1 ? ' with ' + WAYS[way].name : onlineOnly ? '' : ' online'}`}
                 </button>
                 {serviceFee(pay) > 0 && (
                   <span className="sub">Includes {naira(serviceFee(pay))} service fee</span>

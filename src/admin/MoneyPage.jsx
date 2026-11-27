@@ -1,4 +1,5 @@
-// Admin > Payments & delivery: switch Pay online (Paystack) and ShopDesk Delivery (Shipbubble) on or off, see whether
+// Admin > Payments & delivery: switch Pay online and ShopDesk Delivery (Shipbubble) on or off, pick the ways customers
+// can pay online (Paystack, Monnify, Flutterwave: each pays the shop's share straight to its bank), see whether
 // the keys are test or live and what is in the courier wallet, set the delivery margin and ShopDesk's fee, and see every
 // delivery. ShopDesk Delivery orders are always paid online, so ShopDesk has the delivery money before it books a courier.
 import React, { useCallback, useEffect, useState } from 'react';
@@ -7,9 +8,11 @@ import { money, shipStatus } from '../lib/moneyApi.js';
 import { naira, toInt } from '../lib/money.js';
 import { dayOf } from '../lib/dates.js';
 import { errText } from '../lib/helpers.js';
+import { WAYS } from '../shared/PayWays.jsx';
 
 const keyText = (k) => (!k ? 'Checking…' : !k.set ? 'Not set' : k.mode === 'live' ? 'Live' : 'Test');
 const keyTone = (k) => (!k || !k.set ? 'owe' : k.mode === 'live' ? 'paid' : 'warn');
+const GATEWAYS = Object.keys(WAYS);
 
 function Switch({ id, on, title, sub, click }) {
   return (
@@ -62,10 +65,26 @@ export function MoneyPage({ say }) {
     say(done);
     load();
   }
+  // switch one way to pay online on or off; at least one stays on, and one with no keys can't come on
+  function toggleWay(g) {
+    const now = d.settings.pay_gateways || ['paystack'];
+    const on = now.includes(g);
+    const name = WAYS[g].name;
+    if (on && now.length === 1) {
+      setErr('Keep at least one way to pay on.');
+      return;
+    }
+    if (!on && keys && keys[g] && !keys[g].set) {
+      setErr(`Put the ${name} keys in Supabase first (Edge Functions, Secrets).`);
+      return;
+    }
+    setErr('');
+    save({ pay_gateways: GATEWAYS.filter((x) => (x === g ? !on : now.includes(x))) }, `${name} is ${on ? 'off' : 'on'}.`);
+  }
   const head = (
     <div className="page-head">
       <h1>Payments &amp; delivery</h1>
-      <span className="sub">Customers paying online with Paystack, and ShopDesk Delivery with Shipbubble.</span>
+      <span className="sub">Customers paying online, and ShopDesk Delivery with Shipbubble.</span>
     </div>
   );
   if (!d)
@@ -79,8 +98,10 @@ export function MoneyPage({ say }) {
   const ships = d.shipments || [];
   const kept = ships.reduce((n, s) => n + (s.price - s.cost), 0);
   const wantText = (f) => (wants && wants[f] ? ` ${wants[f]} shop${wants[f] === 1 ? '' : 's'} want this.` : '');
-  const pk = keys && keys.paystack;
   const ck = keys && keys.courier;
+  const ways = st.pay_gateways || ['paystack'];
+  const byWay = d.online.by_gateway || {};
+  const testKeys = GATEWAYS.filter((g) => ways.includes(g) && keys && keys[g] && keys[g].set && keys[g].mode !== 'live');
   return (
     <>
       {head}
@@ -115,6 +136,29 @@ export function MoneyPage({ say }) {
           }
         />
       </section>
+      <section className="panel">
+        <div className="panel-head">
+          <h3>Ways to pay online</h3>
+        </div>
+        <p className="note">
+          When more than one is on, customers pick one. Each pays the shop&apos;s share straight to the shop&apos;s bank
+          account. Test shops can try all of them.
+        </p>
+        {GATEWAYS.map((g) => {
+          const k = keys && keys[g];
+          const n = byWay[g] || 0;
+          return (
+            <Switch
+              key={g}
+              id={'way-' + g}
+              on={ways.includes(g)}
+              title={WAYS[g].name}
+              sub={`${WAYS[g].what} · ${!k ? 'checking keys' : !k.set ? 'no keys yet' : k.mode === 'live' ? 'live keys' : 'test keys'}${n ? ` · ${n} paid` : ''}`}
+              click={() => toggleWay(g)}
+            />
+          );
+        })}
+      </section>
       {err && <p className="err">{err}</p>}
       <div className="grid2">
         <section className="panel">
@@ -122,10 +166,12 @@ export function MoneyPage({ say }) {
             <h3>Accounts</h3>
           </div>
           <div className="list">
-            <div className="row">
-              <span>Paystack</span>
-              <span className={'chip ' + keyTone(pk)}>{keyText(pk)}</span>
-            </div>
+            {GATEWAYS.map((g) => (
+              <div className="row" key={g}>
+                <span>{WAYS[g].name}</span>
+                <span className={'chip ' + keyTone(keys && keys[g])}>{keyText(keys && keys[g])}</span>
+              </div>
+            ))}
             <div className="row">
               <span>Shipbubble</span>
               <span className={'chip ' + keyTone(ck)}>{keyText(ck)}</span>
@@ -135,17 +181,19 @@ export function MoneyPage({ say }) {
               <span className="num">{ck && ck.balance != null ? naira(ck.balance) : ck && ck.set ? '…' : 'None'}</span>
             </div>
           </div>
-          {pk && pk.set && pk.mode !== 'live' && (
+          {testKeys.length > 0 && (
             <p className="note">
-              With a test key, only test shops can be paid online. Mark one with Make test shop on its page.
+              With test keys ({testKeys.map((g) => WAYS[g].name).join(', ')}), only test shops can pay that way. Mark
+              one with Make test shop on its page.
             </p>
           )}
           {keys && keys.error && <p className="err">{keys.error}</p>}
           {ck && ck.error && <p className="err">{ck.error}</p>}
           <p className="note">
-            Test keys: payments and bookings are pretend, nothing real is charged. Once the accounts are approved, put
-            the live keys in Supabase (Edge Functions, Secrets): PAYSTACK_SECRET_KEY and SHIPBUBBLE_API_KEY. Top up the
-            courier wallet on Shipbubble before switching delivery on.
+            Test keys: payments and bookings are pretend, nothing real is charged. Once each account is approved, put
+            its live keys in Supabase (Edge Functions, Secrets): PAYSTACK_SECRET_KEY; MONNIFY_API_KEY,
+            MONNIFY_SECRET_KEY and MONNIFY_CONTRACT_CODE; FLW_SECRET_KEY and FLW_WEBHOOK_HASH; SHIPBUBBLE_API_KEY. Top
+            up the courier wallet on Shipbubble before switching delivery on.
           </p>
         </section>
         <section className="panel">
@@ -174,7 +222,7 @@ export function MoneyPage({ say }) {
               />
             </div>
             <div className="field">
-              <label htmlFor="feeBy">Paystack&apos;s fee is paid by</label>
+              <label htmlFor="feeBy">The card or transfer fee is paid by</label>
               <select
                 id="feeBy"
                 value={st.paystack_fee_by}
@@ -217,7 +265,11 @@ export function MoneyPage({ say }) {
           <span className="label">Paid online</span>
           <span className="big num">{naira(d.online.amount)}</span>
           <span className="sub">
-            {d.online.count} payments{d.online.fees > 0 ? ` · ${naira(d.online.fees)} card fees paid by customers` : ''}
+            {d.online.count} payments
+            {GATEWAYS.filter((g) => byWay[g]).length > 1
+              ? ' · ' + GATEWAYS.filter((g) => byWay[g]).map((g) => `${WAYS[g].name} ${byWay[g]}`).join(', ')
+              : ''}
+            {d.online.fees > 0 ? ` · ${naira(d.online.fees)} card fees paid by customers` : ''}
           </span>
         </div>
         <div className="tile">

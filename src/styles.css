@@ -1490,6 +1490,11 @@ a.card.profile > div { flex: 1; }
 .pl-fee { text-align: center; }
 .pl-pay .or { margin: 6px 0; }
 .pl-hint { margin: 2px 0 0; }
+/* Choose how to pay online: Paystack, Monnify or Flutterwave (only when Admin has more than one on) */
+.pay-ways { display: grid; gap: 8px; margin-bottom: 4px; }
+.pay-ways-title { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+.pay-ways .choice[aria-checked="true"] { background: var(--soft); }
+.pay-ways .choice:disabled { cursor: default; opacity: .6; }
 /* straight after checkout with "Someone else" paying */
 .ask-first { border: 1.5px solid var(--ink); border-radius: 18px; padding: 16px; margin-bottom: 16px; }
 .ask-first .row { align-items: center; }

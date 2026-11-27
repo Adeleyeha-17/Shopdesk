@@ -97,3 +97,31 @@ true
 f
 t
 
+M19 ways to pay online: Paystack alone at first; Admin adds Monnify; a made-up one and a non-admin are refused; a test shop gets all three (expect paystack; monnify and paystack; a check error; Not allowed; the same two; permission denied for the payout accounts; all three):
+["paystack"]
+
+["monnify", "paystack"]
+psql:money.sql:153: ERROR:  new row for relation "settings" violates check constraint "settings_pay_gateways_check"
+DETAIL:  Failing row contains (1, 3000, 30, 7, t, Moniepoint, 7012345678, SHOPDESK EDEN, 08090000000, <time>, f, 1, 1, 30, f, f, 200, customer, 50, {bitcoin}).
+CONTEXT:  SQL statement "update public.settings set
+    monthly_price = coalesce((p->>'monthly_price')::int, monthly_price), trial_days = coalesce((p->>'trial_days')::int, trial_days),
+    grace_days = coalesce((p->>'grace_days')::int, grace_days), close_unpaid = coalesce((p->>'close_unpaid')::boolean, close_unpaid),
+    pay_bank = left(trim(coalesce(p->>'pay_bank', pay_bank)), 30), pay_account_number = left(regexp_replace(coalesce(p->>'pay_account_number', pay_account_number), '\s', '', 'g'), 20),
+    pay_account_name = left(trim(coalesce(p->>'pay_account_name', pay_account_name)), 60), admin_whatsapp = left(trim(coalesce(p->>'admin_whatsapp', admin_whatsapp)), 20),
+    invites_on = coalesce((p->>'invites_on')::boolean, invites_on), invite_months = coalesce((p->>'invite_months')::int, invite_months),
+    invited_months = coalesce((p->>'invited_months')::int, invited_months),
+    online_pay_on = coalesce((p->>'online_pay_on')::boolean, online_pay_on), delivery_on = coalesce((p->>'delivery_on')::boolean, delivery_on),
+    delivery_margin = coalesce((p->>'delivery_margin')::int, delivery_margin), paystack_fee_by = coalesce(p->>'paystack_fee_by', paystack_fee_by),
+    online_service_fee = coalesce((p->>'online_service_fee')::int, online_service_fee),
+    pay_gateways = coalesce((select array_agg(distinct g) from jsonb_array_elements_text(p->'pay_gateways') g), pay_gateways),
+    free_orders = coalesce((p->>'free_orders')::int, free_orders),
+    updated_at = now()
+  where id = 1"
+PL/pgSQL function admin_save_settings(jsonb) line N at SQL statement
+psql:money.sql:155: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function admin_save_settings(jsonb) line N at RAISE
+["monnify", "paystack"]
+psql:money.sql:158: ERROR:  permission denied for table shop_payouts
+
+["paystack", "monnify", "flutterwave"]
+|

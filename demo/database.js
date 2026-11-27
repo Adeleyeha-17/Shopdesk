@@ -1179,7 +1179,8 @@ const shipView = (sh) => ({
   rider: sh.rider,
 });
 
-// Paystack's page, in the demo: a pretend checkout sheet instead of leaving the page.
+// The gateway's page (Paystack, Monnify or Flutterwave), in the demo: a pretend checkout sheet instead of leaving the page.
+const GATEWAY = { paystack: 'Paystack', monnify: 'Monnify', flutterwave: 'Flutterwave' };
 function demoPaystack(ref, done) {
   const p = (S.online || []).find((x) => x.reference === ref);
   if (!p) return done && done();
@@ -1192,7 +1193,10 @@ function demoPaystack(ref, done) {
     <div class="dp-shop"></div><div class="dp-amt"></div>
     <div class="dp-ways"><span class="on">Card</span><span>Transfer</span><span>USSD</span></div>
     <button class="btn dp-pay"></button><button class="btn ghost dp-cancel">Cancel</button>
-    <p class="note dp-note">In the real app this is Paystack's own page. Nothing is charged in the demo.</p></div>`;
+    <p class="note dp-note"></p></div>`;
+  const gw = GATEWAY[p.via] || 'Paystack';
+  wrap.querySelector('.dp-brand').textContent = gw.toLowerCase();
+  wrap.querySelector('.dp-note').textContent = `In the real app this is ${gw}'s own page. Nothing is charged in the demo.`;
   wrap.querySelector('.dp-shop').textContent = s.name;
   wrap.querySelector('.dp-amt').textContent = naira(p.amount + p.fee + p.service);
   wrap.querySelector('.dp-pay').textContent = 'Pay ' + naira(p.amount + p.fee + p.service);
@@ -1868,11 +1872,12 @@ const RPC = {
       online_only: o.delivery_by === 'shopdesk',
       fee: onlineFee(left + SERVICE),
       service: SERVICE,
+      gateways: Object.keys(GATEWAY),
     };
   },
-  pay_link_online: ({ p_pay }) => {
+  pay_link_online: ({ p_pay, p_via }) => {
     const o = S.orders.find((x) => x.pay_token === p_pay) || fail('This pay link isn’t right. Ask for a new one.');
-    return RPC.customer_pay_online({ p_token: o.public_token, p_any: true });
+    return RPC.customer_pay_online({ p_token: o.public_token, p_any: true, p_via });
   },
   // ---------- Pay online and ShopDesk Delivery (switched on in the demo; the real ones are off until Admin turns them on) ----------
   money_switches: () => (S.money_off ? { online: false, delivery: false, fee_by: 'customer' } : { online: true, delivery: true, fee_by: 'customer' }),
@@ -1893,6 +1898,7 @@ const RPC = {
       delivery_by: o.delivery_by || 'shop',
       courier: o.delivery_quote ? o.delivery_quote.name : null,
       shipment: sh ? shipView(sh) : null,
+      gateways: Object.keys(GATEWAY),
     };
   },
   save_courier_quotes: ({ p_order }) => {
@@ -2080,7 +2086,7 @@ const RPC = {
     const matches = at.filter((b) => !p_bank || b === p_bank).map((b) => ({ bank: b, account_name: name }));
     return { available: true, matches };
   },
-  customer_pay_online: ({ p_token, p_any }) => {
+  customer_pay_online: ({ p_token, p_any, p_via }) => {
     // p_any: someone else paying with the order's pay link
     const o = p_any ? S.orders.find((x) => x.public_token === p_token) : customerOrder(p_token);
     if (!['awaiting', 'part'].includes(o.status)) fail('This order is already paid or closed.');
@@ -2102,6 +2108,7 @@ const RPC = {
             : o.delivery_quote.price
           : 0,
       paid: false,
+      via: GATEWAY[p_via] ? p_via : 'paystack',
     });
     return { url: ref, amount: due, shop: shopOf(o).name };
   },
@@ -2993,8 +3000,8 @@ const MONEY = {
   pick: (b) => ['set_courier', { p_order: b.order, p_courier: b.courier_id, p_service: b.service_code }],
   book: (b) => ['hand_to_courier', { p_order: b.order }],
   track: (b) => ['set_courier_progress', { p_order: b.order, p_token: b.token }],
-  pay: (b) => ['customer_pay_online', { p_token: b.token }],
-  paylink: (b) => ['pay_link_online', { p_pay: b.pay }],
+  pay: (b) => ['customer_pay_online', { p_token: b.token, p_via: b.via }],
+  paylink: (b) => ['pay_link_online', { p_pay: b.pay, p_via: b.via }],
   check: (b) => ['customer_paid_online', { p_ref: b.reference }],
   bank: (b) => ['demo_find_account', { p_number: b.account_number, p_bank: b.bank }],
 };
