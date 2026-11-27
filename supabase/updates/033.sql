@@ -69,6 +69,18 @@ language sql stable security definer set search_path = public as $$
   from public.orders o join public.shops s on s.id = o.shop_id cross join public.settings st where o.pay_token = p_pay and st.id = 1;
 $$;
 
+-- Checkout: can this shop be paid online, and what a customer paying online pays on top, so checkout shows one total.
+create or replace function public.checkout_pay(p_slug text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'online', (st.online_pay_on or s.pay_test) and s.status = 'active' and s.bank <> 'Other bank' and s.account_number ~ '^[0-9]{10}$',
+    'service', st.online_service_fee,
+    'fee_by', st.paystack_fee_by)
+  from public.shops s cross join public.settings st where s.slug = p_slug and st.id = 1;
+$$;
+revoke all on function public.checkout_pay(text) from public;
+grant execute on function public.checkout_pay(text) to anon, authenticated;
+
 create or replace function public.admin_save_settings(p jsonb) returns void
 language plpgsql security definer set search_path = public as $$
 begin

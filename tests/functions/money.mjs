@@ -56,6 +56,7 @@ async function fakeFetch(url, init = {}) {
       return name ? new Response(JSON.stringify({ status: true, data: { account_name: name } })) : new Response(JSON.stringify({ status: false, message: 'Could not resolve account name' }), { status: 422 });
     }
     if (u.pathname === '/subaccount') return new Response(JSON.stringify({ status: true, data: { subaccount_code: 'ACCT_shop1' } }));
+    if (u.pathname === '/transaction/initialize' && gw.paystackDown) return new Response('{"status":false,"message":"Service unavailable"}', { status: 503 });
     if (u.pathname === '/transaction/initialize') return new Response(JSON.stringify({ status: true, data: { authorization_url: 'https://checkout.paystack.com/abc' } }));
     if (u.pathname.startsWith('/transaction/verify/')) return new Response(JSON.stringify({ status: true, data: { status: 'success', amount: paidKobo, currency: 'NGN' } }));
   }
@@ -281,7 +282,23 @@ check('a test shop pays through the Monnify sandbox, with no split', r.url && tI
 r = await post({ action: 'status' }, 'admin');
 check('Admin sees each gateway’s keys: live or test', r.monnify?.mode === 'test' && r.monnify.set && r.flutterwave?.mode === 'live', r);
 await sql`update shops set pay_test = false where id = ${shop.id}`;
+// the customer picks how they pay (bank app, or card and USSD); ShopDesk picks the gateway
+ENV.MONNIFY_API_KEY = 'MK_PROD_abc';
+await sql`update orders set status = 'cancelled' where public_token in (${t4}::uuid, ${t5}::uuid)`;
+const t6 = await newOrder();
+r = await post({ action: 'pay', token: t6, how: 'bank' }, 'cust');
+let pInit = calls.filter((c) => c.url.endsWith('/transaction/initialize')).pop()?.body;
+check('a bank-app payment opens on the transfer screen, with the first gateway Admin has on', r.url && pInit.reference === r.reference && pInit.channels?.join() === 'bank_transfer', pInit);
+gw.paystackDown = true;
+const t7 = await newOrder();
+r = await post({ action: 'pay', token: t7, how: 'card' }, 'cust');
+const mCard = calls.filter((c) => c.url.endsWith('/init-transaction')).pop()?.body;
+row = (await sql`select provider from online_payments where reference = ${mCard.paymentReference}`)[0];
+check('when Paystack is down, the payment moves to Monnify by itself, card and USSD only', r.url && mCard.paymentReference === r.reference && mCard.paymentMethods.join() === 'CARD,USSD' && row.provider === 'monnify', { r, mCard, row });
 await asAdmin({ pay_gateways: ['paystack'] });
+r = await post({ action: 'pay', token: t7, how: 'card' }, 'cust');
+check('with every gateway down, the customer is told to pay the shop straight', /isn.t working right now|Paystack isn.t working/.test(r.error || ''), r);
+gw.paystackDown = false;
 
 await sql.begin(async (tx) => { await tx`select set_config('request.jwt.claim.sub', ${ADMIN}, true)`; await tx`select admin_save_settings('{"online_pay_on":false,"delivery_on":false}')`; });
 await sql.end();

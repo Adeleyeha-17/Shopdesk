@@ -472,6 +472,8 @@ const GATE = {
         reference: ref,
         ...(sub && { subaccount: sub, bearer: fee > 0 || (r.delivery_part > 0 && r.fee_by === 'shopdesk') ? 'account' : 'subaccount' }),
         callback_url: SITE + back,
+        ...(r.how === 'bank' && { channels: ['bank_transfer'] }),
+        ...(r.how === 'card' && { channels: ['card', 'ussd'] }),
         metadata: { order_id: r.order_id, shop: r.shop.slug, delivery_part: r.delivery_part, card_fee: fee, shopdesk_fee: service, cancel_action: SITE + back },
       };
       if (sub && ours > 0) body.transaction_charge = ours * 100;
@@ -496,7 +498,7 @@ const GATE = {
         currencyCode: 'NGN',
         contractCode: api.get('MONNIFY_CONTRACT_CODE'),
         redirectUrl: SITE + back,
-        paymentMethods: ['CARD', 'ACCOUNT_TRANSFER', 'USSD'],
+        paymentMethods: r.how === 'bank' ? ['ACCOUNT_TRANSFER'] : r.how === 'card' ? ['CARD', 'USSD'] : ['CARD', 'ACCOUNT_TRANSFER', 'USSD'],
         metaData: { order_id: String(r.order_id), shop: r.shop.slug },
         // the shop gets exactly its share and pays none of Monnify's fee
         ...(sub && { incomeSplitConfig: [{ subAccountCode: sub, splitAmount: shopShare, feePercentage: 0, feeBearer: false }] }),
@@ -520,6 +522,7 @@ const GATE = {
         redirect_url: SITE + back,
         customer: { email: r.email },
         customizations: { title: r.shop.name },
+        ...(r.how && { payment_options: r.how === 'bank' ? 'banktransfer' : 'card,ussd' }),
         meta: { order_id: r.order_id, shop: r.shop.slug },
         // flat_subaccount: the shop gets exactly its share; Flutterwave's fee comes out of ShopDesk's part
         ...(sub && { subaccounts: [{ id: sub, transaction_charge_type: 'flat_subaccount', transaction_charge: shopShare }] }),
@@ -538,7 +541,7 @@ const GATE = {
 export async function startPayment(sql, api, r, back, ref, via = 'paystack') {
   const g = GATE[via];
   if (!g) throw say('Pick a way to pay.');
-  if (via !== 'paystack') await sql`update public.online_payments set provider = ${via} where reference = ${ref}`;
+  await sql`update public.online_payments set provider = ${via} where reference = ${ref}`;
   try {
     return { url: await g.start(sql, api, r, back, ref), reference: ref };
   } catch (e) {
@@ -546,6 +549,20 @@ export async function startPayment(sql, api, r, back, ref, via = 'paystack') {
     console.error(via + ' start: ' + e.message);
     throw say(`Paying with ${NAMES[via]} isn’t working right now. Try another way to pay.`);
   }
+}
+
+// how: 'bank' (transfer from a bank app) or 'card' (card or USSD). The customer never picks a gateway: ShopDesk starts
+// the payment with the first one that works, in the order Admin has them, so one being down never stops a payment.
+async function startFirst(sql, api, r, back, ref, ways, how) {
+  const run = { ...r, how: how === 'bank' || how === 'card' ? how : null };
+  for (let i = 0; i < ways.length; i++) {
+    try {
+      return await startPayment(sql, api, run, back, ref, ways[i]);
+    } catch (e) {
+      if (!(e instanceof Say) || i === ways.length - 1) throw ways.length > 1 && e instanceof Say ? say('Paying online isn’t working right now. Pay straight to the shop, or try again in a few minutes.') : e;
+    }
+  }
+  throw say('Paying online isn’t on yet. Pay by transfer for now.');
 }
 
 // Checks with the gateway that took the payment, then marks the order paid. Safe to run more than once.
@@ -597,6 +614,18 @@ async function gatewayFor(sql, api, asked, where, missing = 'Order not found.') 
   if (!t.pay_test && !(t.pay_gateways || ['paystack']).includes(via)) throw say(`Paying with ${NAMES[via]} isn’t on. Pick another way to pay.`);
   if (api.testMode(via) && !t.pay_test) throw say('Paying online isn’t on yet. Pay by transfer for now.');
   return via;
+}
+
+// Every gateway this payment can use, in Admin's order: switched on (a test shop can use any), with keys in, and with
+// test keys only for test shops.
+async function gatewaysFor(sql, api, where, missing) {
+  const t = (await sql`select s.pay_test, st.pay_gateways from public.orders o join public.shops s on s.id = o.shop_id
+    cross join public.settings st where ${where} and st.id = 1`)[0];
+  if (!t) throw say(missing);
+  const on = t.pay_test ? GATEWAYS : GATEWAYS.filter((g) => (t.pay_gateways || ['paystack']).includes(g));
+  const ways = on.filter((g) => api.modeOf(g) && (!api.testMode(g) || t.pay_test));
+  if (!ways.length) throw say('Paying online isn’t on yet. Pay by transfer for now.');
+  return ways;
 }
 
 const ACTIONS = {
@@ -652,10 +681,11 @@ const ACTIONS = {
   async pay({ sql, api, uid, body }) {
     const token = String(body.token || '');
     if (!/^[0-9a-f-]{36}$/i.test(token)) throw say('Order not found.');
-    const via = await gatewayFor(sql, api, body.via, sql`o.public_token = ${token}::uuid`);
+    const where = sql`o.public_token = ${token}::uuid`;
+    const ways = body.via ? [await gatewayFor(sql, api, body.via, where)] : await gatewaysFor(sql, api, where, 'Order not found.');
     const ref = 'SD' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomUUID().slice(0, 8).toUpperCase();
     const r = await asUser(sql, uid, (tx) => one(tx`select public.money_start_payment(${token}::uuid, ${ref}) as r`));
-    return startPayment(sql, api, r, '/o/' + token, ref, via);
+    return startFirst(sql, api, r, '/o/' + token, ref, ways, body.how);
   },
 
   // Someone else pays with the pay link the customer sent them. No sign-in needed: the link is the secret. If they are
@@ -663,10 +693,12 @@ const ACTIONS = {
   async paylink({ sql, api, uid, body }) {
     const pay = String(body.pay || '');
     if (!/^[0-9a-f-]{36}$/i.test(pay)) throw say('This pay link isn’t right. Ask for a new one.');
-    const via = await gatewayFor(sql, api, body.via, sql`o.pay_token = ${pay}::uuid`, 'This pay link isn’t right. Ask for a new one.');
+    const where = sql`o.pay_token = ${pay}::uuid`;
+    const bad = 'This pay link isn’t right. Ask for a new one.';
+    const ways = body.via ? [await gatewayFor(sql, api, body.via, where, bad)] : await gatewaysFor(sql, api, where, bad);
     const ref = 'SD' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomUUID().slice(0, 8).toUpperCase();
     const r = (await sql`select public.money_start_link_payment(${pay}::uuid, ${ref}, ${uid || null}::uuid) as r`)[0].r;
-    return startPayment(sql, api, r, '/pay/' + pay, ref, via);
+    return startFirst(sql, api, r, '/pay/' + pay, ref, ways, body.how);
   },
 
   async check({ sql, api, body }) {

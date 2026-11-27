@@ -1,13 +1,13 @@
 // /pay/<pay token>: a customer sent this link to someone so they pay the order. It shows the shop, the items and what's
 // left to pay, never the customer's address or phone. The payer can transfer to the shop, or pay online. No ShopDesk
-// account needed and no email asked: if they're signed in, the receipt goes to their account email. When Admin has more
-// than one way to pay online switched on (Paystack, Monnify, Flutterwave), the payer picks one.
+// account needed and no email asked: if they're signed in, the receipt goes to their account email. The payer picks how:
+// bank app, card, or straight to the shop.
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { naira } from '../lib/money.js';
 import { copyText, errText } from '../lib/helpers.js';
 import { money } from '../lib/moneyApi.js';
-import { PayWays, WAYS, waysOf, lastWay, keepWay, backFromPay } from '../shared/PayWays.jsx';
+import { PayWith, howsFor, lastHow, keepHow, backFromPay } from '../shared/PayWays.jsx';
 import { Page } from '../shared/Page.jsx';
 import { Skeleton } from '../shared/Skeleton.jsx';
 
@@ -17,7 +17,7 @@ export function PayLinkPage({ token }) {
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState('');
   const [justPaid, setJustPaid] = useState(false);
-  const [via, setVia] = useState('');
+  const [how, setHow] = useState('');
   const load = useCallback(
     () =>
       supabase.rpc('get_pay_link', { p_pay: token }).then(({ data, error }) => {
@@ -47,14 +47,14 @@ export function PayLinkPage({ token }) {
       .catch((e) => setErr(e.message));
   }, [load]);
 
-  const ways = waysOf(o);
-  const way = ways.includes(via) ? via : lastWay(ways);
+  const hows = howsFor(o && o.online_only);
+  const chosen = hows.includes(how) ? how : lastHow(hows);
   async function payOnline() {
     setErr('');
     setPaying(true);
-    keepWay(way);
+    keepHow(chosen);
     try {
-      const r = await money('paylink', { pay: token, via: way });
+      const r = await money('paylink', { pay: token, how: chosen });
       window.location.assign(r.url);
     } catch (e) {
       setErr(e.message);
@@ -149,26 +149,20 @@ export function PayLinkPage({ token }) {
             <section className="card pl-pay">
               {o.online && (
                 <>
-                  <PayWays ways={ways} value={way} onChange={setVia} disabled={paying} />
-                  <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
-                    {paying
-                      ? `Opening ${WAYS[way].name}…`
-                      : `Pay ${naira(left + fee)} ${ways.length > 1 ? 'with ' + WAYS[way].name : 'online'}`}
-                  </button>
-                  {fee > 0 && <span className="sub pl-fee">Includes {naira(fee)} service fee</span>}
+                  <PayWith list={hows} value={chosen} onChange={setHow} disabled={paying} />
+                  {chosen !== 'shop' && (
+                    <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
+                      {paying ? 'Opening payment…' : `Pay ${naira(left + fee)}`}
+                    </button>
+                  )}
                 </>
-              )}
-              {o.online && !o.online_only && (
-                <div className="or">
-                  <span>or pay by transfer</span>
-                </div>
               )}
               {o.online_only && !o.online && (
                 <p className="note" style={{ margin: 0 }}>
                   Paying online isn’t available for this order right now. Let the person who sent this link know.
                 </p>
               )}
-              {!o.online_only && (
+              {!o.online_only && !(o.online && chosen !== 'shop') && (
                 <>
                   <div className="slip pay-slip">
                     <div className="pay-line">

@@ -138,19 +138,19 @@ await step('the customer pays online only: one short service fee line, no totals
   await p.locator(`a:has-text("${code2}")`).click();
   await see('Delivered by Dellyman with ShopDesk Delivery');
   const page = await text();
-  expect(/Includes ₦[\d,]+ service fee/.test(page), 'the service fee line is missing');
+  expect(!/service fee|card fee/i.test(page), 'a fee line shows: the customer sees one total');
   expect(!/Total so far|\bTotal\b/.test(page), 'the totals box still shows');
   expect(!/card fee|ShopDesk fee|Pay by|Saved to/.test(page), 'the long fee text, pay-by line or saved line still shows');
   expect((await p.locator('text=Account number').count()) === 0, 'transfer details still show');
   expect((await p.locator('button:has-text("sent the money")').count()) === 0, "I've sent the money still shows");
   await pause(500);
-  // the three ways to pay online, the last one used picked first
+  // paid online only: bank app or card, never straight to the shop
   const ways = await p.locator('.pay-ways .choice strong').allInnerTexts();
-  expect(ways.join() === 'Paystack,Monnify,Flutterwave', 'the ways to pay are ' + ways.join());
-  await p.locator('.pay-ways .choice:has-text("Monnify")').click();
-  expect(/with Monnify$/.test(await p.locator('.pay-online > button.btn').innerText()), 'the pay button does not say Monnify');
+  expect(ways.join() === 'My bank app,Card or USSD', 'the ways to pay are ' + ways.join());
+  await p.locator('.pay-ways .choice:has-text("Card or USSD")').click();
+  expect(/^Pay ₦[\d,]+$/.test(await p.locator('.pay-online > button.btn').innerText()), 'the pay button is not one total');
   await p.locator('.pay-online > button.btn').click();
-  expect((await p.locator('.demo-paystack .dp-brand').innerText()) === 'monnify', 'the checkout is not Monnify');
+  expect((await p.locator('.demo-paystack .dp-ways').innerText()).replace(/\s+/g, ' ').trim() === 'Card USSD', 'card does not open on card and USSD');
   await p.locator('.demo-paystack .dp-pay').click();
   await p.locator('.paid-done h2:text-is("Payment successful")').waitFor();
   await p.locator('.paid-done button:has-text("View order")').click();
@@ -332,6 +332,7 @@ await step('the customer sees the total and says they have paid', async () => {
   await as('Customer');
   await tab('Orders').click();
   await p.locator(`a:has-text("${code}")`).click();
+  await p.locator('.pay-ways .choice:has-text("Straight to the shop")').click();
   await see('Account number');
   await p.locator('button:has-text("sent the money")').click();
   await see('The shop is told');
@@ -931,12 +932,39 @@ await step('the customer asks someone to pay: the pay link shows the items and a
   const page = await text();
   expect(!page.includes(pay.phone) && !page.includes(pay.name), 'the pay link shows the customer details');
   expect((await p.locator('input[type="email"]').count()) === 0, 'the pay link asks for an email');
-  expect((await p.locator('.pay-ways .choice[aria-checked="true"] strong').innerText()) === 'Monnify', 'the way used last is not picked');
-  await p.locator('.pay-ways .choice:has-text("Flutterwave")').click();
-  await p.locator('.pl-pay > button.btn:has-text("with Flutterwave")').click();
-  expect((await p.locator('.demo-paystack .dp-brand').innerText()) === 'flutterwave', 'the checkout is not Flutterwave');
+  expect((await p.locator('.pay-ways .choice[aria-checked="true"] strong').innerText()) === 'Card or USSD', 'the way used last is not picked');
+  expect((await p.locator('text=Account number').count()) === 0, 'the shop account shows while paying online');
+  await p.locator('.pay-ways .choice:has-text("Straight to the shop")').click();
+  await p.locator('text=Account number').waitFor();
+  expect((await p.locator('.pl-pay > button.btn').count()) === 0, 'the online pay button still shows');
+  await p.locator('.pay-ways .choice:has-text("My bank app")').click();
+  await p.locator('.pl-pay > button.btn').click();
+  expect((await p.locator('.demo-paystack .dp-ways').innerText()).trim() === 'Transfer', 'the bank app does not open on transfer');
   await p.locator('.demo-paystack .dp-pay').click();
   await p.locator('.paid-done h2:text-is("Payment successful")').waitFor();
+});
+
+await step('paying for yourself: checkout asks how; a pick-up paid from a bank app goes straight to paying, at the total shown', async () => {
+  await as('Customer');
+  await patch((S) => { S.money_off = false; }, '/bimpes-beauty');
+  await p.locator('.pcard:not(:has(.pname:text-is("Hair growth oil"))) button[data-inc]').first().click();
+  await tab('Cart').click();
+  await p.locator('button:has-text("Checkout")').click();
+  await see('How will you pay?');
+  await p.locator('button[role="radio"]:has-text("pick it up")').click();
+  const num = async () => Number((await p.locator('.co-bar-total strong').innerText()).replace(/\D/g, ''));
+  await p.locator('.choice:has-text("Straight to the shop")').click();
+  const toShop = await num();
+  await p.locator('.choice:has-text("My bank app")').click();
+  const online = await num();
+  expect(online > toShop, 'the online total has nothing added');
+  expect(!/service fee|card fee/i.test(await text()), 'a fee line shows at checkout');
+  await p.locator('button:has-text("Place order")').click();
+  await p.locator('.demo-paystack .dp-pay').waitFor();
+  expect((await p.locator('.demo-paystack .dp-ways').innerText()).trim() === 'Transfer', 'the bank app does not open on transfer');
+  expect(Number((await p.locator('.demo-paystack .dp-amt').innerText()).replace(/\D/g, '')) === online, 'the payment is not the total shown at checkout');
+  await p.locator('.demo-paystack .dp-pay').click();
+  await p.locator('h2:has-text("Paid")').first().waitFor();
 });
 
 await step('the shop sees how its codes did and makes a new one in the Shop tab', async () => {

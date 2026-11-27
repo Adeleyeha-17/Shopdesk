@@ -1,29 +1,34 @@
-// The ways to pay online that Admin has switched on: Paystack, Monnify and Flutterwave. Each one pays the shop's share
-// straight into the shop's own bank account. With only one way on there's nothing to pick, so nothing shows.
+// How the customer pays: from their bank app or by card, or straight to the shop's account. Customers never pick a
+// payment company: ShopDesk starts the payment with the first one Admin has on (Paystack, Monnify, Flutterwave) and moves
+// to the next if one is down. No fee lines anywhere: the pay button shows the one total.
 import React from 'react';
 
+// the payment companies, for Admin
 export const WAYS = {
   paystack: { name: 'Paystack', what: 'Card, transfer, USSD or Pocket' },
   monnify: { name: 'Monnify', what: 'Card, transfer or USSD' },
   flutterwave: { name: 'Flutterwave', what: 'Card, transfer or USSD' },
 };
 
-// the ways this order can be paid, from order_money or get_pay_link (Paystack alone before the database update),
-// always in the same order
-export const waysOf = (x) => Object.keys(WAYS).filter((w) => ((x && x.gateways) || ['paystack']).includes(w));
+export const HOW = {
+  bank: { name: 'My bank app', what: 'Any bank · confirmed instantly' },
+  card: { name: 'Card or USSD', what: 'Visa, Mastercard or Verve' },
+  shop: { name: 'Straight to the shop', what: 'To the shop’s account · the shop confirms' },
+};
+export const howsFor = (onlineOnly) => (onlineOnly ? ['bank', 'card'] : ['bank', 'card', 'shop']);
 
-// the way this phone used last time, when it's still on
-const KEY = 'sd-pay-via';
-export function lastWay(ways) {
+// the way this phone paid last time, when it's on the list
+const KEY = 'sd-pay-how';
+export function lastHow(list) {
   try {
     const v = localStorage.getItem(KEY);
-    if (ways.includes(v)) return v;
+    if (list.includes(v)) return v;
   } catch {
-    // private window: start from the first way
+    // private window: start from the first
   }
-  return ways[0];
+  return list[0];
 }
-export function keepWay(v) {
+export function keepHow(v) {
   try {
     localStorage.setItem(KEY, v);
   } catch {
@@ -31,7 +36,17 @@ export function keepWay(v) {
   }
 }
 
-// Back from a gateway's page: the payment reference it added to the address, and whether the customer stopped.
+// What a customer paying online pays in all (the same sums as the database's order_money): ShopDesk's fee, plus the
+// card fee when the customer pays it. p: checkout_pay.
+export function onlineTotal(due, p) {
+  if (!p || due <= 0) return due;
+  const base = due + (p.service || 0);
+  const fee =
+    p.fee_by !== 'customer' ? 0 : Math.ceil(base / 0.985) < 2500 ? Math.ceil(base / 0.985) - base : Math.min(Math.ceil((base + 100) / 0.985) - base, 2000);
+  return base + fee;
+}
+
+// Back from the payment page: the payment reference it added to the address, and whether the customer stopped.
 // Paystack adds reference (and trxref), Monnify paymentReference, Flutterwave tx_ref and status.
 export function backFromPay(search) {
   const q = new URLSearchParams(search);
@@ -39,26 +54,32 @@ export function backFromPay(search) {
   return ref ? { ref, stopped: q.get('status') === 'cancelled' } : null;
 }
 
-export function PayWays({ ways, value, onChange, disabled }) {
-  if (ways.length < 2) return null;
+// big: the checkout card, with a heading like the other checkout cards
+export function PayWith({ list, value, onChange, disabled, big }) {
   return (
     <div className="pay-ways">
-      <p className="pay-ways-title" id="payWaysTitle">
-        Choose how to pay
-      </p>
-      <div className="choices" role="radiogroup" aria-labelledby="payWaysTitle">
-        {ways.map((w) => (
+      {big ? (
+        <h2 className="co-title" id="payWithTitle">
+          How will you pay?
+        </h2>
+      ) : (
+        <p className="pay-ways-title" id="payWithTitle">
+          Pay with
+        </p>
+      )}
+      <div className="choices" role="radiogroup" aria-labelledby="payWithTitle">
+        {list.map((h) => (
           <button
-            key={w}
+            key={h}
             type="button"
             className="choice"
             role="radio"
-            aria-checked={value === w}
-            onClick={() => onChange(w)}
+            aria-checked={value === h}
+            onClick={() => onChange(h)}
             disabled={disabled}
           >
-            <strong>{WAYS[w].name}</strong>
-            <span>{WAYS[w].what}</span>
+            <strong>{HOW[h].name}</strong>
+            <span>{HOW[h].what}</span>
             <i aria-hidden="true" />
           </button>
         ))}

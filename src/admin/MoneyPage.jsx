@@ -141,8 +141,9 @@ export function MoneyPage({ say }) {
           <h3>Ways to pay online</h3>
         </div>
         <p className="note">
-          When more than one is on, customers pick one. Each pays the shop&apos;s share straight to the shop&apos;s bank
-          account. Test shops can try all of them.
+          Customers only choose bank app, card or the shop&apos;s account. ShopDesk uses the first company here that
+          works and moves to the next if one is down. Each pays the shop&apos;s share straight to the shop&apos;s bank
+          account. Test shops can use all of them.
         </p>
         {GATEWAYS.map((g) => {
           const k = keys && keys[g];

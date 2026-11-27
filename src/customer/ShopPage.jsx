@@ -23,7 +23,8 @@ import { areaIn } from './areas.js';
 import { noteSource, sourceFor, visitorId } from './source.js';
 import { PinIcon, Star } from './NearYou.jsx';
 import { AddressSheet, loadAddresses } from './Addresses.jsx';
-import { useMoneySwitches } from '../lib/moneyApi.js';
+import { useMoneySwitches, money } from '../lib/moneyApi.js';
+import { PayWith, howsFor, lastHow, keepHow, onlineTotal } from '../shared/PayWays.jsx';
 
 // "₦8,000 ₦9,500": the price to pay, with the old one crossed out during a sale
 function Price({ x }) {
@@ -259,6 +260,12 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [find, setFind] = useState(''); // search this shop's products
   const [inSearch, setInSearch] = useState(false); // the search box is being used
   const [form, setForm] = useState({ name: '', phone: '', mode: 'delivery', address: '', area: '', note: '', payer: 'me' });
+  const [how, setHow] = useState(''); // how the customer pays: bank app, card, or straight to the shop
+  const [cp, setCp] = useState(null); // checkout_pay: can this shop be paid online, and ShopDesk's fee
+  useEffect(() => {
+    if (!checkout) return;
+    supabase.rpc('checkout_pay', { p_slug: slug }).then(({ data, error }) => setCp(error ? null : data));
+  }, [checkout, slug]);
   const [codeOpen, setCodeOpen] = useState(false); // the discount code box
   const [codeIn, setCodeIn] = useState('');
   const [coupon, setCoupon] = useState(null); // the code that worked: { code, kind, value, min_total }
@@ -435,6 +442,13 @@ export function ShopPage({ slug, step = 'shop' }) {
     ? products.filter((p) => (p.name + ' ' + (p.description || '')).toLowerCase().includes(words))
     : products;
   const custPays = shop.delivery_paid_by === 'customer';
+  // Paying for yourself: by bank app or card when this shop can be paid online (a ShopDesk Delivery order is paid online
+  // only), or straight to the shop. It's paid right after it's placed when the total is already known: a pick-up, or a
+  // delivery the shop doesn't charge for.
+  const hows = cp && cp.online ? howsFor(sw.delivery && form.mode === 'delivery') : [];
+  const chosen = hows.length ? (hows.includes(how) ? how : lastHow(hows)) : 'shop';
+  const payNow = form.payer !== 'other' && chosen !== 'shop' && (form.mode === 'pickup' || (!sw.delivery && !custPays));
+  const total = payNow ? onlineTotal(due, cp) : due;
   const set = (id, q) => {
     setCart((c) => ({ ...c, [id]: Math.max(0, q) }));
     setCartNote('');
@@ -525,12 +539,22 @@ export function ShopPage({ slug, step = 'shop' }) {
     rememberOrder(data.token);
     clearCart(slug);
     kick();
-    // someone else paying: the order page opens on the pay link to send them
-    if (form.payer === 'other') {
+    // someone else paying: the order page opens on the pay link to send them; paying yourself: the order page remembers how
+    try {
+      if (form.payer === 'other') sessionStorage.setItem('sd-ask-' + data.token, '1');
+      else if (hows.length) sessionStorage.setItem('sd-how-' + data.token, chosen);
+    } catch {
+      /* without storage the order page still has both */
+    }
+    if (form.payer !== 'other' && hows.length) keepHow(chosen);
+    if (payNow) {
+      setBusy(true);
       try {
-        sessionStorage.setItem('sd-ask-' + data.token, '1');
+        const r = await money('pay', { token: data.token, how: chosen });
+        window.location.assign(r.url);
+        return;
       } catch {
-        /* without storage the pay link is still at the bottom of the order */
+        setBusy(false); // the order page offers the same choice again
       }
     }
     navigate('/o/' + data.token);
@@ -1009,6 +1033,11 @@ export function ShopPage({ slug, step = 'shop' }) {
               </button>
             </div>
           </section>
+          {form.payer !== 'other' && hows.length > 0 && (
+            <section className="card boxed co-card" aria-label="How will you pay?">
+              <PayWith big list={hows} value={chosen} onChange={setHow} disabled={busy} />
+            </section>
+          )}
           <section className="card boxed co-card" aria-label="Your order">
             <div className="row">
               <h2 className="co-title">
@@ -1056,7 +1085,7 @@ export function ShopPage({ slug, step = 'shop' }) {
               <div className="row co-total">
                 <span>Total</span>
                 <span className="num">
-                  {naira(due)}
+                  {naira(total)}
                   {plusDelivery ? ' + delivery' : ''}
                 </span>
               </div>
@@ -1115,7 +1144,9 @@ export function ShopPage({ slug, step = 'shop' }) {
               <span>
                 {sw.delivery && form.mode === 'delivery'
                   ? 'Pay once the shop confirms, then track it to your door.'
-                  : 'Pay in one transfer. It’s packed once it lands.'}
+                  : payNow
+                    ? 'You pay on the next screen. It’s packed once it’s paid.'
+                    : 'Pay in one transfer. It’s packed once it lands.'}
               </span>
             </div>
           </section>
@@ -1131,7 +1162,7 @@ export function ShopPage({ slug, step = 'shop' }) {
             <div className="co-bar-row">
               <div className="co-bar-total">
                 <span>Total</span>
-                <strong className="num">{naira(due)}</strong>
+                <strong className="num">{naira(total)}</strong>
                 {plusDelivery && <span>+ delivery</span>}
               </div>
               <button className="btn" onClick={place} disabled={busy || !sub}>

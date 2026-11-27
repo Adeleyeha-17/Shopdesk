@@ -101,7 +101,7 @@ Monnify and Flutterwave are optional: leave their secrets out and they stay off.
    A Monnify or Flutterwave message alone never marks an order paid: the function asks the gateway about the payment first.
 5. In Paystack, leave **Settings → Preferences → Pass fees to customers** off: the money function already adds the fee.
 6. Top up the Shipbubble wallet, then switch each one on in **Admin → Payments & delivery**. The page shows whether the keys are test or live and the wallet balance.
-7. Under **Ways to pay online** on the same page, switch on each gateway customers can pick. With more than one on, the order page and pay links show **Choose how to pay**.
+7. Under **Ways to pay online** on the same page, switch on each gateway that has keys. Customers only choose **My bank app**, **Card or USSD** or **Straight to the shop**; the money function starts the payment with the first gateway that works, in the page's order, and moves to the next if one is down.
 
 Each gateway pays the shop's share straight into the shop's own bank account, and ShopDesk's share (delivery, fees) to ShopDesk: Paystack with a subaccount, Monnify with a sub account and a split on each payment, Flutterwave with a subaccount and a flat split. ShopDesk makes the shop's account at each gateway the first time a customer pays that shop that way. Monnify turns on sub accounts and split payments for a business only when asked: email Monnify support from the business account before switching Monnify on.
 

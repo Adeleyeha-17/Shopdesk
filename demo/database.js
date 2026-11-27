@@ -1191,10 +1191,12 @@ function demoPaystack(ref, done) {
   wrap.innerHTML = `<div class="dp-sheet" role="dialog" aria-modal="true" aria-label="Pay online">
     <div class="dp-top"><span class="dp-brand">paystack</span><span class="dp-test">Demo checkout</span></div>
     <div class="dp-shop"></div><div class="dp-amt"></div>
-    <div class="dp-ways"><span class="on">Card</span><span>Transfer</span><span>USSD</span></div>
+    <div class="dp-ways"></div>
     <button class="btn dp-pay"></button><button class="btn ghost dp-cancel">Cancel</button>
     <p class="note dp-note"></p></div>`;
   const gw = GATEWAY[p.via] || 'Paystack';
+  const ways = p.how === 'bank' ? ['Transfer'] : p.how === 'card' ? ['Card', 'USSD'] : ['Card', 'Transfer', 'USSD'];
+  wrap.querySelector('.dp-ways').innerHTML = ways.map((w, i) => `<span${i ? '' : ' class="on"'}>${w}</span>`).join('');
   wrap.querySelector('.dp-brand').textContent = gw.toLowerCase();
   wrap.querySelector('.dp-note').textContent = `In the real app this is ${gw}'s own page. Nothing is charged in the demo.`;
   wrap.querySelector('.dp-shop').textContent = s.name;
@@ -1875,11 +1877,15 @@ const RPC = {
       gateways: Object.keys(GATEWAY),
     };
   },
-  pay_link_online: ({ p_pay, p_via }) => {
+  pay_link_online: ({ p_pay, p_via, p_how }) => {
     const o = S.orders.find((x) => x.pay_token === p_pay) || fail('This pay link isn’t right. Ask for a new one.');
-    return RPC.customer_pay_online({ p_token: o.public_token, p_any: true, p_via });
+    return RPC.customer_pay_online({ p_token: o.public_token, p_any: true, p_via, p_how });
   },
   // ---------- Pay online and ShopDesk Delivery (switched on in the demo; the real ones are off until Admin turns them on) ----------
+  checkout_pay: ({ p_slug }) => {
+    const s = S.shops.find((x) => x.slug === p_slug);
+    return s ? { online: !S.money_off && s.bank !== 'Other bank', service: SERVICE, fee_by: 'customer' } : null;
+  },
   money_switches: () => (S.money_off ? { online: false, delivery: false, fee_by: 'customer' } : { online: true, delivery: true, fee_by: 'customer' }),
   order_money: ({ p_token }) => {
     const o = S.orders.find((x) => x.public_token === p_token);
@@ -2086,7 +2092,7 @@ const RPC = {
     const matches = at.filter((b) => !p_bank || b === p_bank).map((b) => ({ bank: b, account_name: name }));
     return { available: true, matches };
   },
-  customer_pay_online: ({ p_token, p_any, p_via }) => {
+  customer_pay_online: ({ p_token, p_any, p_via, p_how }) => {
     // p_any: someone else paying with the order's pay link
     const o = p_any ? S.orders.find((x) => x.public_token === p_token) : customerOrder(p_token);
     if (!['awaiting', 'part'].includes(o.status)) fail('This order is already paid or closed.');
@@ -2109,6 +2115,7 @@ const RPC = {
           : 0,
       paid: false,
       via: GATEWAY[p_via] ? p_via : 'paystack',
+      how: p_how || null,
     });
     return { url: ref, amount: due, shop: shopOf(o).name };
   },
@@ -3000,8 +3007,8 @@ const MONEY = {
   pick: (b) => ['set_courier', { p_order: b.order, p_courier: b.courier_id, p_service: b.service_code }],
   book: (b) => ['hand_to_courier', { p_order: b.order }],
   track: (b) => ['set_courier_progress', { p_order: b.order, p_token: b.token }],
-  pay: (b) => ['customer_pay_online', { p_token: b.token, p_via: b.via }],
-  paylink: (b) => ['pay_link_online', { p_pay: b.pay, p_via: b.via }],
+  pay: (b) => ['customer_pay_online', { p_token: b.token, p_via: b.via, p_how: b.how }],
+  paylink: (b) => ['pay_link_online', { p_pay: b.pay, p_via: b.via, p_how: b.how }],
   check: (b) => ['customer_paid_online', { p_ref: b.reference }],
   bank: (b) => ['demo_find_account', { p_number: b.account_number, p_bank: b.bank }],
 };

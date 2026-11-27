@@ -27,7 +27,7 @@ import { myTokens } from './savedOrders.js';
 import { ReportProblemForm, CustomerProblem } from './ProblemBox.jsx';
 import { RateShop } from './RateShop.jsx';
 import { money } from '../lib/moneyApi.js';
-import { PayWays, WAYS, waysOf, lastWay, keepWay, backFromPay } from '../shared/PayWays.jsx';
+import { PayWith, howsFor, lastHow, keepHow, backFromPay } from '../shared/PayWays.jsx';
 import { useShipment, CourierRider } from '../shared/Shipment.jsx';
 import { useLiveRider, LiveRiderCard } from '../shared/LiveRider.jsx';
 import { ReceiptSheet, receiptFromOrderPage } from '../shared/Receipt.jsx';
@@ -165,7 +165,14 @@ export function OrderPage({ token }) {
   const [loadErr, setLoadErr] = useState(null);
   const [msg, setMsg] = useState('');
   const [justPaid, setJustPaid] = useState(false); // back from paying online with the payment through: the success screen
-  const [via, setVia] = useState(''); // the way to pay online the customer picked (empty: the one they used last)
+  // how the customer pays: bank app, card, or straight to the shop (picked at checkout, or here)
+  const [how, setHow] = useState(() => {
+    try {
+      return sessionStorage.getItem('sd-how-' + token) || '';
+    } catch {
+      return '';
+    }
+  });
   // straight from checkout with "Someone else" paying: the pay link to send comes first
   const [askFirst, setAskFirst] = useState(() => {
     try {
@@ -318,14 +325,14 @@ export function OrderPage({ token }) {
       })
       .catch((e) => setErr(e.message));
   }, [load]);
-  const ways = waysOf(pay);
-  const way = ways.includes(via) ? via : lastWay(ways);
+  const hows = howsFor(onlineOnly);
+  const chosen = hows.includes(how) ? how : lastHow(hows);
   async function payOnline() {
     setPaying(true);
     setErr('');
-    keepWay(way);
+    keepHow(chosen);
     try {
-      const r = await money('pay', { token, via: way });
+      const r = await money('pay', { token, how: chosen });
       window.location.assign(r.url);
     } catch (e) {
       setErr(e.message);
@@ -409,6 +416,8 @@ export function OrderPage({ token }) {
   const current = o.status === 'cancelled' ? -1 : steps.findIndex((s) => !s.at);
   // Orders from before accounts have no owner; anyone with the link can update those (the database still refuses shop accounts).
   const canAct = o.mine || !o.saved;
+  // the transfer details and "I've sent the money" are for paying straight to the shop only
+  const payingOnline = onlineOnly || (!!pay && pay.online && canAct && chosen !== 'shop');
   const wantsCustomer =
     o.status !== 'cancelled' && (canReceive || (unpaid && !feeWait && !o.customer_says_paid));
   const gate = wantsCustomer && !canAct && who !== undefined;
@@ -548,23 +557,15 @@ export function OrderPage({ token }) {
             )}
             {pay && pay.online && canAct && (
               <div className="pay-online">
-                <PayWays ways={ways} value={way} onChange={setVia} disabled={paying} />
-                <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
-                  {paying
-                    ? `Opening ${WAYS[way].name}…`
-                    : `Pay ${naira(left + serviceFee(pay))}${ways.length > 1 ? ' with ' + WAYS[way].name : onlineOnly ? '' : ' online'}`}
-                </button>
-                {serviceFee(pay) > 0 && (
-                  <span className="sub">Includes {naira(serviceFee(pay))} service fee</span>
-                )}
-                {!onlineOnly && (
-                  <div className="or">
-                    <span>or transfer {naira(left)} to the shop</span>
-                  </div>
+                <PayWith list={hows} value={chosen} onChange={setHow} disabled={paying} />
+                {chosen !== 'shop' && (
+                  <button className={'btn' + (paying ? ' busy' : '')} onClick={payOnline} disabled={paying}>
+                    {paying ? 'Opening payment…' : `Pay ${naira(left + serviceFee(pay))}`}
+                  </button>
                 )}
               </div>
             )}
-            {!onlineOnly && (
+            {!payingOnline && (
               <>
                 <p className="note">
                   Pay <strong>{naira(left)}</strong> in one transfer to:
@@ -620,7 +621,7 @@ export function OrderPage({ token }) {
                 )}
               </>
             )}
-            {!onlineOnly &&
+            {!payingOnline &&
               (o.customer_says_paid ? (
                 <p className="ok">The shop is told. They confirm when it lands.</p>
               ) : (
