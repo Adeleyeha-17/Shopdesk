@@ -2406,6 +2406,7 @@ begin
     online_pay_on = coalesce((p->>'online_pay_on')::boolean, online_pay_on), delivery_on = coalesce((p->>'delivery_on')::boolean, delivery_on),
     delivery_margin = coalesce((p->>'delivery_margin')::int, delivery_margin), paystack_fee_by = coalesce(p->>'paystack_fee_by', paystack_fee_by),
     online_service_fee = coalesce((p->>'online_service_fee')::int, online_service_fee),
+    pay_gateways = coalesce((select array_agg(distinct g) from jsonb_array_elements_text(p->'pay_gateways') g), pay_gateways),
     free_orders = coalesce((p->>'free_orders')::int, free_orders),
     updated_at = now()
   where id = 1;
@@ -3189,6 +3190,30 @@ language sql immutable set search_path = public as $$
     else least(ceil((p_base + 100) / 0.985)::int - p_base, 2000) end;
 $$;
 
+-- ---------- more ways to pay online: Monnify and Flutterwave beside Paystack ----------
+-- Which gateways customers can pick from (Admin switches them on once their keys are in). A test shop sees them all.
+alter table public.settings add column if not exists pay_gateways text[] not null default '{paystack}';
+alter table public.settings drop constraint if exists settings_pay_gateways_check;
+alter table public.settings add constraint settings_pay_gateways_check
+  check (pay_gateways <@ array['paystack', 'monnify', 'flutterwave']::text[] and cardinality(pay_gateways) >= 1);
+-- which gateway took each online payment
+alter table public.online_payments add column if not exists provider text not null default 'paystack';
+alter table public.online_payments drop constraint if exists online_payments_provider_check;
+alter table public.online_payments add constraint online_payments_provider_check check (provider in ('paystack', 'monnify', 'flutterwave'));
+-- Each shop's payout account at Monnify and Flutterwave (its own bank account): the shop's share of every payment goes
+-- straight there, like a Paystack subaccount (those stay on shops.paystack_subaccount). for_account: the bank and number it
+-- was made for, so a new bank account gets a new one.
+create table if not exists public.shop_payouts (
+  shop_id uuid not null references public.shops(id) on delete cascade,
+  provider text not null check (provider in ('monnify', 'flutterwave')),
+  code text not null check (char_length(code) between 3 and 80),
+  for_account text not null,
+  updated_at timestamptz not null default now(),
+  primary key (shop_id, provider)
+);
+alter table public.shop_payouts enable row level security;
+revoke all on public.shop_payouts from anon, authenticated;
+
 -- The order page: can it be paid online (and the card fee the customer pays on top), and how its ShopDesk Delivery is going.
 create or replace function public.order_money(p_token uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
@@ -3198,6 +3223,8 @@ language sql stable security definer set search_path = public as $$
     'fee', case when st.paystack_fee_by = 'customer' then public.online_fee(st.online_service_fee +
       o.items_total + case when o.delivery_paid_by = 'customer' then coalesce(o.delivery_fee, 0) else 0 end - o.amount_paid) else 0 end,
     'service', st.online_service_fee,
+    -- the gateways the customer can pick from
+    'gateways', case when s.pay_test then array['paystack', 'monnify', 'flutterwave'] else st.pay_gateways end,
     -- a ShopDesk Delivery order is paid online only; wait: the shop hasn't picked the courier yet
     'online_only', o.delivery_by = 'shopdesk',
     'wait', st.delivery_on and o.mode = 'delivery' and o.delivery_by <> 'shopdesk' and o.confirmed_at is null and o.status = 'awaiting',
@@ -3215,8 +3242,9 @@ begin
   if not public.is_admin() then raise exception 'Not allowed.'; end if;
   return jsonb_build_object(
     'settings', (select jsonb_build_object('online_pay_on', online_pay_on, 'delivery_on', delivery_on, 'delivery_margin', delivery_margin,
-      'paystack_fee_by', paystack_fee_by, 'online_service_fee', online_service_fee) from public.settings where id = 1),
-    'online', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(amount), 0), 'delivery', coalesce(sum(delivery_part), 0), 'fees', coalesce(sum(fee), 0), 'service', coalesce(sum(service), 0))
+      'paystack_fee_by', paystack_fee_by, 'online_service_fee', online_service_fee, 'pay_gateways', pay_gateways) from public.settings where id = 1),
+    'online', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(amount), 0), 'delivery', coalesce(sum(delivery_part), 0), 'fees', coalesce(sum(fee), 0), 'service', coalesce(sum(service), 0),
+        'by_gateway', coalesce((select jsonb_object_agg(provider, n) from (select provider, count(*) n from public.online_payments where status = 'paid' group by provider) g), '{}'::jsonb))
       from public.online_payments where status = 'paid'),
     'shipments', coalesce((select jsonb_agg(x order by x.created_at desc) from (
       select sh.order_id, sh.created_at, sh.courier, sh.status, sh.cost, sh.price, sh.tracking_url,
@@ -3656,7 +3684,9 @@ language sql stable security definer set search_path = public as $$
     'online_only', o.delivery_by = 'shopdesk',
     'fee', case when st.paystack_fee_by = 'customer' then public.online_fee(st.online_service_fee +
       o.items_total + case when o.delivery_paid_by = 'customer' then coalesce(o.delivery_fee, 0) else 0 end - o.amount_paid) else 0 end,
-    'service', st.online_service_fee)
+    'service', st.online_service_fee,
+    'gateways', case when s.pay_test then array['paystack', 'monnify', 'flutterwave'] else st.pay_gateways end,
+    'test', s.pay_test)
   from public.orders o join public.shops s on s.id = o.shop_id cross join public.settings st where o.pay_token = p_pay and st.id = 1;
 $$;
 

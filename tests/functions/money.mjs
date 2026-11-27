@@ -59,8 +59,23 @@ async function fakeFetch(url, init = {}) {
     if (u.pathname === '/transaction/initialize') return new Response(JSON.stringify({ status: true, data: { authorization_url: 'https://checkout.paystack.com/abc' } }));
     if (u.pathname.startsWith('/transaction/verify/')) return new Response(JSON.stringify({ status: true, data: { status: 'success', amount: paidKobo, currency: 'NGN' } }));
   }
+  if (u.host === 'api.monnify.com' || u.host === 'sandbox.monnify.com') {
+    const ok = (b) => new Response(JSON.stringify({ requestSuccessful: true, responseMessage: 'success', responseCode: '0', responseBody: b }));
+    if (u.pathname === '/api/v1/auth/login') return ok({ accessToken: 'mn-token', expiresIn: 3000 });
+    if (u.pathname === '/api/v1/banks') return ok([{ name: 'Opay', code: '999992' }, { name: 'Kuda Microfinance Bank', code: '50211' }]);
+    if (u.pathname === '/api/v1/sub-accounts') return ok([{ subAccountCode: 'MFY_SUB_1' }]);
+    if (u.pathname === '/api/v1/merchant/transactions/init-transaction') return ok({ checkoutUrl: 'https://sandbox.sdk.monnify.com/checkout/xyz' });
+    if (u.pathname === '/api/v2/merchant/transactions/query') return ok({ paymentStatus: gw.monnify ? 'PAID' : 'PENDING', amountPaid: gw.monnify || 0, currencyCode: 'NGN' });
+  }
+  if (u.host === 'api.flutterwave.com') {
+    if (u.pathname === '/v3/banks/NG') return reply([{ code: '999992', name: 'OPay' }, { code: '50211', name: 'Kuda Bank' }]);
+    if (u.pathname === '/v3/subaccounts') return reply({ id: 9530, subaccount_id: 'RS_1' });
+    if (u.pathname === '/v3/payments') return reply({ link: 'https://checkout.flutterwave.com/v3/hosted/pay/abc' });
+    if (u.pathname === '/v3/transactions/verify_by_reference') return reply({ status: gw.flutterwave ? 'successful' : 'pending', amount: gw.flutterwave || 0, currency: 'NGN' });
+  }
   return new Response('{}', { status: 404 });
 }
+const gw = { monnify: 0, flutterwave: 0 }; // what the fake Monnify and Flutterwave say was paid (₦), 0: not paid
 let paidKobo = 0;
 const env = (k) => ENV[k];
 const post = async (body, who, hook, headers = {}) => {
@@ -203,6 +218,70 @@ r = await post({ action: 'quote', order: ord.id }, 'shop');
 check('a database check message comes through as it is', /locked once paid/.test(r.error || ''), r);
 r = await post({ action: 'nope' }, 'shop');
 check('an unknown action is refused', r.status === 400, r);
+
+// ---------- Monnify and Flutterwave, beside Paystack ----------
+const asAdmin = (p) => sql.begin(async (tx) => { await tx`select set_config('request.jwt.claim.sub', ${ADMIN}, true)`; await tx`select admin_save_settings(${sql.json(p)})`; });
+const newOrder = () => sql.begin(async (tx) => {
+  await tx`select set_config('request.jwt.claim.sub', ${CUST}, true)`;
+  await tx`set local role authenticated`;
+  return (await tx`select place_order('edgeshop', ${sql.json({ name: 'Bola', phone: '08035556666', mode: 'pickup' })}, ${sql.json([{ product_id: prod.id, qty: 1 }])})->>'token' as t`)[0].t;
+});
+await sql`update products set stock = 20 where id = ${prod.id}`;
+Object.assign(ENV, { PAYSTACK_SECRET_KEY: 'sk_live_abc', MONNIFY_API_KEY: 'MK_PROD_abc', MONNIFY_SECRET_KEY: 'mn-secret', MONNIFY_CONTRACT_CODE: '7059707855',
+  FLW_SECRET_KEY: 'FLWSECK-abc-X', FLW_WEBHOOK_HASH: 'hush' });
+await sql`update shops set pay_test = false where id = ${shop.id}`;
+await asAdmin({ online_pay_on: true });
+const t2 = await newOrder();
+r = await post({ action: 'pay', token: t2, via: 'monnify' }, 'cust');
+check('a gateway Admin hasn’t switched on can’t be used', /Monnify isn.t on/.test(r.error || ''), r);
+await asAdmin({ pay_gateways: ['paystack', 'monnify', 'flutterwave'] });
+r = await post({ action: 'pay', token: t2, via: 'monnify' }, 'cust');
+const mSub = calls.filter((c) => c.url.endsWith('/api/v1/sub-accounts')).pop()?.body;
+const mInit = calls.filter((c) => c.url.endsWith('/init-transaction')).pop()?.body;
+check('Monnify: the shop gets a payout account for its own bank account, and exactly its share is split to it',
+  r.url && mSub?.[0].accountNumber === '0123456780' && mSub[0].bankCode === '999992' && mSub[0].email === 'edge-shop@example.com'
+  && mInit.incomeSplitConfig?.[0].subAccountCode === 'MFY_SUB_1' && mInit.incomeSplitConfig[0].splitAmount === 15000 && mInit.incomeSplitConfig[0].feePercentage === 0
+  && mInit.amount > 15000 && mInit.contractCode === '7059707855' && mInit.redirectUrl.endsWith('/o/' + t2), { mSub, mInit });
+check('Monnify live keys use the live address, signed in with the key and secret', calls.some((c) => c.url === 'https://api.monnify.com/api/v1/auth/login'), null);
+const mRef = mInit.paymentReference;
+r = await post({ eventType: 'SUCCESSFUL_TRANSACTION', eventData: { paymentReference: mRef, paymentStatus: 'PAID' } }, null, 'monnify');
+let row = (await sql`select status, provider from online_payments where reference = ${mRef}`)[0];
+check('a Monnify message alone doesn’t mark an order paid: Monnify is asked first', row.status === 'started' && row.provider === 'monnify', row);
+gw.monnify = mInit.amount;
+r = await post({ eventType: 'SUCCESSFUL_TRANSACTION', eventData: { paymentReference: mRef } }, null, 'monnify');
+row = (await sql`select p.status, o.status as ostatus from online_payments p join orders o on o.id = p.order_id where p.reference = ${mRef}`)[0];
+check('when Monnify confirms the payment, the order is paid', row.status === 'paid' && row.ostatus === 'paid', row);
+r = await post({ action: 'check', reference: mRef }, null);
+check('the order page check works for a Monnify payment', r.paid === true, r);
+const t3 = await newOrder();
+const subsBefore = calls.filter((c) => c.url.endsWith('/api/v1/sub-accounts')).length;
+r = await post({ action: 'pay', token: t3, via: 'flutterwave' }, 'cust');
+const fSub = calls.filter((c) => c.url.endsWith('/v3/subaccounts')).pop()?.body;
+const fInit = calls.filter((c) => c.url.endsWith('/v3/payments')).pop()?.body;
+check('Flutterwave: a payout account for the shop bank account, and exactly its share goes to it',
+  r.url && fSub?.account_number === '0123456780' && fSub.account_bank === '999992' && fInit.subaccounts?.[0].id === 'RS_1'
+  && fInit.subaccounts[0].transaction_charge_type === 'flat_subaccount' && fInit.subaccounts[0].transaction_charge === 15000 && fInit.redirect_url.endsWith('/o/' + t3), { fSub, fInit });
+r = await post({ event: 'charge.completed', data: { tx_ref: fInit.tx_ref } }, null, 'flutterwave', { 'verif-hash': 'wrong' });
+check('a Flutterwave message without the secret hash is refused', r.status === 401, r);
+gw.flutterwave = fInit.amount;
+r = await post({ event: 'charge.completed', data: { tx_ref: fInit.tx_ref } }, null, 'flutterwave', { 'verif-hash': 'hush' });
+row = (await sql`select status, provider from online_payments where reference = ${fInit.tx_ref}`)[0];
+check('when Flutterwave confirms the payment, the order is paid', row.status === 'paid' && row.provider === 'flutterwave', row);
+const t4 = await newOrder();
+r = await post({ action: 'pay', token: t4, via: 'monnify' }, 'cust');
+check('the shop’s Monnify payout account is made once, not for every payment', calls.filter((c) => c.url.endsWith('/api/v1/sub-accounts')).length === subsBefore, null);
+ENV.MONNIFY_API_KEY = 'MK_TEST_abc';
+const t5 = await newOrder();
+r = await post({ action: 'pay', token: t5, via: 'monnify' }, 'cust');
+check('with Monnify test keys, only test shops can pay with Monnify', /isn.t on yet/.test(r.error || ''), r);
+await sql`update shops set pay_test = true where id = ${shop.id}`;
+r = await post({ action: 'pay', token: t5, via: 'monnify' }, 'cust');
+const tInit = calls.filter((c) => c.url.endsWith('/init-transaction')).pop();
+check('a test shop pays through the Monnify sandbox, with no split', r.url && tInit.url.startsWith('https://sandbox.monnify.com') && !tInit.body.incomeSplitConfig, tInit);
+r = await post({ action: 'status' }, 'admin');
+check('Admin sees each gateway’s keys: live or test', r.monnify?.mode === 'test' && r.monnify.set && r.flutterwave?.mode === 'live', r);
+await sql`update shops set pay_test = false where id = ${shop.id}`;
+await asAdmin({ pay_gateways: ['paystack'] });
 
 await sql.begin(async (tx) => { await tx`select set_config('request.jwt.claim.sub', ${ADMIN}, true)`; await tx`select admin_save_settings('{"online_pay_on":false,"delivery_on":false}')`; });
 await sql.end();

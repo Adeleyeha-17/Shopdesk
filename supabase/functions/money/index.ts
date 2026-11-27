@@ -19,6 +19,7 @@
 //   POST {"action":"bank", "account_number", "bank"?}        signed in: which bank the account is at, and the name on it (live key only)
 //   POST {"action":"status"}                                 admin: are the keys set, test or live, courier wallet balance
 //   POST ?hook=paystack                                      Paystack's webhook
+//   POST ?hook=monnify, ?hook=flutterwave                    their webhooks (each payment is checked with the gateway first)
 //   POST ?hook=shipbubble                                    Shipbubble's webhook
 //
 // Secrets (Edge Functions -> Secrets): PAYSTACK_SECRET_KEY and SHIPBUBBLE_API_KEY. Test keys while testing, live keys once the
@@ -29,6 +30,12 @@ import postgres from 'npm:postgres@3.4.5';
 
 const SITE = 'https://shopdesk.com.ng';
 const PAYSTACK = 'https://api.paystack.co';
+const MONNIFY_LIVE = 'https://api.monnify.com';
+const MONNIFY_TEST = 'https://sandbox.monnify.com';
+const FLUTTERWAVE = 'https://api.flutterwave.com/v3';
+// The gateways customers can pay through. Each one sends the shop's share straight to the shop's own bank account.
+export const GATEWAYS = ['paystack', 'monnify', 'flutterwave'];
+const NAMES = { paystack: 'Paystack', monnify: 'Monnify', flutterwave: 'Flutterwave' };
 const SHIPBUBBLE = 'https://api.shipbubble.com/v1';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -93,12 +100,56 @@ export function makeApi(env, fetcher) {
   };
   // a test key (sk_test_…): only test shops can be paid online
   const testKey = () => !!get('PAYSTACK_SECRET_KEY') && !get('PAYSTACK_SECRET_KEY').startsWith('sk_live_');
+
+  // Monnify: a short-lived token from the API key and secret key. MK_PROD_ keys are live, MK_TEST_ keys use the sandbox.
+  let mnToken = '', mnUntil = 0;
+  const mnBase = () => (get('MONNIFY_API_KEY').startsWith('MK_PROD_') ? MONNIFY_LIVE : MONNIFY_TEST);
+  async function monnify(path, body, method) {
+    const key = get('MONNIFY_API_KEY'), secret = get('MONNIFY_SECRET_KEY');
+    if (!key || !secret || !get('MONNIFY_CONTRACT_CODE')) throw say('Paying with Monnify isn’t set up yet. Pick another way to pay.');
+    let r, j;
+    try {
+      if (!mnToken || Date.now() > mnUntil) {
+        r = await fetcher(mnBase() + '/api/v1/auth/login', { method: 'POST', headers: { Authorization: 'Basic ' + btoa(key + ':' + secret) } });
+        j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.requestSuccessful) throw Object.assign(new Error('monnify login: ' + (j.responseMessage || r.status)), { http: r.status });
+        mnToken = j.responseBody.accessToken;
+        mnUntil = Date.now() + Math.max(60, Number(j.responseBody.expiresIn || 600) - 60) * 1000;
+      }
+      r = await fetcher(mnBase() + path, {
+        method: method || (body ? 'POST' : 'GET'),
+        headers: { Authorization: 'Bearer ' + mnToken, 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      j = await r.json().catch(() => ({}));
+    } catch (e) {
+      if (e.http) throw e;
+      console.error(path + ': ' + e.message);
+      throw say('The connection dropped. Try again.');
+    }
+    if (r.status === 401) mnToken = '';
+    if (!r.ok || j.requestSuccessful === false) throw Object.assign(new Error(String(j.responseMessage || 'HTTP ' + r.status)), { http: r.status, body: j });
+    return j.responseBody;
+  }
+  // Flutterwave: FLWSECK_TEST-… keys are test keys
+  const flutterwave = (path, body, method) => {
+    const key = get('FLW_SECRET_KEY');
+    if (!key) throw say('Paying with Flutterwave isn’t set up yet. Pick another way to pay.');
+    return call(FLUTTERWAVE, path, key, body, method);
+  };
+  // 'live', 'test', or null when the gateway's keys aren't in
+  const modeOf = (g) => {
+    if (g === 'paystack') return get('PAYSTACK_SECRET_KEY') ? (testKey() ? 'test' : 'live') : null;
+    if (g === 'monnify') return get('MONNIFY_API_KEY') ? (get('MONNIFY_API_KEY').startsWith('MK_PROD_') ? 'live' : 'test') : null;
+    if (g === 'flutterwave') return get('FLW_SECRET_KEY') ? (/_TEST/i.test(get('FLW_SECRET_KEY')) ? 'test' : 'live') : null;
+    return null;
+  };
   const ship = (path, body) => {
     const key = get('SHIPBUBBLE_API_KEY');
     if (!key) throw say('ShopDesk Delivery isn’t set up yet. Use your own rider for now.');
     return call(SHIPBUBBLE, path, key, body);
   };
-  return { paystack, ship, get, testKey };
+  return { paystack, monnify, flutterwave, ship, get, testKey, modeOf, testMode: (g) => modeOf(g) === 'test' };
 }
 
 // ---------- ShopDesk Delivery ----------
@@ -282,13 +333,17 @@ const BANKS = {
   'SunTrust Bank': /suntrust/i, 'TAJ Bank': /^taj/i, 'Titan Trust Bank': /titan/i, UBA: /united bank for africa|^uba\b/i,
   'Union Bank': /^union bank/i, 'Unity Bank': /^unity/i, VFD: /vfd/i, 'Wema Bank': /wema/i, 'Zenith Bank': /zenith/i,
 };
-let bankList = null;
-// The shortest matching name wins, so "Access Bank" is picked over "Access Bank (Diamond)".
-export async function bankCode(api, bank) {
+const bankLists = {};
+// The bank's code at a gateway. The shortest matching name wins, so "Access Bank" is picked over "Access Bank (Diamond)".
+export async function bankCode(api, bank, via = 'paystack') {
   const re = BANKS[bank];
   if (!re) return null;
-  if (!bankList) bankList = (await api.paystack('/bank?country=nigeria&perPage=200')) || [];
-  const hits = bankList.filter((b) => b.active !== false && (re.test(b.name || '') || re.test(b.slug || '')));
+  if (!bankLists[via])
+    bankLists[via] =
+      via === 'monnify' ? (await api.monnify('/api/v1/banks')) || []
+      : via === 'flutterwave' ? (await api.flutterwave('/banks/NG')) || []
+      : (await api.paystack('/bank?country=nigeria&perPage=200')) || [];
+  const hits = bankLists[via].filter((b) => b.active !== false && (re.test(b.name || '') || re.test(b.slug || '')));
   hits.sort((a, b) => String(a.name).length - String(b.name).length);
   return hits[0]?.code || null;
 }
@@ -361,48 +416,151 @@ export async function ensureSubaccount(sql, api, shop) {
   return sub;
 }
 
-// back: the page Paystack returns to (the order page, or the pay link page).
-export async function startPayment(sql, api, r, back, ref) {
-  // With a test key there is no split: Paystack won't make subaccounts for a business it hasn't activated, and test money
-  // never settles anyway. The whole test payment goes to ShopDesk's test balance.
-  const sub = api.testKey() ? null : await ensureSubaccount(sql, api, r.shop);
-  // The customer pays the goods (and delivery), plus ShopDesk's fee, plus Paystack's fee when fee > 0. ShopDesk's share is
-  // the delivery fee and both fees, and Paystack takes its fee from ShopDesk's share, so the shop's share is exactly what
-  // the shop is owed.
-  const fee = Number(r.fee || 0);
-  const service = Number(r.service || 0);
-  const body = {
-    email: r.email,
-    amount: (r.amount + fee + service) * 100,
-    currency: 'NGN',
-    reference: ref,
-    ...(sub && { subaccount: sub, bearer: fee > 0 || (r.delivery_part > 0 && r.fee_by === 'shopdesk') ? 'account' : 'subaccount' }),
-    callback_url: SITE + back,
-    metadata: { order_id: r.order_id, shop: r.shop.slug, delivery_part: r.delivery_part, card_fee: fee, shopdesk_fee: service, cancel_action: SITE + back },
-  };
-  if (sub && r.delivery_part + fee + service > 0) body.transaction_charge = (r.delivery_part + fee + service) * 100;
+const NOT_YET = 'This shop can’t take online payments yet. Pay by transfer to the account below.';
+// The shop's payout account at Monnify or Flutterwave: made once from its bank details (again if they change).
+export async function payoutFor(sql, api, shop, via) {
+  const want = shop.bank + ':' + shop.account_number;
+  const have = (await sql`select code, for_account from public.shop_payouts where shop_id = ${shop.id}::uuid and provider = ${via}`)[0];
+  if (have && have.for_account === want) return have.code;
+  let made;
   try {
-    const d = await api.paystack('/transaction/initialize', body);
-    return { url: d.authorization_url, reference: ref };
+    const code = await bankCode(api, shop.bank, via);
+    if (!code || !/^\d{10}$/.test(shop.account_number || '')) throw say(NOT_YET);
+    const owner = (await sql`select u.email, s.whatsapp from public.shops s left join auth.users u on u.id = s.owner_id where s.id = ${shop.id}::uuid`)[0] || {};
+    if (via === 'monnify') {
+      const d = await api.monnify('/api/v1/sub-accounts', [
+        { currencyCode: 'NGN', bankCode: code, accountNumber: shop.account_number, email: owner.email || 'shop@shopdesk.com.ng', defaultSplitPercentage: 0 },
+      ]);
+      made = (Array.isArray(d) ? d[0] : d)?.subAccountCode;
+    } else {
+      const d = await api.flutterwave('/subaccounts', {
+        account_bank: code, account_number: shop.account_number, business_name: String(shop.name).slice(0, 100),
+        business_mobile: String(owner.whatsapp || '').replace(/\D/g, '') || '08000000000', country: 'NG', split_type: 'flat', split_value: 0,
+      });
+      made = d?.subaccount_id;
+    }
   } catch (e) {
     if (e instanceof Say) throw e;
-    console.error('initialize: ' + e.message);
-    throw say('Paying online isn’t working right now. Try again, or pay by transfer.');
+    console.error(via + ' payout account: ' + e.message);
+    throw say(NOT_YET);
+  }
+  if (!made) throw say(NOT_YET);
+  await sql`insert into public.shop_payouts (shop_id, provider, code, for_account) values (${shop.id}::uuid, ${via}, ${made}, ${want})
+    on conflict (shop_id, provider) do update set code = excluded.code, for_account = excluded.for_account, updated_at = now()`;
+  return made;
+}
+
+// The money in one payment: the customer pays the goods (and delivery) plus ShopDesk's fee plus the card fee (when the
+// customer pays it). The shop's share is exactly what it's owed; ShopDesk keeps the delivery part and the fees.
+const totals = (r) => {
+  const fee = Number(r.fee || 0), service = Number(r.service || 0);
+  return { fee, service, total: r.amount + fee + service, shopShare: r.amount - r.delivery_part, ours: r.delivery_part + fee + service };
+};
+
+// Each gateway: start a payment (its page's address), and check one (paid kobo, or its status).
+const GATE = {
+  paystack: {
+    async start(sql, api, r, back, ref) {
+      // With a test key there is no split: Paystack won't make subaccounts for a business it hasn't activated, and test
+      // money never settles anyway. The whole test payment goes to ShopDesk's test balance.
+      const sub = api.testKey() ? null : await ensureSubaccount(sql, api, r.shop);
+      const { fee, service, total, ours } = totals(r);
+      const body = {
+        email: r.email,
+        amount: total * 100,
+        currency: 'NGN',
+        reference: ref,
+        ...(sub && { subaccount: sub, bearer: fee > 0 || (r.delivery_part > 0 && r.fee_by === 'shopdesk') ? 'account' : 'subaccount' }),
+        callback_url: SITE + back,
+        metadata: { order_id: r.order_id, shop: r.shop.slug, delivery_part: r.delivery_part, card_fee: fee, shopdesk_fee: service, cancel_action: SITE + back },
+      };
+      if (sub && ours > 0) body.transaction_charge = ours * 100;
+      return (await api.paystack('/transaction/initialize', body)).authorization_url;
+    },
+    async verify(api, ref) {
+      const d = await api.paystack('/transaction/verify/' + encodeURIComponent(ref));
+      if (d?.status !== 'success' || (d.currency && d.currency !== 'NGN')) return { status: d?.status || 'unknown' };
+      return { kobo: Number(d.amount) };
+    },
+  },
+  monnify: {
+    async start(sql, api, r, back, ref) {
+      const sub = api.testMode('monnify') ? null : await payoutFor(sql, api, r.shop, 'monnify');
+      const { total, shopShare } = totals(r);
+      const d = await api.monnify('/api/v1/merchant/transactions/init-transaction', {
+        amount: total,
+        customerName: 'ShopDesk customer',
+        customerEmail: r.email,
+        paymentReference: ref,
+        paymentDescription: 'Order from ' + r.shop.name,
+        currencyCode: 'NGN',
+        contractCode: api.get('MONNIFY_CONTRACT_CODE'),
+        redirectUrl: SITE + back,
+        paymentMethods: ['CARD', 'ACCOUNT_TRANSFER', 'USSD'],
+        metaData: { order_id: String(r.order_id), shop: r.shop.slug },
+        // the shop gets exactly its share and pays none of Monnify's fee
+        ...(sub && { incomeSplitConfig: [{ subAccountCode: sub, splitAmount: shopShare, feePercentage: 0, feeBearer: false }] }),
+      });
+      return d.checkoutUrl;
+    },
+    async verify(api, ref) {
+      const d = await api.monnify('/api/v2/merchant/transactions/query?paymentReference=' + encodeURIComponent(ref));
+      if (String(d?.paymentStatus).toUpperCase() !== 'PAID' || (d.currencyCode && d.currencyCode !== 'NGN')) return { status: String(d?.paymentStatus || 'unknown').toLowerCase() };
+      return { kobo: Math.round(Number(d.amountPaid) * 100) };
+    },
+  },
+  flutterwave: {
+    async start(sql, api, r, back, ref) {
+      const sub = api.testMode('flutterwave') ? null : await payoutFor(sql, api, r.shop, 'flutterwave');
+      const { total, shopShare } = totals(r);
+      const d = await api.flutterwave('/payments', {
+        tx_ref: ref,
+        amount: total,
+        currency: 'NGN',
+        redirect_url: SITE + back,
+        customer: { email: r.email },
+        customizations: { title: r.shop.name },
+        meta: { order_id: r.order_id, shop: r.shop.slug },
+        // flat_subaccount: the shop gets exactly its share; Flutterwave's fee comes out of ShopDesk's part
+        ...(sub && { subaccounts: [{ id: sub, transaction_charge_type: 'flat_subaccount', transaction_charge: shopShare }] }),
+      });
+      return d.link;
+    },
+    async verify(api, ref) {
+      const d = await api.flutterwave('/transactions/verify_by_reference?tx_ref=' + encodeURIComponent(ref));
+      if (d?.status !== 'successful' || (d.currency && d.currency !== 'NGN')) return { status: d?.status || 'unknown' };
+      return { kobo: Math.round(Number(d.amount) * 100) };
+    },
+  },
+};
+
+// back: the page the gateway returns to (the order page, or the pay link page). via: which gateway.
+export async function startPayment(sql, api, r, back, ref, via = 'paystack') {
+  const g = GATE[via];
+  if (!g) throw say('Pick a way to pay.');
+  if (via !== 'paystack') await sql`update public.online_payments set provider = ${via} where reference = ${ref}`;
+  try {
+    return { url: await g.start(sql, api, r, back, ref), reference: ref };
+  } catch (e) {
+    if (e instanceof Say) throw e;
+    console.error(via + ' start: ' + e.message);
+    throw say(`Paying with ${NAMES[via]} isn’t working right now. Try another way to pay.`);
   }
 }
 
-// Checks with Paystack, then marks the order paid. Safe to run more than once for the same payment.
+// Checks with the gateway that took the payment, then marks the order paid. Safe to run more than once.
 export async function confirmPayment(sql, api, ref) {
-  let d;
+  const via = (await sql`select provider from public.online_payments where reference = ${ref}`)[0]?.provider || 'paystack';
+  let v;
   try {
-    d = await api.paystack('/transaction/verify/' + encodeURIComponent(ref));
+    v = await GATE[via].verify(api, ref);
   } catch (e) {
     if (e instanceof Say) throw e;
     if (e.http === 404 || e.http === 400) return { paid: false, status: 'unknown' };
     throw say('Couldn’t check the payment yet. Refresh in a moment.');
   }
-  if (d?.status !== 'success' || (d.currency && d.currency !== 'NGN')) return { paid: false, status: d?.status || 'unknown' };
-  const r = (await sql`select public.money_paid(${ref}, ${d.amount}::bigint) as r`)[0].r;
+  if (!v.kobo) return { paid: false, status: v.status || 'unknown' };
+  const r = (await sql`select public.money_paid(${ref}, ${v.kobo}::bigint) as r`)[0].r;
   return { paid: true, order_id: r.order_id };
 }
 
@@ -429,6 +587,17 @@ const asUser = (sql, uid, fn) =>
     return fn(tx);
   });
 const one = async (q) => (await q)[0]?.r;
+
+// The gateway for this payment: one Admin has switched on (a test shop can use any), and with test keys only test shops.
+async function gatewayFor(sql, api, asked, where, missing = 'Order not found.') {
+  const via = GATEWAYS.includes(asked) ? asked : 'paystack';
+  const t = (await sql`select s.pay_test, st.pay_gateways from public.orders o join public.shops s on s.id = o.shop_id
+    cross join public.settings st where ${where} and st.id = 1`)[0];
+  if (!t) throw say(missing);
+  if (!t.pay_test && !(t.pay_gateways || ['paystack']).includes(via)) throw say(`Paying with ${NAMES[via]} isn’t on. Pick another way to pay.`);
+  if (api.testMode(via) && !t.pay_test) throw say('Paying online isn’t on yet. Pay by transfer for now.');
+  return via;
+}
 
 const ACTIONS = {
   async quote({ sql, api, uid, body }) {
@@ -479,16 +648,14 @@ const ACTIONS = {
     return { shipment: sh || null };
   },
 
+  // via: the gateway the customer picked (Paystack when not given)
   async pay({ sql, api, uid, body }) {
     const token = String(body.token || '');
     if (!/^[0-9a-f-]{36}$/i.test(token)) throw say('Order not found.');
-    if (api.testKey()) {
-      const t = (await sql`select s.pay_test from public.orders o join public.shops s on s.id = o.shop_id where o.public_token = ${token}::uuid`)[0];
-      if (!t?.pay_test) throw say('Paying online isn’t on yet. Pay by transfer for now.');
-    }
+    const via = await gatewayFor(sql, api, body.via, sql`o.public_token = ${token}::uuid`);
     const ref = 'SD' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomUUID().slice(0, 8).toUpperCase();
     const r = await asUser(sql, uid, (tx) => one(tx`select public.money_start_payment(${token}::uuid, ${ref}) as r`));
-    return startPayment(sql, api, r, '/o/' + token, ref);
+    return startPayment(sql, api, r, '/o/' + token, ref, via);
   },
 
   // Someone else pays with the pay link the customer sent them. No sign-in needed: the link is the secret. If they are
@@ -496,14 +663,10 @@ const ACTIONS = {
   async paylink({ sql, api, uid, body }) {
     const pay = String(body.pay || '');
     if (!/^[0-9a-f-]{36}$/i.test(pay)) throw say('This pay link isn’t right. Ask for a new one.');
-    if (api.testKey()) {
-      const t = (await sql`select s.pay_test from public.orders o join public.shops s on s.id = o.shop_id where o.pay_token = ${pay}::uuid`)[0];
-      if (!t) throw say('This pay link isn’t right. Ask for a new one.');
-      if (!t.pay_test) throw say('Paying online isn’t on yet. Pay by transfer for now.');
-    }
+    const via = await gatewayFor(sql, api, body.via, sql`o.pay_token = ${pay}::uuid`, 'This pay link isn’t right. Ask for a new one.');
     const ref = 'SD' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomUUID().slice(0, 8).toUpperCase();
     const r = (await sql`select public.money_start_link_payment(${pay}::uuid, ${ref}, ${uid || null}::uuid) as r`)[0].r;
-    return startPayment(sql, api, r, '/pay/' + pay, ref);
+    return startPayment(sql, api, r, '/pay/' + pay, ref, via);
   },
 
   async check({ sql, api, body }) {
@@ -532,6 +695,8 @@ const ACTIONS = {
     const pk = api.get('PAYSTACK_SECRET_KEY'), sk = api.get('SHIPBUBBLE_API_KEY');
     const out = {
       paystack: { set: !!pk, mode: pk ? (pk.startsWith('sk_live_') ? 'live' : 'test') : null },
+      monnify: { set: !!api.modeOf('monnify') && !!api.get('MONNIFY_SECRET_KEY') && !!api.get('MONNIFY_CONTRACT_CODE'), mode: api.modeOf('monnify') },
+      flutterwave: { set: !!api.modeOf('flutterwave'), mode: api.modeOf('flutterwave') },
       courier: { set: !!sk, mode: sk ? (sk.startsWith('sb_prod_') ? 'live' : 'test') : null, balance: null },
     };
     if (sk) {
@@ -562,6 +727,33 @@ async function paystackHook(req, sql, api) {
       await confirmPayment(sql, api, ref);
     } catch (e) {
       console.error('paystack hook ' + ref + ': ' + e.message);
+    }
+  }
+  return json({ ok: true });
+}
+
+// Monnify's and Flutterwave's webhooks. Nothing in the message is trusted: the payment is checked with the gateway itself
+// (confirmPayment) before the order is marked paid. Flutterwave also sends the secret hash set on its dashboard.
+async function gatewayHook(req, sql, api, via) {
+  const raw = await req.text();
+  if (via === 'flutterwave' && api.get('FLW_WEBHOOK_HASH') && !same(req.headers.get('verif-hash') || '', api.get('FLW_WEBHOOK_HASH'))) {
+    return json({ error: 'bad signature' }, 401);
+  }
+  let ev;
+  try {
+    ev = JSON.parse(raw);
+  } catch (e) {
+    return json({ ok: true });
+  }
+  const ref = via === 'monnify' ? ev?.eventData?.paymentReference : ev?.data?.tx_ref || ev?.txRef;
+  if (typeof ref === 'string' && /^SD[A-Z0-9-]{6,40}$/.test(ref)) {
+    const known = (await sql`select provider, status from public.online_payments where reference = ${ref}`)[0];
+    if (known && known.provider === via && known.status !== 'paid') {
+      try {
+        await confirmPayment(sql, api, ref);
+      } catch (e) {
+        console.error(via + ' hook ' + ref + ': ' + e.message);
+      }
     }
   }
   return json({ ok: true });
@@ -603,6 +795,7 @@ export async function handle(req, sql, opts = {}) {
   const hook = new URL(req.url).searchParams.get('hook');
   if (hook === 'paystack') return paystackHook(req, sql, api);
   if (hook === 'shipbubble') return shipbubbleHook(req, sql, api);
+  if (hook === 'monnify' || hook === 'flutterwave') return gatewayHook(req, sql, api, hook);
 
   let body = {};
   try {
