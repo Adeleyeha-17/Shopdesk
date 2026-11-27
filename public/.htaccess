@@ -8,6 +8,10 @@ DirectoryIndex index.html
 <Files ".ftp-deploy-sync-state.json">
   Require all denied
 </Files>
+# shared by shop.php and sitemap.php; never opened on their own
+<FilesMatch "^seo-(lib|config)\.php$">
+  Require all denied
+</FilesMatch>
 AddType application/manifest+json .webmanifest
 
 <IfModule mod_rewrite.c>
@@ -19,6 +23,11 @@ AddType application/manifest+json .webmanifest
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
+  # the sitemap, with every open shop
+  RewriteRule ^sitemap\.xml$ sitemap.php [L]
+  # a shop's link: the app page with the shop's own title and preview picture (shop.php)
+  RewriteCond $1 !^(admin|privacy|orders|order|login|signin|shopdesk|help|support|api|app|email-off|account|shops|carts|legal|terms|prohibited|pay)$
+  RewriteRule ^([a-z0-9-]+)/?$ shop.php?s=$1 [L,QSA]
   # anything else: let the app open it
   RewriteRule ^ index.html [L]
 </IfModule>

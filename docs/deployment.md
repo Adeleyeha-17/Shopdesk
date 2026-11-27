@@ -38,6 +38,8 @@ Any static host works, provided every path falls back to `index.html`.
 
 **cPanel / Apache.** Upload the contents of `dist/` to the site's document root, including the hidden `.htaccess`, which provides the fallback and cache headers. Uploading a zip of `dist/` and extracting it in File Manager is the simplest route.
 
+**Search and link previews.** `dist/` also carries `robots.txt`, `og.jpg` (the preview picture for shopdesk.com.ng) and three small PHP files. `shop.php` opens each shop's link with the shop's own title, description, photo and search details, so Google, X and WhatsApp show the shop; `sitemap.php` answers `/sitemap.xml` with every open shop. Both read the publishable key from `seo-config.php`, which the build writes, and keep answers for a few minutes. They need PHP (any cPanel host has it). If PHP or the database is unavailable, a shop link still opens the app as before. After the first deploy, add the site to Google Search Console and submit `https://shopdesk.com.ng/sitemap.xml`.
+
 **Vercel.** `vercel.json` contains the equivalent rewrite. Set the three environment variables in the project settings.
 
 `index.html` is served without caching and asset file names are content-hashed, so clients pick up a new release on their next load.

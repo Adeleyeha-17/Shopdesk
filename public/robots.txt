@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /o/
+Disallow: /pay/
+Disallow: /orders
+Disallow: /account
+Disallow: /carts
+Disallow: /email-off
+Disallow: /*/cart
+Disallow: /*/checkout
+
+Sitemap: https://shopdesk.com.ng/sitemap.xml

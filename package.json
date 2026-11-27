@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/seo-config.mjs",
     "preview": "vite preview",
     "build:demo": "vite build --config demo/vite.demo.config.js",
     "test:db": "bash tests/db/run.sh",
