@@ -88,8 +88,7 @@ export function ProblemPanel({ o, p, code, run, say }) {
       )}
       {st === 'with_shopdesk' && !p.reply && (
         <p className="note">
-          <strong>ShopDesk decides by {atText(decideBy(p))}.</strong> You can still give your side, and ShopDesk may
-          ask you something in the chat.
+          <strong>ShopDesk decides by {atText(decideBy(p))}.</strong>
         </p>
       )}
 
@@ -111,7 +110,7 @@ export function ProblemPanel({ o, p, code, run, say }) {
         <div className="stack-sm">
           {mode === 'refund' && (
             <>
-              <p className="note">Send it from your bank app first. They paid {naira(o.amount_paid)}.</p>
+              <p className="note">They paid {naira(o.amount_paid)}.</p>
               <div className="field">
                 <label htmlFor={'ra' + o.id}>How much did you send back? (₦)</label>
                 <input
@@ -124,7 +123,6 @@ export function ProblemPanel({ o, p, code, run, say }) {
               </div>
             </>
           )}
-          {mode === 'resend' && <p className="note">It goes back to packing, then to a rider.</p>}
           <div className="field">
             <label htmlFor={'rn-' + o.id}>
               {mode === 'explain' ? 'What happened?' : 'Message for the customer (optional)'}

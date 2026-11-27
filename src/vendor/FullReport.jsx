@@ -464,10 +464,6 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
     ),
     sources: (
       <>
-        <p className="note">
-          Where customers came from before they ordered. Instagram, TikTok and Facebook are spotted
-          automatically; WhatsApp needs the link from Copy WhatsApp message.
-        </p>
         <Table
           cols={[
             { k: 'name', label: 'Source' },
@@ -521,10 +517,6 @@ export function FullReport({ r, shop, sheet, setSheet, onClose, addOut, say, rel
     ),
     quiet: (
       <>
-        <p className="note">
-          Regulars (3 or more paid orders) who haven't ordered in over a month. A short hello often brings
-          them back.
-        </p>
         <Table
           cols={[
             { k: 'name', label: 'Customer' },

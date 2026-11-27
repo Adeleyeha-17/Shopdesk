@@ -88,7 +88,6 @@ export function HelpPage() {
     <Page title="Help" kind="me" tabs={<CustomerTabs active="help" unread={inbox.count} shopNews={inbox.shopCount} />}>
       <div className="help-hero">
         <h2>How can we help?</h2>
-        <p className="sub">Answers to common questions, and help with your recent orders.</p>
       </div>
       {recent.map((o) => {
         const reportBy = new Date(o.done_at).getTime() + 3 * 864e5;

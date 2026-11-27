@@ -265,9 +265,6 @@ export function ProductForm({ shop, product, onDone, onCancel }) {
               placeholder="12"
             />
           </div>
-          <p className="note small">
-            A sale price is what customers pay, with the old price crossed out. Clear it to end the sale.
-          </p>
         </>
       ) : (
         <>
@@ -344,9 +341,6 @@ export function ProductForm({ shop, product, onDone, onCancel }) {
               </button>
             </div>
           )}
-          {p && options(p).length > 0 && (
-            <p className="note small">Removing a {word} doesn't change orders already placed.</p>
-          )}
         </>
       )}
       <div className="field">
@@ -359,9 +353,6 @@ export function ProductForm({ shop, product, onDone, onCancel }) {
           placeholder="e.g. 3"
         />
       </div>
-      {p && (
-        <p className="note small">New prices apply to new orders. Orders already placed keep their prices.</p>
-      )}
       {err && <p className="err">{err}</p>}
       <div className="btns">
         <button className="btn" onClick={save} disabled={busy}>

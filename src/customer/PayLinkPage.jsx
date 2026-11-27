@@ -142,7 +142,7 @@ export function PayLinkPage({ token }) {
           {o.fee_pending ? (
             <section className="card">
               <p className="note" style={{ margin: 0 }}>
-                The shop is still adding the delivery fee. Open this link again in a little while.
+                The shop is still adding the delivery fee.
               </p>
             </section>
           ) : (
@@ -190,9 +190,6 @@ export function PayLinkPage({ token }) {
                       </span>
                     </div>
                   </div>
-                  <p className="sub pl-hint">
-                    Send exactly {naira(left)} with {o.code} as the note. The shop confirms once it lands.
-                  </p>
                 </>
               )}
               {copied && (
@@ -206,7 +203,7 @@ export function PayLinkPage({ token }) {
       )}
       {err && <p className="err">{err}</p>}
       <p className="fine-center">
-        Only pay into the account shown here. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
       </p>
     </Page>
   );

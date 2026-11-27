@@ -312,7 +312,6 @@ export function OrderCard({
         <div className="slip">
           <span className="label">Delivery fee</span>
           <span className="sub">
-            Ask your rider the price to {o.address}.
             <MapPin o={o} />
           </span>
           <div className="inline">
@@ -359,7 +358,6 @@ export function OrderCard({
             <span className="label">
               {o.customer_name.split(' ')[0]} pays {naira(due)} online
             </span>
-            <span className="sub">It shows as paid here the moment they do. Then pack it and book the courier.</span>
           </div>
           <div className="btns">
             <button
@@ -501,12 +499,6 @@ export function OrderCard({
               }}
             />
           </div>
-          {(!allPacked || !o.packing_photo) && (
-            <span className="sub">
-              {!allPacked ? 'Tick each item as you pack. ' : ''}
-              {!o.packing_photo ? 'A packing photo is your proof.' : ''}
-            </span>
-          )}
         </div>
       )}
       {o.packing_photo && <PhotoStrip paths={[o.packing_photo]} label="Packing photo" />}
@@ -594,11 +586,6 @@ export function OrderCard({
               </select>
             </div>
           </div>
-          {o.status === 'out' && (
-            <p className="note" style={{ fontSize: 12 }}>
-              ShopDesk sees time changes.
-            </p>
-          )}
           <div className="btns">
             <button className="btn small" onClick={handOver}>
               {pickup ? 'Ready for pick-up' : o.status === 'out' ? 'Save' : 'Hand to rider'}

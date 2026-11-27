@@ -185,9 +185,7 @@ function SignedInAccount({ email, userId, section }) {
                 {me.name && <strong>{me.name}</strong>}
                 {me.phone && <span>{me.phone}</span>}
               </div>
-            ) : (
-              <p className="sub">Save your name and phone number so checkout is quicker.</p>
-            )
+            ) : null
           ) : (
             <div className="stack-sm">
               <div className="field">

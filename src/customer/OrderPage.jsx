@@ -100,7 +100,6 @@ function AskToPay({ o, left, big }) {
         </svg>
         <span className="ask-text">
           <strong>Ask someone to pay</strong>
-          <span className="sub">Send a link. They see the items and amount, not your address or phone.</span>
         </span>
         <svg className="ask-go" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M9 6l6 6-6 6" />
@@ -142,10 +141,6 @@ function PaidScreen({ o, pickup, onView }) {
           ))}
         </ul>
       )}
-      <p className="note">
-        {o.shop.name} has been told and is getting it ready.{' '}
-        {pickup ? 'We’ll let you know when it’s ready to pick up.' : 'We’ll let you know when it’s on the way.'}
-      </p>
       <div className="paid-actions">
         <button className="btn" onClick={onView}>
           View order
@@ -472,10 +467,6 @@ export function OrderPage({ token }) {
               Not now
             </button>
           </div>
-          <p className="note">
-            Your order is in. Send this link to whoever is paying: they see the items and {naira(left)}, not your address or
-            phone, and can pay by transfer or online.
-          </p>
           <AskToPay o={o} left={left} big />
         </section>
       )}
@@ -543,8 +534,8 @@ export function OrderPage({ token }) {
         (feeWait || (pay && pay.wait) ? (
           <p className="note">
             {pay && pay.wait
-              ? 'The shop is picking your courier, then you pay online. This page updates by itself.'
-              : 'The shop is setting your delivery fee. This page updates by itself.'}
+              ? 'The shop is picking your courier.'
+              : 'The shop is setting your delivery fee.'}
           </p>
         ) : (
           <section className="card">
@@ -567,9 +558,6 @@ export function OrderPage({ token }) {
             )}
             {!payingOnline && (
               <>
-                <p className="note">
-                  Pay <strong>{naira(left)}</strong> in one transfer to:
-                </p>
                 <div className="slip pay-slip">
                   <div className="pay-line">
                     <div>
@@ -611,9 +599,6 @@ export function OrderPage({ token }) {
                     </span>
                   </div>
                 </div>
-                <p className="note">
-                  Put <strong>{o.code}</strong> in the transfer note.
-                </p>
                 {copied && (
                   <p className="ok" role="status">
                     {copied}
@@ -637,7 +622,7 @@ export function OrderPage({ token }) {
       {o.can_cancel &&
         (cancelling ? (
           <section className="card boxed">
-            <p className="note">Cancel this order? The shop is told.</p>
+            <p className="note">Cancel this order?</p>
             <div className="btns">
               <button
                 className="btn small"

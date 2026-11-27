@@ -48,11 +48,7 @@ export function RiderLive({ o, shop, code, say }) {
     );
   return (
     <div className="rider-live">
-      <span className="sub">
-        {live && live.link
-          ? `${rider} hasn't shared their location yet. Send the link again?`
-          : `Send ${rider} a tracking link so ${first} can follow them on a map.`}
-      </span>
+      {live && live.link && <span className="sub">{rider} hasn't shared their location yet.</span>}
       <div className="btns">
         <button className="btn small ghost" onClick={() => send('wa')} disabled={busy}>
           Send on WhatsApp

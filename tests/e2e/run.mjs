@@ -467,7 +467,7 @@ await step('the Cart tab opens the one cart straight away; with carts in two sho
   }, KEY);
   await tab('Cart').locator('.badge:text-is("3")').waitFor();
   await tab('Cart').click();
-  await see('One cart for each shop');
+  await see('Your carts');
   await p.locator('.cart-card .cart-thumbs').nth(1).waitFor();
   expect((await p.locator('.cart-card').count()) === 2, 'Your carts does not show both carts');
   expect((await p.locator('.cart-card').first().innerText()).includes(other.name), 'the newest cart is not first');
@@ -808,7 +808,7 @@ await step('a shop owner buys from another shop with the same account: Buy from 
   const buying = p.locator('.card.buying');
   await buying.waitFor();
   expect((await buying.innerText()).includes('Pack Pro Lagos'), 'Your buying does not list Pack Pro');
-  expect((await buying.innerText()).includes('Not taken off your sales'), 'Your buying does not say it is apart from sales');
+  expect(/Paid to 1 shop/.test(await buying.innerText()), 'Your buying does not show who was paid');
 });
 
 // ---------------- a new shop owner signs up ----------------
@@ -870,7 +870,7 @@ await step('a shop page shows its rating and opens its ratings page, and has a N
   await p.goto(url);
   await p.locator('.demo-bar').waitFor();
   await as('Customer');
-  await see('Pick what you want');
+  await p.locator('.shop-intro').waitFor();
   expect((await p.locator('.rating-chip').innerText()).includes('6 ratings'), 'the rating is not on the shop page');
   await p.locator('.rating-chip').click();
   await see('What customers say');

@@ -136,7 +136,6 @@ export function CartsPage() {
   const inbox = useInbox(uid, { title: 'Your carts' });
   return (
     <Page title="Your carts" kind="me" tabs={<CustomerTabs active="cart" unread={inbox.count} shopNews={inbox.shopCount} />}>
-      {carts.length > 1 && <p className="sub carts-note">One cart for each shop, because each shop takes its own order and payment.</p>}
       <Carts carts={carts} />
       <InboxToast inbox={inbox} />
     </Page>

@@ -111,10 +111,11 @@ export function OrdersTab({ shop, data, run, say, unread, focus, setFocus, setTa
             </span>
             <strong className="num">{naira(owing.reduce((a, o) => a + owes(o), 0))}</strong>
           </div>
-          <div className="sub">
-            Unpaid orders cancel after 48 hours.
-            {feeless > 0 && ` ${feeless} need${feeless === 1 ? 's' : ''} a delivery fee first.`}
-          </div>
+          {feeless > 0 && (
+            <div className="sub">
+              {feeless} need{feeless === 1 ? 's' : ''} a delivery fee first.
+            </div>
+          )}
         </section>
       )}
       <div className="search">
@@ -152,7 +153,7 @@ export function OrdersTab({ shop, data, run, say, unread, focus, setFocus, setTa
         <p className="note">
           {shown.length
             ? `${shown.length} order${shown.length === 1 ? '' : 's'} found`
-            : 'No orders match. Try the code from the bank alert.'}
+            : 'No orders match.'}
         </p>
       )}
       {shown.length
@@ -173,7 +174,6 @@ export function OrdersTab({ shop, data, run, say, unread, focus, setFocus, setTa
             />
           ))
         : !searching && <p className="note">No orders here.</p>}
-      <p className="note">Older than 60 days? Search the code.</p>
     </>
   );
 }

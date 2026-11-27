@@ -15,7 +15,6 @@ export function ThemePicker() {
           </button>
         ))}
       </div>
-      {t === 'system' && <p className="note">Switches with your phone's light or dark setting.</p>}
     </section>
   );
 }

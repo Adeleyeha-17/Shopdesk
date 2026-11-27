@@ -71,9 +71,7 @@ export function MoneyCards({ shop, reloadShop, say }) {
         <section className="card">
           <h2>ShopDesk Delivery</h2>
           <p className="note">
-            Every delivery order goes with ShopDesk Delivery: pick a courier on the new order, and ShopDesk books and
-            pays them. Your customer pays online, and you both follow the delivery on the order. Pick-up orders can
-            still be paid to you by transfer.
+            A courier picks up from you and delivers to the door.
           </p>
           {!online && (
             <p className="err">
@@ -104,18 +102,11 @@ export function MoneyCards({ shop, reloadShop, say }) {
           <h2>Customers pay online</h2>
           {online ? (
             <p className="note">
-              Customers can pay with card, transfer or USSD on their order page, and the order is marked paid by itself.
-              The money goes straight to your {shop.bank} account through Paystack, usually by the next working day.
-              {sw.fee_by === 'customer'
-                ? ' Customers who pay online also pay the card fee and a small ShopDesk fee, so you get the full amount. Transfers to you stay free.'
-                : sw.fee_by === 'shop'
-                  ? ' Paystack keeps its fee (1.5% + ₦100, at most ₦2,000) from each payment.'
-                  : ''}
+              Paid straight to your {shop.bank} account{sw.fee_by === 'shop' ? ', minus the payment fee.' : ', in full.'}
             </p>
           ) : (
             <p className="note">
-              Customers can pay you online once you pick your bank by name under Your shop, not Other bank. Until then,
-              they pay by transfer.
+              Pick your bank by name under Your shop to get paid online.
             </p>
           )}
         </section>

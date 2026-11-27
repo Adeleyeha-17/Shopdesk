@@ -26,7 +26,6 @@ export function CourierPrices({ o, shop, code, run, say, goShop }) {
     return (
       <div className="courier">
         <span className="label">ShopDesk Delivery</span>
-        <span className="sub">We book a courier and pay them. Add your pickup address first.</span>
         <div className="btns">
           <button className="btn small ghost" onClick={goShop}>
             Add pickup address
@@ -120,11 +119,7 @@ export function CourierBook({ o, code, run, allPacked }) {
   return (
     <div className="slip">
       <span className="label">Delivery is already paid</span>
-      <span className="sub">
-        {allPacked
-          ? `${name} will pick it up from you.`
-          : `Tick every item as you pack, then book ${name} to pick it up.`}
-      </span>
+      {allPacked && <span className="sub">{name} will pick it up from you.</span>}
       <div className="btns">
         <button className={'btn small' + (busy ? ' busy' : '')} onClick={book} disabled={!allPacked || busy}>
           {busy ? 'Booking…' : 'Book pickup'}

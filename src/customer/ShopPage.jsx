@@ -581,9 +581,6 @@ export function ShopPage({ slug, step = 'shop' }) {
         )}
         <div className="shop-intro">
           <h2>{shop.name}</h2>
-          <p className="note">
-            {sw.delivery ? 'Pick what you want, then check out.' : 'Pick what you want, then pay in one transfer.'}
-          </p>
           {shop.ratings > 0 && (
             <a className="rating-chip" href={'/' + slug + '/ratings'}>
               <Star />
@@ -755,9 +752,7 @@ export function ShopPage({ slug, step = 'shop' }) {
           <h2>Your cart is empty</h2>
           {cartNote ? (
             <p className="note cart-note">{cartNote}</p>
-          ) : (
-            <p className="note">Add something from {shop.name}.</p>
-          )}
+          ) : null}
           <button className="btn" onClick={toShop}>
             Start shopping
           </button>
@@ -1136,18 +1131,6 @@ export function ShopPage({ slug, step = 'shop' }) {
                 onChange={(e) => setForm({ ...form, note: e.target.value })}
                 placeholder="e.g. Please wrap it as a gift"
               />
-            </div>
-            <div className="co-note">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2 2.6 5 3.2 5 1.4 5 3.3-2.2 3.3-5 3.3-5-1.2-5-3.3" />
-              </svg>
-              <span>
-                {sw.delivery && form.mode === 'delivery'
-                  ? 'Pay once the shop confirms, then track it to your door.'
-                  : payNow
-                    ? 'You pay on the next screen. It’s packed once it’s paid.'
-                    : 'Pay in one transfer. It’s packed once it lands.'}
-              </span>
             </div>
           </section>
           <p className="fine-center">

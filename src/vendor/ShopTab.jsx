@@ -58,11 +58,7 @@ export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread, un
         <h2>Your order link</h2>
         <div className="slip">
           <span className="mono">{link}</span>
-          <span className="sub">
-            {shop.status === 'active'
-              ? 'Share it on WhatsApp and Instagram.'
-              : 'Opens once ShopDesk approves you.'}
-          </span>
+          {shop.status !== 'active' && <span className="sub">Opens once ShopDesk approves you.</span>}
         </div>
         <div className="btns">
           <button
@@ -131,7 +127,6 @@ export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread, un
             click={() => rule({ delivery_paid_by: 'vendor' })}
           />
         </div>
-        <p className="note">New rules apply to new orders.</p>
       </section>
       <ThemePicker />
       <section className="card">

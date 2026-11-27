@@ -65,7 +65,7 @@ export function RatingsPage({ slug }) {
       </div>
       {total === 0 ? (
         <section className="card boxed">
-          <p className="note">No ratings yet. Customers can rate {d.name} once their order is delivered.</p>
+          <p className="note">No ratings yet.</p>
         </section>
       ) : (
         <>

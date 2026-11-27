@@ -142,7 +142,6 @@ export function StockTab({ shop, data, load, run, say }) {
           </div>
         </section>
       )}
-      <p className="note">Ordered items are held. Cancelled orders put them back.</p>
       {editing === 'new' ? (
         <ProductForm shop={shop} onDone={saved} onCancel={() => setEditing(null)} />
       ) : (

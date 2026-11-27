@@ -142,7 +142,6 @@ export function GetStarted({ shop, data, setTab, say }) {
                 ))}
               </ol>
               <div className="gs-foot">
-                <span className="sub">Ticks itself off as you go.</span>
                 <button
                   className="linkbtn"
                   onClick={() => {

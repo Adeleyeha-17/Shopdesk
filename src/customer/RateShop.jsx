@@ -156,7 +156,6 @@ export function RateShop({ token, shopName, slug }) {
         ) : (
           <>
             <strong>How was {shopName}?</strong>
-            <span className="sub">Your rating helps other customers choose.</span>
             <StarPicker value={0} onPick={(k) => setSheet({ stars: k })} />
           </>
         )}

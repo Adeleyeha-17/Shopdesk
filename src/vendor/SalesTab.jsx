@@ -284,7 +284,7 @@ function BuyingCard({ b }) {
       </div>
       <div className="big">{naira(b.spent)}</div>
       <p className="sub">
-        Paid to {n} shop{n === 1 ? '' : 's'} · {b.orders} order{b.orders === 1 ? '' : 's'}. Not taken off your sales.
+        Paid to {n} shop{n === 1 ? '' : 's'} · {b.orders} order{b.orders === 1 ? '' : 's'}
       </p>
       <ul className="rank">
         {b.shops.slice(0, 5).map((x) => (
@@ -312,9 +312,6 @@ function GoalCard({ goal, saveGoal }) {
       <section className="card dash-card goal">
         <div>
           <h2>Your goal for {goal.month}</h2>
-          <p className="note">
-            How much do you want to sell this month? ShopDesk tracks it and tells you what's needed each day.
-          </p>
         </div>
         <div className="goal-set">
           <input
@@ -497,7 +494,6 @@ function HeatCard({ heat, periodName }) {
           <strong>
             {hourWord(best.b * 3)}–{hourWord(best.b * 3 + 3)}
           </strong>
-          . Post your link just before.
         </p>
       ) : (
         <p className="note">No orders in this period yet.</p>
@@ -614,7 +610,6 @@ function SalesView({
             </span>
           </div>
         )}
-        <div className="sub">Money in for what you sold, without delivery fees.</div>
       </section>
 
       <div className="dash-tiles">
@@ -805,9 +800,6 @@ function SalesView({
       <section className="card dash-card">
         <div>
           <h2>Monthly reports</h2>
-          <p className="note">
-            Every month ends with a report in ShopDesk. Tap one to open it, or download it for Excel.
-          </p>
         </div>
         <ul className="months">
           {r.months
@@ -887,7 +879,7 @@ function SalesView({
         </div>
       </div>
       <p className="note small">
-        Sales count when you tap Money in. Updated {dayOf(new Date().toISOString())}{' '}
+        Updated {dayOf(new Date().toISOString())}{' '}
         {timeOf(new Date().toISOString())}.
       </p>
     </>

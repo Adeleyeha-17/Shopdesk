@@ -55,7 +55,7 @@ function Banner({ shop, reloadShop, say }) {
             <p className="promo-title">Sale banner</p>
             <p className="sub">
               {!shop.banner
-                ? 'One line at the top of your shop page.'
+                ? 'None'
                 : showing
                   ? shop.banner_until
                     ? `Showing until ${dayText(shop.banner_until)}`
@@ -185,7 +185,6 @@ function NewCode({ onDone, say }) {
           <input id="cpMax" inputMode="numeric" value={f.max} onChange={set('max')} placeholder="No limit" />
         </div>
       </div>
-      <p className="note">Each customer can use a code once.</p>
       {err && <p className="err">{err}</p>}
       <div className="btns">
         <button className="btn small" onClick={save} disabled={busy}>
@@ -239,7 +238,6 @@ function Codes({ say }) {
       <div className="promo-head">
         <div>
           <p className="promo-title">Discount codes</p>
-          <p className="sub">Customers type the code at checkout.</p>
         </div>
         {!adding && (
           <button className="btn small ghost" onClick={() => setAdding(true)}>
@@ -259,7 +257,7 @@ function Codes({ say }) {
       {list === null ? (
         <p className="sub">Loading…</p>
       ) : list.length === 0 ? (
-        !adding && <p className="sub promo-empty">No codes yet. Make one and post it on your status or Instagram.</p>
+        !adding && <p className="sub promo-empty">No codes yet.</p>
       ) : (
         <ul className="promo-codes">
           {list.map((c) => {

@@ -47,7 +47,6 @@ export function ReportProblemForm({ orderId, token, late, onDone, onCancel }) {
   return (
     <section className="card boxed">
       <h2>Report a problem</h2>
-      <p className="note">The shop has 48 hours to answer. If you can't agree, ShopDesk decides.</p>
       <div className="choices" role="radiogroup" aria-label="What went wrong?">
         {KINDS.map(([k, label]) => (
           <button
@@ -162,7 +161,7 @@ export function CustomerProblem({ p, token, reload, setMsg }) {
       {p.status === 'answered' && p.reply === 'resend' && (
         <>
           <p className="note">
-            The shop is sending it again. Tap <strong>I got everything</strong> when it arrives.
+            The shop is sending it again.
           </p>
           <div className="btns">{escalate}</div>
         </>

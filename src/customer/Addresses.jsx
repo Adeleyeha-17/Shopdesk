@@ -186,7 +186,7 @@ export function AccountAddresses({ userId }) {
         </section>
       )}
       {list && !list.length && !adding && (
-        <p className="sub addr-none">Addresses you deliver to are saved here when you order.</p>
+        <p className="sub addr-none">No saved addresses yet.</p>
       )}
     </>
   );
