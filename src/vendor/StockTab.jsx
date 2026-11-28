@@ -205,6 +205,7 @@ export function StockTab({ shop, data, load, run, say }) {
                         <Price x={p} />
                       )}
                       {' · '}warn at {p.low_at}
+                    {!list.length && heldHere ? ` · ${heldHere} held` : ''}
                       {p.active ? '' : ' · hidden'}
                     </div>
                   </div>
@@ -226,8 +227,7 @@ export function StockTab({ shop, data, load, run, say }) {
                   ))}
                 </ul>
               )}
-              {!list.length && heldHere ? <div className="sub">{heldHere} held for unpaid orders</div> : null}
-              {!list.length && (
+                {!list.length && (
                 <div className="stockbar">
                   <b
                     style={{

@@ -1600,7 +1600,13 @@ a.card.profile > div { flex: 1; }
   .app:has(> .tabs) main.with-tabs > .toast.low { bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
   /* more on the screen at once */
   .shop-main .grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 20px 16px; }
-  .stock-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .stock-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+  /* cards in a row are the same height, with the stock bar, Add stock and the buttons lined up at the bottom */
+  .stock-grid > .card .stockbar, .stock-grid > .card:not(:has(> .stockbar)) > .inline { margin-top: auto; }
+  /* a product with sizes is taller: it takes a whole row, so it never stretches the cards beside it */
+  .stock-grid { grid-auto-flow: row dense; }
+  .stock-grid > .card:has(> .optlist) { grid-column: 1 / -1; }
+  .stock-grid > .card:has(> .optlist) > .inline, .stock-grid > .card:has(> .optlist) > .optlist { max-width: 560px; }
   .stock-grid > section:has(> h2:first-child) { grid-column: 1 / -1; } /* editing a product: the form takes the row */
   .near-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feed-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
@@ -1624,7 +1630,7 @@ a.card.profile > div { flex: 1; }
   .tab[aria-selected="true"], .tab[aria-current="page"] { background: var(--soft); }
   .tabs-in .badge, .tabs-in.five .badge { position: static; margin-left: auto; font-size: 11px; line-height: 18px; padding: 0 6px; }
   /* shop owners: orders side by side, cards in two columns */
-  .orders-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+  .orders-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
   .stock-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .wide-cols { display: block; columns: 2; column-gap: 24px; }
   .wide-cols > * { break-inside: avoid; margin-bottom: 24px; }

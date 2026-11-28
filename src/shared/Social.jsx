@@ -1,8 +1,7 @@
-// ShopDesk on Instagram, TikTok, X and Facebook: on the Help page and the Shop tab.
+// ShopDesk on TikTok, X and Facebook: on the Help page and the Shop tab. (Instagram goes back in once the account is up.)
 import React from 'react';
 
 export const SOCIAL = [
-  ['Instagram', 'https://instagram.com/shopdeskng'],
   ['TikTok', 'https://www.tiktok.com/@shopdeskng'],
   ['X', 'https://x.com/shopdeskng'],
   ['Facebook', 'https://www.facebook.com/61596838162757'],
