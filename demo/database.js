@@ -1179,6 +1179,39 @@ const shipView = (sh) => ({
   rider: sh.rider,
 });
 
+// ---------- shop news in the demo (update 034) ----------
+const newsLive = (a) => Date.now() - new Date(a.created_at).getTime() < 14 * 864e5 && (!a.ends_on || a.ends_on >= todayLagos());
+function audienceOf(s) {
+  const f = S.follows || [];
+  const set = new Set(f.filter((x) => x.shop_id === s.id && x.following).map((x) => x.user_id));
+  S.orders.forEach((o) => {
+    if (o.shop_id === s.id && o.customer_id && !f.some((x) => x.shop_id === s.id && x.user_id === o.customer_id && !x.following)) set.add(o.customer_id);
+  });
+  set.delete(s.owner_id);
+  return [...set];
+}
+function newsLine(a) {
+  const ps = a.product_ids.map((id) => S.products.find((p) => p.id === id)).filter(Boolean);
+  const first = ps[0] && ps[0].name;
+  const n = a.product_ids.length;
+  const c = (S.coupons || []).find((x) => x.id === a.coupon_id);
+  let t = { new: 'New: ' + (first || 'new products'), restock: 'Back in stock: ' + (first || 'your favourites'), black_friday: 'Black Friday', sale: 'Sale' }[a.kind];
+  if (['new', 'restock'].includes(a.kind) && n > 1) t += ` and ${n - 1} more`;
+  if (c) t += (['new', 'restock'].includes(a.kind) ? '. ' : ': ') + (c.kind === 'percent' ? `${c.value}% off` : `₦${Number(c.value).toLocaleString('en-NG')} off`) + ' with code ' + c.code;
+  else if (['sale', 'black_friday'].includes(a.kind) && first) t += ' on ' + first + (n > 1 ? ' and more' : '');
+  return t + '.';
+}
+function newsJson(a) {
+  const c = (S.coupons || []).find((x) => x.id === a.coupon_id);
+  return {
+    id: a.id, kind: a.kind, line: newsLine(a), body: a.body, ends_on: a.ends_on, at: a.created_at, live: newsLive(a), sent: a.sent,
+    code: c ? c.code : null, off: c ? { kind: c.kind, value: c.value } : null,
+    products: a.product_ids.map((id) => S.products.find((p) => p.id === id)).filter((p) => p && p.active !== false)
+      .map((p) => ({ id: p.id, name: p.name, price: p.price, sale_price: p.sale_price, photo_path: p.photo_path })),
+  };
+}
+const openShopBySlug = (slug) => S.shops.find((x) => x.slug === String(slug).toLowerCase() && x.status === 'active');
+
 // The gateway's page (Paystack, Monnify or Flutterwave), in the demo: a pretend checkout sheet instead of leaving the page.
 const GATEWAY = { paystack: 'Paystack', monnify: 'Monnify', flutterwave: 'Flutterwave' };
 function demoPaystack(ref, done) {
@@ -1880,6 +1913,63 @@ const RPC = {
   pay_link_online: ({ p_pay, p_via, p_how }) => {
     const o = S.orders.find((x) => x.pay_token === p_pay) || fail('This pay link isn’t right. Ask for a new one.');
     return RPC.customer_pay_online({ p_token: o.public_token, p_any: true, p_via, p_how });
+  },
+  // ---------- shop news (update 034) ----------
+  shop_follow: ({ p_slug }) => {
+    const s = openShopBySlug(p_slug);
+    if (!s) return null;
+    const aud = audienceOf(s);
+    const n = (S.news || []).filter((a) => a.shop_id === s.id && newsLive(a)).sort((a, b) => b.id - a.id)[0];
+    return { following: !!uid() && aud.includes(uid()), followers: aud.length, mine: !!uid() && s.owner_id === uid(), news: n ? newsJson(n) : null };
+  },
+  follow_shop: ({ p_slug, p_on }) => {
+    if (!uid()) fail('Sign in to follow shops.');
+    const s = openShopBySlug(p_slug) || fail('This shop isn’t open right now.');
+    if (s.owner_id === uid()) fail('This is your own shop.');
+    S.follows = S.follows || [];
+    const f = S.follows.find((x) => x.shop_id === s.id && x.user_id === uid());
+    if (f) f.following = p_on !== false;
+    else S.follows.push({ shop_id: s.id, user_id: uid(), following: p_on !== false, created_at: nowIso() });
+    return RPC.shop_follow({ p_slug });
+  },
+  my_feed: () => {
+    if (!uid()) return [];
+    return (S.news || [])
+      .filter((a) => newsLive(a))
+      .map((a) => [a, S.shops.find((x) => x.id === a.shop_id)])
+      .filter(([, s]) => s && s.status === 'active' && audienceOf(s).includes(uid()))
+      .sort(([a], [b]) => b.id - a.id)
+      .slice(0, 20)
+      .map(([a, s]) => ({ ...newsJson(a), shop: { name: s.name, slug: s.slug } }));
+  },
+  my_news: () => {
+    const s = myShop();
+    if (!s) return null;
+    const mine = (S.news || []).filter((a) => a.shop_id === s.id).sort((a, b) => b.id - a.id);
+    return {
+      audience: audienceOf(s).length,
+      posted_today: mine.some((a) => a.created_at.slice(0, 10) === todayLagos()),
+      list: mine.slice(0, 10).map(newsJson),
+    };
+  },
+  post_news: ({ p_kind, p_body, p_products, p_coupon, p_ends }) => {
+    const s = myShop() || fail('Not allowed.');
+    if (!['new', 'sale', 'black_friday', 'restock'].includes(p_kind)) fail('Pick what you’re announcing.');
+    S.news = S.news || [];
+    if (S.news.some((a) => a.shop_id === s.id && a.created_at.slice(0, 10) === todayLagos())) fail('You’ve announced today already. Announce again tomorrow.');
+    const ids = (p_products || []).filter((id) => S.products.some((p) => p.id === id && p.shop_id === s.id && p.active !== false));
+    if (!ids.length) fail('Pick at least one product.');
+    if (ids.length > 6) fail('Pick up to 6 products.');
+    if (p_ends && p_ends < todayLagos()) fail('Pick an end date from today on.');
+    if (/\d{10,}/.test(String(p_body || '').replace(/[\s.-]/g, ''))) fail('Leave account and phone numbers out of announcements.');
+    const a = { id: Math.max(0, ...S.news.map((x) => x.id)) + 1, shop_id: s.id, kind: p_kind, body: String(p_body || '').trim().slice(0, 200),
+      product_ids: ids, coupon_id: p_coupon || null, ends_on: p_ends || null, created_at: nowIso(), sent: 0 };
+    S.news.push(a);
+    const text = newsLine(a) + (a.body ? ' ' + a.body : '');
+    const aud = audienceOf(s);
+    aud.forEach((u) => notify(u, null, 'shop_news', s.name, text, '/' + s.slug));
+    a.sent = aud.length;
+    return newsJson(a);
   },
   // ---------- Pay online and ShopDesk Delivery (switched on in the demo; the real ones are off until Admin turns them on) ----------
   checkout_pay: ({ p_slug }) => {

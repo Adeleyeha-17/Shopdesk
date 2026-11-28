@@ -18,7 +18,7 @@ export function useInbox(uid, { onAlert, quiet, open, title } = {}) {
     unread.reload();
     if (ref.current.onAlert) ref.current.onAlert(n);
     // a shop's chat message, or a message a shop sent its customers (shown on the Shops tab)
-    if (!n || !['message', 'shop_message'].includes(n.kind) || (ref.current.quiet && ref.current.quiet(n)))
+    if (!n || !['message', 'shop_message', 'shop_news'].includes(n.kind) || (ref.current.quiet && ref.current.quiet(n)))
       return;
     // the same alert can come twice (live, and from the phone's alert); show it once
     const key = n.order_id + '|' + n.body;
@@ -38,7 +38,7 @@ export function useInbox(uid, { onAlert, quiet, open, title } = {}) {
     });
   });
   // count: news on their orders (the Orders tab); shopCount: messages from shops (the Shops tab)
-  const shopCount = unread.list.filter((n) => n.kind === 'shop_message').length;
+  const shopCount = unread.list.filter((n) => n.kind === 'shop_message' || n.kind === 'shop_news').length;
   const count = unread.list.length - shopCount;
   useCount(count + shopCount, title || 'ShopDesk');
   return { unread, count, shopCount, toast, closeToast: close };

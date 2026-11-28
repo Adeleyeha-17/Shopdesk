@@ -9,11 +9,12 @@ import { errText, copyText } from '../lib/helpers.js';
 import { ShopFields, checkShop, shopRow } from './shopForm.jsx';
 import { MoneyCards } from './MoneyCards.jsx';
 import { Promotions } from './Promotions.jsx';
+import { Announce } from './Announce.jsx';
 import { ShopDeskCard } from './ShopDeskChat.jsx';
 import { markShared } from './GetStarted.jsx';
 import { TabIcon } from '../shared/TabIcon.jsx';
 
-export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread, unread }) {
+export function ShopTab({ shop, data, reloadShop, say, email, openDesk, deskUnread, unread }) {
   const buyNews = (unread && unread.others) || 0; // news on orders this shop owner placed with other shops
   const [v, setV] = useState({ ...shop, slugTouched: true });
   const [err, setErr] = useState('');
@@ -101,6 +102,7 @@ export function ShopTab({ shop, reloadShop, say, email, openDesk, deskUnread, un
       </section>
       <MoneyCards shop={shop} reloadShop={reloadShop} say={say} />
       <Promotions shop={shop} reloadShop={reloadShop} say={say} />
+      <Announce shop={shop} products={(data && data.products) || []} say={say} />
       <section className="card">
         <h2>Your shop</h2>
         <ShopFields v={v} set={setV} />

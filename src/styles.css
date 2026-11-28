@@ -1501,3 +1501,51 @@ a.card.profile > div { flex: 1; }
 .ask-first h2 { margin: 0; font-size: 18px; }
 .ask-first .note { margin: 6px 0 12px; }
 .ask-first .btn { width: 100%; }
+
+/* shop news: Follow, the news strip on the shop page, From shops you follow, and the shop's Announcements */
+.shop-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; align-self: stretch; }
+.shop-title h2 { min-width: 0; }
+.follow-btn { appearance: none; border: 0; flex-shrink: 0; font: 700 14px var(--body); padding: 9px 16px; border-radius: 999px; background: var(--btn); color: var(--on-btn); cursor: pointer; }
+.follow-btn.on { background: var(--soft); color: var(--ink); }
+.follow-count { display: block; margin-top: 2px; }
+.news-strip { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--ink); color: var(--bg); }
+.news-strip img { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
+.news-strip div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.news-strip strong { font-size: 14px; line-height: 1.3; }
+.news-strip span { font-size: 13px; opacity: .75; }
+.feed-head { margin: 0; }
+.feed-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.feed-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; color: inherit; text-decoration: none; }
+.feed-pics { display: grid; gap: 3px; height: 150px; background: var(--soft); }
+.feed-pics.n2 { grid-template-columns: 1fr 1fr; }
+.feed-pics.n3 { grid-template-columns: 2fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.feed-pics.n3 img:first-child { grid-row: 1 / 3; }
+.feed-pics img { width: 100%; height: 100%; object-fit: cover; min-height: 0; display: block; }
+.feed-in { padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.feed-top { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.feed-top b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-top .sub { white-space: nowrap; }
+.feed-tag { margin-left: auto; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--soft); white-space: nowrap; }
+.feed-tag.black_friday, .feed-tag.sale { background: #fdecc8; color: #7a5200; }
+.feed-tag.new, .feed-tag.restock { background: #dff3e6; color: #17663a; }
+:root[data-theme="dark"] .feed-tag.black_friday, :root[data-theme="dark"] .feed-tag.sale { background: #3a2f12; color: #f5d38a; }
+:root[data-theme="dark"] .feed-tag.new, :root[data-theme="dark"] .feed-tag.restock { background: #123222; color: #8fe0ae; }
+.feed-in strong { font-size: 15px; line-height: 1.3; }
+.news-form .choices.tiles .choice { align-content: center; }
+.news-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; margin-top: 6px; }
+.news-pick { appearance: none; position: relative; border: 2px solid transparent; padding: 0; border-radius: 12px; overflow: hidden; aspect-ratio: 1; background: var(--soft); cursor: pointer; display: grid; place-items: center; }
+.news-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.news-pick > span { font-weight: 700; color: var(--muted); }
+.news-pick i { position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); display: none; place-items: center; }
+.news-pick i svg { width: 13px; height: 13px; fill: none; stroke: var(--bg); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.news-pick[aria-pressed="true"] { border-color: var(--ink); }
+.news-pick[aria-pressed="true"] i { display: grid; }
+.news-poster { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.news-poster img, .news-poster-wait { width: min(240px, 70%); aspect-ratio: 9 / 16; border-radius: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, .14); background: var(--soft); }
+.news-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-self: stretch; }
+.news-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.news-list li { padding: 10px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.news-line { font-weight: 600; font-size: 14px; line-height: 1.35; }
+.news-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+.news-form .field .label { display: block; margin-top: 4px; }

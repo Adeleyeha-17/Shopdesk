@@ -241,6 +241,20 @@ function useTypingHint(names, plain, on) {
   return hint;
 }
 
+// The shop's latest news ("New: Coconut oil, 500ml"), above its products.
+function NewsStrip({ news }) {
+  const p = (news.products || []).find((x) => x.photo_path);
+  return (
+    <div className="news-strip" role="note">
+      {p && <img src={photoUrl(p.photo_path)} alt="" />}
+      <div>
+        <strong>{news.line}</strong>
+        {news.body && <span>{news.body}</span>}
+      </div>
+    </div>
+  );
+}
+
 // /<shop>: the products; /<shop>/cart: the cart; /<shop>/checkout: who it's for, delivery, and placing the order.
 export function ShopPage({ slug, step = 'shop' }) {
   const checkout = step === 'checkout';
@@ -249,6 +263,9 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [state, setState] = useState({ loading: true, shop: null, products: [], error: null });
   const [cart, setCart] = useState({}); // product id, or "product id:size id", -> how many (see cart.js)
   const [cartNote, setCartNote] = useState(''); // what changed in a saved cart since last time
+  const [fol, setFol] = useState(null); // shop_follow: following, followers, this shop's latest news
+  const [askFollow, setAskFollow] = useState(false); // signed out and tapped Follow: sign in first
+  const [folErr, setFolErr] = useState('');
   const restored = useRef(false); // the saved cart is read once, when the shop's products first arrive
   const [ready, setReady] = useState(false); // the saved cart has been read (so an empty cart really is empty)
   const [saved, setSaved] = useState(null); // the customer's saved details, from their last order
@@ -383,6 +400,22 @@ export function ShopPage({ slug, step = 'shop' }) {
   );
   // a shop writes about another order while they browse: a pop-up, and the count on My orders
   const inbox = useInbox(uid, { title: state.shop ? state.shop.name : 'ShopDesk' });
+  // following this shop, and its latest news
+  const shopSlug = state.shop && state.shop.slug;
+  useEffect(() => {
+    if (!shopSlug) return;
+    supabase.rpc('shop_follow', { p_slug: shopSlug }).then(({ data, error }) => !error && setFol(data));
+  }, [shopSlug, me]);
+  async function toggleFollow() {
+    setFolErr('');
+    if (!me) {
+      setAskFollow(true);
+      return;
+    }
+    const { data, error } = await supabase.rpc('follow_shop', { p_slug: shopSlug, p_on: !fol.following });
+    if (error) setFolErr(errText(error));
+    else setFol(data);
+  }
   // a sheet that finishes closing after another one opened leaves the new one open
   const closeSheet = useCallback((id) => setPicking((x) => (x === id ? null : x)), []);
   // the bar at the bottom on the shop and the cart (not on checkout)
@@ -580,7 +613,14 @@ export function ShopPage({ slug, step = 'shop' }) {
           </div>
         )}
         <div className="shop-intro">
-          <h2>{shop.name}</h2>
+          <div className="shop-title">
+            <h2>{shop.name}</h2>
+            {fol && !fol.mine && (
+              <button className={'follow-btn' + (fol.following ? ' on' : '')} aria-pressed={fol.following} onClick={toggleFollow}>
+                {fol.following ? 'Following' : 'Follow'}
+              </button>
+            )}
+          </div>
           {shop.ratings > 0 && (
             <a className="rating-chip" href={'/' + slug + '/ratings'}>
               <Star />
@@ -593,7 +633,19 @@ export function ShopPage({ slug, step = 'shop' }) {
               </svg>
             </a>
           )}
+          {fol && fol.followers > 0 && (
+            <span className="sub follow-count">
+              {fol.followers} follower{fol.followers === 1 ? '' : 's'}
+            </span>
+          )}
         </div>
+        {folErr && <p className="err">{folErr}</p>}
+        {askFollow && !me && (
+          <section className="card boxed">
+            <SignIn compact title={`Sign in to follow ${shop.name}`} path={'/' + slug} />
+          </section>
+        )}
+        {fol && fol.news && <NewsStrip news={fol.news} />}
         {cartNote && <p className="note cart-note">{cartNote}</p>}
         {products.length > 4 && (
           <div className="search">

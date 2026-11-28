@@ -15,6 +15,7 @@ import { useInbox, InboxToast } from './inbox.jsx';
 import { loadCart } from './cart.js';
 import { orderLabel } from './MyOrdersPage.jsx';
 import { forgetShop, hiddenShops, myShops } from './myShops.js';
+import { ShopFeed } from './ShopFeed.jsx';
 import { NearYou } from './NearYou.jsx';
 
 const inCart = (slug) => Object.values(loadCart(slug)).reduce((a, q) => a + (q > 0 ? q : 0), 0);
@@ -58,9 +59,13 @@ export function ShopsPage() {
   const [editing, setEditing] = useState(false);
   const [toast, say, closeToast] = useToast();
   const [notes, setNotes] = useState({}); // the newest message from each shop: { slug: { body, at, unread } }
+  const [feedStamp, setFeedStamp] = useState(0); // news from a shop arrived: load From shops you follow again
   const inbox = useInbox(uid, {
     title: 'Shops',
-    onAlert: (n) => n && n.kind === 'shop_message' && loadNotes(),
+    onAlert: (n) => {
+      if (n && n.kind === 'shop_message') loadNotes();
+      if (n && n.kind === 'shop_news') setFeedStamp(Date.now());
+    },
   });
   // messages shops sent this customer ("We have new stock in!"), shown on that shop's row; seeing them here reads them
   async function loadNotes() {
@@ -204,6 +209,7 @@ export function ShopsPage() {
           </div>
         </section>
       )}
+      <ShopFeed uid={uid} stamp={feedStamp} markRead={() => inbox.unread.markRead(null, 'shop_news')} />
       <div className="stack-sm">
         <div className="shops-head">
           <h2>{resume ? 'All your shops' : 'Your shops'}</h2>
@@ -260,7 +266,6 @@ export function ShopsPage() {
         </ul>
         {words && !shown.length && <p className="note">No shop matches “{find.trim()}”.</p>}
       </div>
-      <p className="shops-foot">Open a shop&apos;s link once and it stays here.</p>
       {!words && !editing && orders !== null && <NearYou skip={shops.map((s) => s.slug)} uid={uid} />}
       <Toast toast={toast} onClose={closeToast} low />
       <InboxToast inbox={inbox} />

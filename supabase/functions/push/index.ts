@@ -124,6 +124,7 @@ export function catchy(n) {
     // for the customer (and chats both ways)
     case 'message': return [`💬 ${t}`, b];
     case 'shop_message': return [`💬 ${t}`, b];
+    case 'shop_news': return [`📣 ${t}`, b];
     case 'confirmed': return shopSays('✅ Order confirmed!', b);
     case 'paid': return shopSays('💚 Payment received!', `packing ${code || 'your order'} now 📦`);
     case 'out': return ['🛵 Your order is on its way!', b];
@@ -272,6 +273,8 @@ function kindOf(k, who) {
     shopdesk: ['ShopDesk', C.info, 'ShopDesk sent you a message', 'Open the message'],
     admin_message: ['Message', C.info, 'A shop wrote to ShopDesk', 'Open Messages'],
     feature: ['New', C.good, null, 'Open ShopDesk'], // "Pay online is here"
+    shop_message: ['Message', C.info, null, 'Open the shop'],
+    shop_news: ['News', C.good, null, 'See the shop'], // "Black Friday: 15% off with code BF15."
   };
   if (K[k]) return K[k];
   if (String(k).startsWith('admin') || k === 'report') return ['ShopDesk', C.info, 'Something needs you in Admin', 'Open Admin'];

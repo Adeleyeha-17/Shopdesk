@@ -979,6 +979,37 @@ await step('the shop sees how its codes did and makes a new one in the Shop tab'
   await p.locator('.promo-codes li:has-text("XMAS10")').waitFor();
 });
 
+await step('a shop announces Black Friday with a code: its past customer gets an alert, sees it in the Shops tab and on the shop page', async () => {
+  await as('Shop owner');
+  await nav('Shop');
+  await p.locator('.news-card').waitFor();
+  expect(/hears? your news/.test(await p.locator('.news-card .promo-head').innerText()), 'the audience line is missing');
+  await p.locator('.news-card button:has-text("New")').click();
+  await p.locator('.news-form .choice:has-text("Black Friday")').click();
+  await p.locator('.news-pick').nth(0).click();
+  await p.locator('.news-pick').nth(1).click();
+  await p.locator('#newsCode').selectOption({ label: /^BF15/ }).catch(async () => {
+    const v = await p.locator('#newsCode option').filter({ hasText: 'BF15' }).getAttribute('value');
+    await p.locator('#newsCode').selectOption(v);
+  });
+  await p.locator('#newsBody').fill('This weekend only.');
+  await p.locator('.news-form button:has-text("Announce")').click();
+  await p.locator('.news-poster img').waitFor();
+  await p.locator('.news-poster button:has-text("Done")').click();
+  await p.locator('.news-list li:has-text("Black Friday: 15% off with code BF15.")').waitFor();
+  expect((await p.locator('.news-card button:has-text("Next one tomorrow")').count()) === 1, 'a second announcement today is allowed');
+  await as('Customer');
+  await tab('Shops').click();
+  await p.locator('.feed-card:has-text("Black Friday: 15% off with code BF15.")').waitFor();
+  await p.locator('.feed-card').first().click();
+  await p.locator('.news-strip:has-text("Black Friday")').waitFor();
+  expect((await p.locator('.follow-btn').innerText()) === 'Following', 'a past customer is not following');
+  await p.locator('.follow-btn').click();
+  await p.locator('.follow-btn:text-is("Follow")').waitFor();
+  await p.locator('.follow-btn').click();
+  await p.locator('.follow-btn:text-is("Following")').waitFor();
+});
+
 await step('no errors in the page', async () => {
   expect(pageErrors.length === 0, 'page errors: ' + pageErrors.join(' | '));
 });

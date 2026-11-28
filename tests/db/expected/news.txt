@@ -1,0 +1,38 @@
+N1 Bayo orders, so he hears the shop news; Sade follows; Chuka does neither (expect t 2, t 2, f 2):
+t
+true|2
+true|2
+false|2
+N2 the owner cant follow their own shop, and signed-out people cant follow (expect 2 errors):
+psql:news.sql:29: ERROR:  This is your own shop.
+CONTEXT:  PL/pgSQL function follow_shop(text,boolean) line N at RAISE
+psql:news.sql:31: ERROR:  Sign in to follow shops.
+CONTEXT:  PL/pgSQL function follow_shop(text,boolean) line N at RAISE
+N3 the shop sees who will hear its news, then announces: bad posts get a plain reason (expect 2, then 4 errors):
+2
+psql:news.sql:36: ERROR:  Pick what you're announcing.
+CONTEXT:  PL/pgSQL function post_news(text,text,uuid[],bigint,date) line N at RAISE
+psql:news.sql:37: ERROR:  Pick at least one product.
+CONTEXT:  PL/pgSQL function post_news(text,text,uuid[],bigint,date) line N at RAISE
+psql:news.sql:38: ERROR:  Leave account and phone numbers out of announcements.
+CONTEXT:  PL/pgSQL function post_news(text,text,uuid[],bigint,date) line N at RAISE
+psql:news.sql:39: ERROR:  Pick an end date from today on.
+CONTEXT:  PL/pgSQL function post_news(text,text,uuid[],bigint,date) line N at RAISE
+N4 a Black Friday announcement with a code reaches both, as a phone alert (expect the line, 2, then 2 alerts):
+Black Friday: 10% off with code HAIR10.|2
+2
+N5 one announcement a day (expect an error):
+psql:news.sql:49: ERROR:  You've announced today already. Announce again tomorrow.
+CONTEXT:  PL/pgSQL function post_news(text,text,uuid[],bigint,date) line N at RAISE
+N6 the news shows on the shop page for anyone, and in the feeds of the two who hear it, not for Chuka (expect the line twice, 1, 1, 0):
+Black Friday: 10% off with code HAIR10.
+Black Friday: 10% off with code HAIR10.
+1
+1
+0
+N7 Bayo unfollows: he stops hearing the shop even though he ordered (expect f 1, then 0 in his feed):
+false|1
+0
+N8 nobody reads the tables directly (expect permission denied twice):
+psql:news.sql:69: ERROR:  permission denied for table shop_news
+psql:news.sql:70: ERROR:  permission denied for table shop_follows
