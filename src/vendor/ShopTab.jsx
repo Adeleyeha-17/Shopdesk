@@ -55,7 +55,7 @@ export function ShopTab({ shop, data, reloadShop, say, email, openDesk, deskUnre
     </button>
   );
   return (
-    <>
+    <div className="wide-cols shop-cols">
       <section className="card">
         <h2>Your order link</h2>
         <div className="slip">
@@ -149,6 +149,6 @@ export function ShopTab({ shop, data, reloadShop, say, email, openDesk, deskUnre
           </button>
         </div>
       </section>
-    </>
+    </div>
   );
 }

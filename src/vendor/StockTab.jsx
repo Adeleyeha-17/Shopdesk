@@ -165,120 +165,122 @@ export function StockTab({ shop, data, load, run, say }) {
         </div>
       )}
       {find.trim() && !shown.length && <p className="note">No products match “{find.trim()}”.</p>}
-      {shown.map((p) => {
-        if (editing === p.id)
+      <div className="wide-grid stock-grid">
+        {shown.map((p) => {
+          if (editing === p.id)
+            return (
+              <ProductForm
+                key={p.id}
+                shop={shop}
+                product={p}
+                onDone={saved}
+                onCancel={() => setEditing(null)}
+              />
+            );
+          const list = options(p);
+          const isLow = list.length ? list.some((o) => o.stock <= p.low_at) : p.stock <= p.low_at;
+          const from = priceFrom(p);
+          const heldHere = list.length ? list.reduce((a, o) => a + (held[o.id] || 0), 0) : held[p.id] || 0;
           return (
-            <ProductForm
+            <section
               key={p.id}
-              shop={shop}
-              product={p}
-              onDone={saved}
-              onCancel={() => setEditing(null)}
-            />
-          );
-        const list = options(p);
-        const isLow = list.length ? list.some((o) => o.stock <= p.low_at) : p.stock <= p.low_at;
-        const from = priceFrom(p);
-        const heldHere = list.length ? list.reduce((a, o) => a + (held[o.id] || 0), 0) : held[p.id] || 0;
-        return (
-          <section
-            key={p.id}
-            className="card boxed"
-            style={p.active && !p.hidden_by_admin ? null : { opacity: 0.6 }}
-          >
-            <div className="row">
-              <div className="row" style={{ justifyContent: 'flex-start', gap: 12 }}>
-                <img className="thumb" src={photoUrl(p.photo_path)} alt="" />
-                <div>
-                  <strong>{p.name}</strong>
-                  <div className="sub">
-                    {list.length ? (
-                      <>
-                        {list.length} {list.length === 1 ? optionWord(p) : optionWord(p) + 's'}
-                        {' · '}
-                        {from.from ? 'from ' : ''}
-                        {naira(from.price)}
-                        {from.sale ? ' · on sale' : ''}
-                      </>
-                    ) : (
-                      <Price x={p} />
-                    )}
-                    {' · '}warn at {p.low_at}
-                    {p.active ? '' : ' · hidden'}
+              className="card boxed"
+              style={p.active && !p.hidden_by_admin ? null : { opacity: 0.6 }}
+            >
+              <div className="row">
+                <div className="row" style={{ justifyContent: 'flex-start', gap: 12 }}>
+                  <img className="thumb" src={photoUrl(p.photo_path)} alt="" />
+                  <div>
+                    <strong>{p.name}</strong>
+                    <div className="sub">
+                      {list.length ? (
+                        <>
+                          {list.length} {list.length === 1 ? optionWord(p) : optionWord(p) + 's'}
+                          {' · '}
+                          {from.from ? 'from ' : ''}
+                          {naira(from.price)}
+                          {from.sale ? ' · on sale' : ''}
+                        </>
+                      ) : (
+                        <Price x={p} />
+                      )}
+                      {' · '}warn at {p.low_at}
+                      {p.active ? '' : ' · hidden'}
+                    </div>
                   </div>
                 </div>
+                <span className={'chip num ' + (isLow ? 'warn' : 'paid')}>{p.stock} left</span>
               </div>
-              <span className={'chip num ' + (isLow ? 'warn' : 'paid')}>{p.stock} left</span>
-            </div>
-            {list.length > 0 && (
-              <ul className="optlist">
-                {list.map((o) => (
-                  <li key={o.id}>
-                    <span className="optname">{o.name}</span>
-                    <span className="sub num">
-                      <Price x={o} />
-                    </span>
-                    <span className={'chip num ' + (o.stock <= p.low_at ? 'warn' : 'paid')}>
-                      {o.stock} left{held[o.id] ? ` · ${held[o.id]} held` : ''}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {!list.length && heldHere ? <div className="sub">{heldHere} held for unpaid orders</div> : null}
-            {!list.length && (
-              <div className="stockbar">
-                <b
-                  style={{
-                    width: Math.min(100, Math.round((100 * p.stock) / Math.max(p.low_at * 3, 1))) + '%',
-                  }}
-                  className={isLow ? 'low' : ''}
-                />
-              </div>
-            )}
-            <AddStock key={list.map((o) => o.id).join()} p={p} run={run} say={say} />
-            {p.hidden_by_admin ? (
-              <>
-                <p className="err" style={{ fontSize: 13 }}>
-                  Hidden by ShopDesk: {p.hidden_reason} Message ShopDesk if you think this is a mistake.
-                </p>
+              {list.length > 0 && (
+                <ul className="optlist">
+                  {list.map((o) => (
+                    <li key={o.id}>
+                      <span className="optname">{o.name}</span>
+                      <span className="sub num">
+                        <Price x={o} />
+                      </span>
+                      <span className={'chip num ' + (o.stock <= p.low_at ? 'warn' : 'paid')}>
+                        {o.stock} left{held[o.id] ? ` · ${held[o.id]} held` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!list.length && heldHere ? <div className="sub">{heldHere} held for unpaid orders</div> : null}
+              {!list.length && (
+                <div className="stockbar">
+                  <b
+                    style={{
+                      width: Math.min(100, Math.round((100 * p.stock) / Math.max(p.low_at * 3, 1))) + '%',
+                    }}
+                    className={isLow ? 'low' : ''}
+                  />
+                </div>
+              )}
+              <AddStock key={list.map((o) => o.id).join()} p={p} run={run} say={say} />
+              {p.hidden_by_admin ? (
+                <>
+                  <p className="err" style={{ fontSize: 13 }}>
+                    Hidden by ShopDesk: {p.hidden_reason} Message ShopDesk if you think this is a mistake.
+                  </p>
+                  <div className="btns">
+                    <button className="linkbtn" onClick={() => setEditing(p.id)}>
+                      Edit
+                    </button>
+                  </div>
+                </>
+              ) : (
                 <div className="btns">
-                  <button className="linkbtn" onClick={() => setEditing(p.id)}>
+                  <button className="btn small ghost" onClick={() => setEditing(p.id)}>
                     Edit
                   </button>
-                </div>
-              </>
-            ) : (
-              <div className="btns">
-                <button className="btn small ghost" onClick={() => setEditing(p.id)}>
-                  Edit
-                </button>
-                <button className="btn small ghost" onClick={() => toggle(p)}>
-                  {p.active ? 'Hide from order page' : 'Show on order page'}
-                </button>
-                <button className="btn small ghost danger" onClick={() => setDeleting(p.id)}>
-                  Delete
-                </button>
-              </div>
-            )}
-            {deleting === p.id && (
-              <div className="confirm-del" role="alert">
-                <span>
-                  Delete <strong>{p.name}</strong> for good? Orders already placed keep its details.
-                </span>
-                <div className="btns">
-                  <button className="btn small bad" onClick={() => remove(p)} disabled={busy}>
-                    {busy ? 'Deleting…' : 'Delete for good'}
+                  <button className="btn small ghost" onClick={() => toggle(p)}>
+                    {p.active ? 'Hide from order page' : 'Show on order page'}
                   </button>
-                  <button className="linkbtn" onClick={() => setDeleting(null)} disabled={busy}>
-                    Keep it
+                  <button className="btn small ghost danger" onClick={() => setDeleting(p.id)}>
+                    Delete
                   </button>
                 </div>
-              </div>
-            )}
-          </section>
-        );
-      })}
+              )}
+              {deleting === p.id && (
+                <div className="confirm-del" role="alert">
+                  <span>
+                    Delete <strong>{p.name}</strong> for good? Orders already placed keep its details.
+                  </span>
+                  <div className="btns">
+                    <button className="btn small bad" onClick={() => remove(p)} disabled={busy}>
+                      {busy ? 'Deleting…' : 'Delete for good'}
+                    </button>
+                    <button className="linkbtn" onClick={() => setDeleting(null)} disabled={busy}>
+                      Keep it
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
       {!data.products.length && editing !== 'new' && <p className="note">No products yet.</p>}
     </>
   );

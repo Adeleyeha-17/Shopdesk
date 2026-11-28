@@ -14,7 +14,8 @@ import { LoadError } from '../shared/LoadError.jsx';
 import { SignIn } from '../shared/SignIn.jsx';
 import { ReportShopForm } from '../shared/ReportShopForm.jsx';
 import { rememberOrder } from './savedOrders.js';
-import { loadCart, saveCart, clearCart, fitCart } from './cart.js';
+import { useMedia, WIDE } from '../lib/media.js';
+import { accountCart, loadCart, saveCart, clearCart, fitCart } from './cart.js';
 import { onSale, optionWord, options, payPrice, priceFrom } from '../lib/products.js';
 import { useBusy } from '../lib/busy.js';
 import { Skeleton } from '../shared/Skeleton.jsx';
@@ -267,6 +268,7 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [askFollow, setAskFollow] = useState(false); // signed out and tapped Follow: sign in first
   const [folErr, setFolErr] = useState('');
   const restored = useRef(false); // the saved cart is read once, when the shop's products first arrive
+  const reading = useRef(false);
   const [ready, setReady] = useState(false); // the saved cart has been read (so an empty cart really is empty)
   const [saved, setSaved] = useState(null); // the customer's saved details, from their last order
   const [editDetails, setEditDetails] = useState(false);
@@ -301,6 +303,7 @@ export function ShopPage({ slug, step = 'shop' }) {
   const [reporting, setReporting] = useState(false);
   const [me, setMe] = useState(null);
   const [isShop, setIsShop] = useState(null); // signed in as this shop's own owner: they can look, not order
+  const wide = useMedia(WIDE); // a laptop: the cart sits beside the products
   const [mine, setMine] = useState([]); // this customer's orders with this shop, for Report this shop
   const [uid, setUid] = useState(null);
   // Customers order from their account. Sign-in happens at checkout, so the cart is kept; then their saved details fill in.
@@ -363,14 +366,22 @@ export function ShopPage({ slug, step = 'shop' }) {
   useEffect(() => {
     loadShop();
   }, [loadShop]);
-  // the cart from last time, fitted to what's in stock now; from then on every change is kept in this browser
+  // the cart from last time (this browser's, or the account's from another phone), fitted to what's in stock now;
+  // from then on every change is kept
   useEffect(() => {
-    if (restored.current || state.loading || !state.shop) return;
-    restored.current = true;
-    const fit = fitCart(loadCart(slug), state.products);
-    setCart(fit.items);
-    setCartNote(fit.note);
-    setReady(true);
+    if (reading.current || state.loading || !state.shop) return;
+    reading.current = true;
+    const products = state.products;
+    const use = (items) => {
+      const fit = fitCart(items, products);
+      restored.current = true;
+      setCart(fit.items);
+      setCartNote(fit.note);
+      setReady(true);
+    };
+    const here = loadCart(slug);
+    if (Object.keys(here).length) use(here);
+    else accountCart(slug).then(use);
   }, [state.loading, state.shop, state.products, slug]);
   useEffect(() => {
     if (restored.current) saveCart(slug, cart);
@@ -400,6 +411,10 @@ export function ShopPage({ slug, step = 'shop' }) {
   );
   // a shop writes about another order while they browse: a pop-up, and the count on My orders
   const inbox = useInbox(uid, { title: state.shop ? state.shop.name : 'ShopDesk' });
+  const cartAlerts = inbox.cartCount;
+  useEffect(() => {
+    if (cartAlerts && (cartPage || checkout)) inbox.unread.markRead(null, 'cart_reminder');
+  }, [cartAlerts, cartPage, checkout]); // eslint-disable-line react-hooks/exhaustive-deps
   // following this shop, and its latest news
   const shopSlug = state.shop && state.shop.slug;
   useEffect(() => {
@@ -593,6 +608,64 @@ export function ShopPage({ slug, step = 'shop' }) {
     navigate('/o/' + data.token);
   }
 
+  // one line of the cart: photo, name, price, and − / + (the cart page, and beside the products on a laptop)
+  const cartLine = (l) => {
+    const left = l.o ? l.o.stock : l.p.stock;
+    return (
+      <li key={l.key} className="oitem cart-line">
+        <img className="oitem-img" src={photoUrl(l.p.photo_path)} alt="" />
+        <span className="oitem-name">
+          {l.name}
+          <span className="sub num">
+            {' '}
+            {l.q > 1 ? `${naira(l.price)} each · ` : ''}
+            {naira(l.price * l.q)}
+          </span>
+        </span>
+        <span className="stepper">
+          <button
+            className="step"
+            onClick={() => set(l.key, l.q - 1)}
+            aria-label={l.q === 1 ? `Remove ${l.name}` : `One less ${l.name}`}
+          >
+            {l.q === 1 ? '×' : '−'}
+          </button>
+          <span className="qty">{l.q}</span>
+          <button
+            className="step"
+            onClick={() => set(l.key, Math.min(left, 99, l.q + 1))}
+            disabled={l.q >= Math.min(left, 99)}
+            aria-label={`One more ${l.name}`}
+          >
+            +
+          </button>
+        </span>
+      </li>
+    );
+  };
+  const cartAside = wide && !isShop && (
+    <aside className="cart-aside" aria-label="Your cart">
+      <div className="page-head">
+        <h2>Your cart</h2>
+        {count > 0 && (
+          <span className="sub">
+            {count} item{count === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
+      {lines.length ? (
+        <>
+          <ul className="oitems">{lines.map(cartLine)}</ul>
+          <button className="btn" onClick={toCheckout}>
+            Checkout · {naira(sub)}
+          </button>
+        </>
+      ) : (
+        <p className="note">Nothing yet</p>
+      )}
+    </aside>
+  );
+
   if (step === 'shop')
     return (
       <Page
@@ -604,178 +677,183 @@ export function ShopPage({ slug, step = 'shop' }) {
           </a>
         }
       >
-        {shop.banner && (
-          <div className="sale-banner" role="note">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M3 12l9-9h8v8l-9 9zM15.5 8.5h.01" />
-            </svg>
-            <span>{shop.banner}</span>
-          </div>
-        )}
-        <div className="shop-intro">
-          <div className="shop-title">
-            <h2>{shop.name}</h2>
-            {fol && !fol.mine && (
-              <button className={'follow-btn' + (fol.following ? ' on' : '')} aria-pressed={fol.following} onClick={toggleFollow}>
-                {fol.following ? 'Following' : 'Follow'}
-              </button>
+        <div className="shop-split">
+          <div className="shop-main">
+            {shop.banner && (
+              <div className="sale-banner" role="note">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 12l9-9h8v8l-9 9zM15.5 8.5h.01" />
+                </svg>
+                <span>{shop.banner}</span>
+              </div>
             )}
-          </div>
-          {shop.ratings > 0 && (
-            <a className="rating-chip" href={'/' + slug + '/ratings'}>
-              <Star />
-              <b>{Number(shop.rating).toFixed(1)}</b>
-              <span>
-                · {shop.ratings} rating{shop.ratings === 1 ? '' : 's'}
-              </span>
-              <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 5l7 7-7 7" />
-              </svg>
-            </a>
-          )}
-          {fol && fol.followers > 0 && (
-            <span className="sub follow-count">
-              {fol.followers} follower{fol.followers === 1 ? '' : 's'}
-            </span>
-          )}
-        </div>
-        {folErr && <p className="err">{folErr}</p>}
-        {askFollow && !me && (
-          <section className="card boxed">
-            <SignIn compact title={`Sign in to follow ${shop.name}`} path={'/' + slug} />
-          </section>
-        )}
-        {fol && fol.news && <NewsStrip news={fol.news} />}
-        {cartNote && <p className="note cart-note">{cartNote}</p>}
-        {products.length > 4 && (
-          <div className="search">
-            <label htmlFor="shopSearch" className="visually-hidden">
-              Search {shop.name}
-            </label>
-            <input
-              id="shopSearch"
-              type="search"
-              value={find}
-              onChange={(e) => setFind(e.target.value)}
-              onFocus={() => setInSearch(true)}
-              onBlur={() => setInSearch(false)}
-              placeholder={hint}
-              autoComplete="off"
-            />
-          </div>
-        )}
-        {words && !shown.length && (
-          <p className="note">
-            Nothing here matches “{find.trim()}”.{' '}
-            <button className="linkbtn" onClick={() => setFind('')}>
-              Show everything
-            </button>
-          </p>
-        )}
-        {products.length ? (
-          <div className="grid">
-            {shown.map((p) => {
-              const opts = options(p);
-              const q = opts.length
-                ? opts.reduce((a, o) => a + (cart[p.id + ':' + o.id] || 0), 0)
-                : cart[p.id] || 0;
-              const pf = priceFrom(p);
-              const sale = opts.length ? pf.sale : onSale(p);
-              const about = !!(p.description || '').trim(); // the photo and name open its details
-              const details = about ? () => setPicking(p.id) : undefined;
-              return (
-                <div className="pcard" key={p.id}>
-                  <div className={'pimg' + (p.stock ? '' : ' out')}>
-                    <img
-                      src={photoUrl(p.photo_path)}
-                      alt={p.name}
-                      loading="lazy"
-                      onClick={details}
-                      className={about ? 'tap' : undefined}
-                    />
-                    {sale && p.stock > 0 && <span className="saletag">Sale</span>}
-                    {p.stock > 0 && opts.length > 0 && (
-                      <div className="pill">
-                        {q > 0 && <span className="qty">{q}</span>}
-                        <button
-                          className="step"
-                          data-inc="1"
-                          onClick={() => setPicking(p.id)}
-                          aria-label={`Choose a ${optionWord(p)} of ${p.name}`}
-                        >
-                          +
-                        </button>
-                      </div>
-                    )}
-                    {p.stock > 0 && !opts.length && (
-                      <div className="pill">
-                        {q > 0 && (
-                          <>
+            <div className="shop-intro">
+              <div className="shop-title">
+                <h2>{shop.name}</h2>
+                {fol && !fol.mine && (
+                  <button className={'follow-btn' + (fol.following ? ' on' : '')} aria-pressed={fol.following} onClick={toggleFollow}>
+                    {fol.following ? 'Following' : 'Follow'}
+                  </button>
+                )}
+              </div>
+              {shop.ratings > 0 && (
+                <a className="rating-chip" href={'/' + slug + '/ratings'}>
+                  <Star />
+                  <b>{Number(shop.rating).toFixed(1)}</b>
+                  <span>
+                    · {shop.ratings} rating{shop.ratings === 1 ? '' : 's'}
+                  </span>
+                  <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 5l7 7-7 7" />
+                  </svg>
+                </a>
+              )}
+              {fol && fol.followers > 0 && (
+                <span className="sub follow-count">
+                  {fol.followers} follower{fol.followers === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+            {folErr && <p className="err">{folErr}</p>}
+            {askFollow && !me && (
+              <section className="card boxed">
+                <SignIn compact title={`Sign in to follow ${shop.name}`} path={'/' + slug} />
+              </section>
+            )}
+            {fol && fol.news && <NewsStrip news={fol.news} />}
+            {cartNote && <p className="note cart-note">{cartNote}</p>}
+            {products.length > 4 && (
+              <div className="search">
+                <label htmlFor="shopSearch" className="visually-hidden">
+                  Search {shop.name}
+                </label>
+                <input
+                  id="shopSearch"
+                  type="search"
+                  value={find}
+                  onChange={(e) => setFind(e.target.value)}
+                  onFocus={() => setInSearch(true)}
+                  onBlur={() => setInSearch(false)}
+                  placeholder={hint}
+                  autoComplete="off"
+                />
+              </div>
+            )}
+            {words && !shown.length && (
+              <p className="note">
+                Nothing here matches “{find.trim()}”.{' '}
+                <button className="linkbtn" onClick={() => setFind('')}>
+                  Show everything
+                </button>
+              </p>
+            )}
+            {products.length ? (
+              <div className="grid">
+                {shown.map((p) => {
+                  const opts = options(p);
+                  const q = opts.length
+                    ? opts.reduce((a, o) => a + (cart[p.id + ':' + o.id] || 0), 0)
+                    : cart[p.id] || 0;
+                  const pf = priceFrom(p);
+                  const sale = opts.length ? pf.sale : onSale(p);
+                  const about = !!(p.description || '').trim(); // the photo and name open its details
+                  const details = about ? () => setPicking(p.id) : undefined;
+                  return (
+                    <div className="pcard" key={p.id}>
+                      <div className={'pimg' + (p.stock ? '' : ' out')}>
+                        <img
+                          src={photoUrl(p.photo_path)}
+                          alt={p.name}
+                          loading="lazy"
+                          onClick={details}
+                          className={about ? 'tap' : undefined}
+                        />
+                        {sale && p.stock > 0 && <span className="saletag">Sale</span>}
+                        {p.stock > 0 && opts.length > 0 && (
+                          <div className="pill">
+                            {q > 0 && <span className="qty">{q}</span>}
                             <button
                               className="step"
-                              onClick={() => set(p.id, q - 1)}
-                              aria-label={'One less ' + p.name}
+                              data-inc="1"
+                              onClick={() => setPicking(p.id)}
+                              aria-label={`Choose a ${optionWord(p)} of ${p.name}`}
                             >
-                              −
+                              +
                             </button>
-                            <span className="qty">{q}</span>
-                          </>
+                          </div>
                         )}
-                        <button
-                          className="step"
-                          data-inc="1"
-                          onClick={() => set(p.id, Math.min(p.stock, q + 1))}
-                          disabled={q >= p.stock}
-                          aria-label={'Add ' + p.name}
-                        >
-                          +
-                        </button>
+                        {p.stock > 0 && !opts.length && (
+                          <div className="pill">
+                            {q > 0 && (
+                              <>
+                                <button
+                                  className="step"
+                                  onClick={() => set(p.id, q - 1)}
+                                  aria-label={'One less ' + p.name}
+                                >
+                                  −
+                                </button>
+                                <span className="qty">{q}</span>
+                              </>
+                            )}
+                            <button
+                              className="step"
+                              data-inc="1"
+                              onClick={() => set(p.id, Math.min(p.stock, q + 1))}
+                              disabled={q >= p.stock}
+                              aria-label={'Add ' + p.name}
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className={'pname' + (about ? ' tap' : '')} onClick={details}>
-                    {p.name}
-                  </div>
-                  <div className="row">
-                    <span className="pprice">
-                      {opts.length ? (
-                        <>
-                          {pf.from ? <span className="from">from </span> : null}
-                          {naira(pf.price)}
-                          {pf.was ? (
+                      <div className={'pname' + (about ? ' tap' : '')} onClick={details}>
+                        {p.name}
+                      </div>
+                      <div className="row">
+                        <span className="pprice">
+                          {opts.length ? (
                             <>
-                              {' '}
-                              <s className="was">{naira(pf.was)}</s>
+                              {pf.from ? <span className="from">from </span> : null}
+                              {naira(pf.price)}
+                              {pf.was ? (
+                                <>
+                                  {' '}
+                                  <s className="was">{naira(pf.was)}</s>
+                                </>
+                              ) : null}
                             </>
-                          ) : null}
-                        </>
+                          ) : (
+                            <Price x={p} />
+                          )}
+                        </span>
+                        {!opts.length && p.stock > 0 && p.stock <= 3 && (
+                          <span className="sub">{p.stock} left</span>
+                        )}
+                      </div>
+                      {opts.length > 0 && p.stock > 0 ? (
+                        <button className="linkbtn optnames" onClick={() => setPicking(p.id)}>
+                          {opts.map((o) => o.name).join(' · ')}
+                        </button>
                       ) : (
-                        <Price x={p} />
+                        about && (
+                          <button className="linkbtn optnames" onClick={details}>
+                            Details
+                          </button>
+                        )
                       )}
-                    </span>
-                    {!opts.length && p.stock > 0 && p.stock <= 3 && (
-                      <span className="sub">{p.stock} left</span>
-                    )}
-                  </div>
-                  {opts.length > 0 && p.stock > 0 ? (
-                    <button className="linkbtn optnames" onClick={() => setPicking(p.id)}>
-                      {opts.map((o) => o.name).join(' · ')}
-                    </button>
-                  ) : (
-                    about && (
-                      <button className="linkbtn optnames" onClick={details}>
-                        Details
-                      </button>
-                    )
-                  )}
-                </div>
-              );
-            })}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="note">This shop hasn't added products yet.</p>
+            )}
+            {foot}
           </div>
-        ) : (
-          <p className="note">This shop hasn't added products yet.</p>
-        )}
-        {foot}
+          {cartAside}
+        </div>
         {reporting && (
           <ReportShopForm slug={slug} orders={mine} signedIn={me !== ''} done={() => setReporting(false)} />
         )}
@@ -834,40 +912,7 @@ export function ShopPage({ slug, step = 'shop' }) {
         {cartNote && <p className="note cart-note">{cartNote}</p>}
         <section className="card boxed cart" aria-label="Your cart">
           <ul className="oitems">
-            {lines.map((l) => {
-              const left = l.o ? l.o.stock : l.p.stock;
-              return (
-                <li key={l.key} className="oitem cart-line">
-                  <img className="oitem-img" src={photoUrl(l.p.photo_path)} alt="" />
-                  <span className="oitem-name">
-                    {l.name}
-                    <span className="sub num">
-                      {' '}
-                      {l.q > 1 ? `${naira(l.price)} each · ` : ''}
-                      {naira(l.price * l.q)}
-                    </span>
-                  </span>
-                  <span className="stepper">
-                    <button
-                      className="step"
-                      onClick={() => set(l.key, l.q - 1)}
-                      aria-label={l.q === 1 ? `Remove ${l.name}` : `One less ${l.name}`}
-                    >
-                      {l.q === 1 ? '×' : '−'}
-                    </button>
-                    <span className="qty">{l.q}</span>
-                    <button
-                      className="step"
-                      onClick={() => set(l.key, Math.min(left, 99, l.q + 1))}
-                      disabled={l.q >= Math.min(left, 99)}
-                      aria-label={`One more ${l.name}`}
-                    >
-                      +
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
+            {lines.map(cartLine)}
           </ul>
           <div className="row">
             <span className="sub">Items</span>

@@ -37,11 +37,13 @@ export function useInbox(uid, { onAlert, quiet, open, title } = {}) {
       },
     });
   });
-  // count: news on their orders (the Orders tab); shopCount: messages from shops (the Shops tab)
+  // count: news on their orders (the Orders tab); shopCount: messages from shops (the Shops tab); cart reminders are
+  // read when a cart is opened
   const shopCount = unread.list.filter((n) => n.kind === 'shop_message' || n.kind === 'shop_news').length;
-  const count = unread.list.length - shopCount;
-  useCount(count + shopCount, title || 'ShopDesk');
-  return { unread, count, shopCount, toast, closeToast: close };
+  const cartCount = unread.list.filter((n) => n.kind === 'cart_reminder').length;
+  const count = unread.list.length - shopCount - cartCount;
+  useCount(count + shopCount + cartCount, title || 'ShopDesk');
+  return { unread, count, shopCount, cartCount, toast, closeToast: close };
 }
 
 export function InboxToast({ inbox }) {

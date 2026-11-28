@@ -1,5 +1,7 @@
 // The customer's cart, one per shop (each shop is paid separately), kept in this browser so it survives a refresh,
 // signing in, or coming back another day. Keys are a product id, or "product id:size id" for a product with sizes.
+// Signed in, it's kept on the account too: it opens on another phone, and ShopDesk reminds them if they leave it.
+import { supabase } from '../lib/database.js';
 import { options, optionWord } from '../lib/products.js';
 
 const KEEP_DAYS = 30;
@@ -22,8 +24,38 @@ export function saveCart(slug, items) {
       localStorage.setItem(key(slug), JSON.stringify({ items: kept, at: Date.now() }));
     else localStorage.removeItem(key(slug));
     window.dispatchEvent(new Event('shopdesk-cart')); // the Cart tab's number follows
+    keepOnAccount(slug, kept);
   } catch (e) {
     /* not saved; the cart still works on this page */
+  }
+}
+
+// a moment after the last change, the account's copy follows; an emptied cart goes at once (signed out: nothing is sent)
+const waiting = {};
+function keepOnAccount(slug, items) {
+  clearTimeout(waiting[slug]);
+  const send = async () => {
+    delete waiting[slug];
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data && data.session) await supabase.rpc('save_cart', { p_slug: slug, p_items: items });
+    } catch (e) {
+      /* offline: this browser still has it */
+    }
+  };
+  if (Object.keys(items).length) waiting[slug] = setTimeout(send, 1500);
+  else send();
+}
+
+// The cart kept on the account for this shop ({} when signed out or there is none).
+export async function accountCart(slug) {
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (!data || !data.session) return {};
+    const r = await supabase.rpc('my_cart', { p_slug: slug });
+    return r.data && typeof r.data === 'object' && !Array.isArray(r.data) ? r.data : {};
+  } catch (e) {
+    return {};
   }
 }
 

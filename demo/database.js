@@ -407,14 +407,16 @@ function seedData() {
   const fee = () => pick([1500, 2000, 2000, 2500, 2500, 3000, 3500]);
   const hourOf = () => weighted(HOURS, (h) => h[1])[0];
 
-  // Every day from opening until yesterday
+  // Every day from opening until yesterday (this week has been slow, so the Sales tab offers a quick sale)
+  const monday = t0 - ((new Date(t0).getDay() + 6) % 7) * DAY;
   for (let d = 400; d >= 1; d--) {
     const day = t0 - d * DAY;
     const wd = new Date(day).getDay();
     const grow = 1.1 + 4.4 * (1 - d / 400);
     const week = wd === 5 ? 1.25 : wd === 6 ? 1.35 : wd === 0 ? 0.8 : 1;
     const december = new Date(day).getMonth() === 11 ? 1.4 : 1;
-    const n = Math.max(0, Math.round(grow * week * december + between(-1.2, 1.2)));
+    const slow = day >= monday ? 0.3 : 1;
+    const n = Math.max(0, Math.round(grow * week * december * slow + between(-1.2, 1.2)));
     for (let k = 0; k < n; k++) {
       const at = day + hourOf() * HOUR + between(0, 59) * MIN;
       const pool = customers.filter((c) => c.joined <= 400 - d);
@@ -912,6 +914,19 @@ export function resetDemo() {
 
 // ---------- rules the real database keeps ----------
 const myShop = () => S.shops.find((s) => s.owner_id === uid()) || null;
+// what a shop took in between two moments (paid orders, without delivery), and this week so far against the same
+// days and hours last week (weeks start Monday, Lagos time)
+const soldBetween = (s, from, to) =>
+  S.orders
+    .filter((o) => o.shop_id === s.id && ['paid', 'out', 'delivered'].includes(o.status) && o.paid_at)
+    .filter((o) => Date.parse(o.paid_at) >= from && Date.parse(o.paid_at) < to)
+    .reduce((a, o) => a + o.items_total, 0);
+function weekPace(s) {
+  const lagos = new Date(Date.now() + 3600e3);
+  const monday = Date.UTC(lagos.getUTCFullYear(), lagos.getUTCMonth(), lagos.getUTCDate()) - ((lagos.getUTCDay() + 6) % 7) * DAY - 3600e3;
+  const now = Date.now();
+  return { so_far: soldBetween(s, monday, now), last: soldBetween(s, monday - 7 * DAY, now - 7 * DAY) };
+}
 const deskJson = (m) => ({ id: m.id, sender: m.sender, body: m.body, photo: m.photo, video: m.video || null, created_at: m.created_at });
 const hasShop = (u) => S.shops.some((s) => s.owner_id === u);
 const hasShopped = (u) =>
@@ -1981,6 +1996,46 @@ const RPC = {
     aud.forEach((u) => notify(u, null, 'shop_news', s.name, text, '/' + s.slug));
     a.sent = aud.length;
     return newsJson(a);
+  },
+  // ---------- alerts: carts kept on the account, the week's pace, a quick sale ----------
+  save_cart: ({ p_slug, p_items }) => {
+    const s = S.shops.find((x) => x.slug === String(p_slug || '').toLowerCase());
+    if (!uid() || !s) return null;
+    S.saved_carts = (S.saved_carts || []).filter((c) => !(c.user_id === uid() && c.shop_id === s.id));
+    const items = Object.fromEntries(Object.entries(p_items || {}).filter(([, q]) => q > 0).slice(0, 50));
+    if (Object.keys(items).length) S.saved_carts.push({ user_id: uid(), shop_id: s.id, items, updated_at: nowIso() });
+    return null;
+  },
+  my_cart: ({ p_slug }) => {
+    const s = S.shops.find((x) => x.slug === String(p_slug || '').toLowerCase());
+    const c = s && (S.saved_carts || []).find((x) => x.user_id === uid() && x.shop_id === s.id);
+    const ordered = c && S.orders.some((o) => o.shop_id === s.id && o.customer_id === uid() && o.created_at > c.updated_at);
+    return c && !ordered ? c.items : {};
+  },
+  sales_pace: () => {
+    const s = myShop();
+    if (!s) return null;
+    const p = weekPace(s);
+    const dow = ((new Date(Date.now() + 3600e3).getUTCDay() + 6) % 7) + 1;
+    const sale = (S.coupons || []).some((c) => c.shop_id === s.id && /^SAVE(5|10|15|20)$/.test(c.code) && c.active && c.ends_on >= todayLagos());
+    return { ...p, slow: dow >= 3 && p.last >= 10000 && p.so_far < p.last * 0.6, sale_on: sale };
+  },
+  quick_sale: ({ p_percent }) => {
+    const s = myShop() || fail('Not allowed.');
+    if (![5, 10, 15, 20].includes(p_percent)) fail('Pick 5, 10, 15 or 20 percent.');
+    const code = 'SAVE' + p_percent;
+    const ends = new Date(Date.now() + 3600e3 + 3 * DAY).toISOString().slice(0, 10);
+    S.coupons = S.coupons || [];
+    let c = S.coupons.find((x) => x.shop_id === s.id && x.code === code);
+    if (!c) {
+      c = { id: Math.max(0, ...S.coupons.map((x) => x.id)) + 1, shop_id: s.id, code, created_at: nowIso() };
+      S.coupons.push(c);
+    }
+    Object.assign(c, { kind: 'percent', value: p_percent, min_total: 0, max_uses: null, ends_on: ends, active: true });
+    const day = new Date(ends + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
+    s.banner = `${p_percent}% off everything with code ${code} until ${day}`;
+    s.banner_until = ends;
+    return { id: c.id, code, ends_on: ends };
   },
   // ---------- Pay online and ShopDesk Delivery (switched on in the demo; the real ones are off until Admin turns them on) ----------
   checkout_pay: ({ p_slug }) => {

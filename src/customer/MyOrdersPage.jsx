@@ -153,7 +153,11 @@ function SignedInOrders({ userId }) {
           <Skeleton kind="list" />
         )
       ) : live.length ? (
-        live.map((o) => <OrderRow key={o.token} o={o} unread={unread} />)
+        <div className="wide-grid orders-grid">
+          {live.map((o) => (
+            <OrderRow key={o.token} o={o} unread={unread} />
+          ))}
+        </div>
       ) : (
         <Empty
           kind="scooter"

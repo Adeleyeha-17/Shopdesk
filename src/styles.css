@@ -1567,3 +1567,77 @@ a.card.profile > div { flex: 1; }
 .social-links { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .social-links a { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 12px; background: var(--soft); color: var(--ink); font-weight: 600; font-size: 14px; text-decoration: none; }
 .social-links svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Sales tab: sales are slower this week */
+.slow-card { border-color: color-mix(in srgb, var(--wait) 70%, var(--line)); background: color-mix(in srgb, var(--wait) 6%, var(--bg)); }
+.slow-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.slow-head h2 { margin: 0; }
+.slow-head .sub { margin: 2px 0 0; }
+.slow-head .round-x { width: 32px; height: 32px; }
+.slow-head .round-x svg { width: 16px; height: 16px; stroke-width: 2; }
+.slow-pcts .filter { flex: 1; text-align: center; }
+
+/* ---------- tablets and laptops: the tabs move to a side rail and the pages use the room ----------
+   Phones are untouched: below 760px every rule here is the same as before. */
+.wide-grid, .wide-cols, .shop-split, .shop-main { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.cart-aside { display: none; }
+@media (min-width: 760px) {
+  :root { --rail: 92px; --wide: 820px; }
+  .app:has(> .tabs) { max-width: none; display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .app:has(> .tabs) > .top { grid-column: 2; grid-row: 1; }
+  .app:has(> .tabs) > .top .top-row { max-width: calc(var(--wide) - 64px); margin-inline: auto; }
+  .app:has(> .tabs) > main { grid-column: 2; grid-row: 2; width: 100%; max-width: var(--wide); margin-inline: auto; box-sizing: border-box;
+    padding-left: 32px; padding-right: 32px; padding-top: 24px; }
+  .app:has(> .tabs) > main.with-tabs { padding-bottom: 56px; }
+  .app:has(> .tabs) > .tabs { grid-column: 1; grid-row: 1 / span 2; position: sticky; inset: auto; top: 0; height: 100vh; height: 100dvh;
+    padding: 0; pointer-events: auto; z-index: 6; }
+  .tabs-in { height: 100%; box-sizing: border-box; max-width: none; margin: 0; grid-template-columns: minmax(0, 1fr) !important; grid-auto-rows: max-content;
+    align-content: start; gap: 6px; padding: calc(18px + env(safe-area-inset-top, 0px)) 8px 18px max(8px, env(safe-area-inset-left, 0px));
+    border: 0; border-right: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+  .tab { padding: 8px 2px 7px; }
+  .tabs-in .badge, .tabs-in.five .badge { right: calc(50% - 28px); }
+  .app:has(> .tabs) .toast { margin-left: calc(var(--rail) / 2); bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+  .app:has(> .tabs) main.with-tabs > .toast.low { bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+  /* more on the screen at once */
+  .shop-main .grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 20px 16px; }
+  .stock-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .stock-grid > section:has(> h2:first-child) { grid-column: 1 / -1; } /* editing a product: the form takes the row */
+  .near-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .feed-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  /* a button on its own takes its own width, not the whole page */
+  .app:has(> .tabs) > main > .btn, .slow-card > .btn { align-self: flex-start; min-width: 240px; }
+  .slow-pcts .filter { flex: none; min-width: 72px; }
+  /* Shops: pick up where you left off, photos beside the cart */
+  .resume { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 1fr auto; gap: 14px 22px; padding: 14px; }
+  .resume-photos { grid-row: 1 / span 2; }
+  .resume-body { align-self: end; padding: 0; }
+  .resume .btns { align-self: start; }
+}
+@media (min-width: 1100px) {
+  :root { --rail: 232px; --wide: 1180px; }
+  .app:has(> .tabs) { font-size: 16px; }
+  .app:has(> .tabs) h2 { font-size: 18px; }
+  .tabs-in { padding: calc(22px + env(safe-area-inset-top, 0px)) 14px 22px; gap: 4px; }
+  .tab, .tabs-in.five .tab { flex-direction: row; justify-content: flex-start; gap: 14px; padding: 11px 14px; border-radius: 12px; font-size: 15px; font-weight: 600; }
+  .tab svg, .tabs-in.five .tab svg { padding: 0; width: 22px; height: 22px; background: none !important; }
+  .tab-letter { padding: 0; background: none !important; }
+  .tab[aria-selected="true"], .tab[aria-current="page"] { background: var(--soft); }
+  .tabs-in .badge, .tabs-in.five .badge { position: static; margin-left: auto; font-size: 11px; line-height: 18px; padding: 0 6px; }
+  /* shop owners: orders side by side, cards in two columns */
+  .orders-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+  .stock-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wide-cols { display: block; columns: 2; column-gap: 24px; }
+  .wide-cols > * { break-inside: avoid; margin-bottom: 24px; }
+  .wide-cols > :last-child { margin-bottom: 0; }
+  /* customers: the products, with the cart beside them */
+  .shop-split:has(> .cart-aside) { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 36px; align-items: start; }
+  .shop-main .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 24px 18px; }
+  .cart-aside { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 84px; max-height: calc(100vh - 108px); overflow: auto;
+    box-sizing: border-box; padding: 18px; border: 1px solid var(--line); border-radius: 18px; }
+  .cart-aside .oitems { gap: 12px; }
+  .near-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .feed-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1100px) and (hover: hover) {
+  .tab:hover:not([aria-selected="true"]):not([aria-current="page"]) { background: color-mix(in srgb, var(--soft) 55%, transparent); }
+}

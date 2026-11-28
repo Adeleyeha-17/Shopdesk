@@ -1,11 +1,12 @@
 // Shop tab > Announcements: tell your customers about a new product, a sale, Black Friday or a restock. It reaches
 // everyone who follows the shop and everyone who has ordered from it (unless they unfollowed), as a phone alert, on the
 // shop's page and in their Shops tab. One a day. ShopDesk makes a poster for WhatsApp status and Instagram from it.
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/database.js';
 import { photoUrl } from '../lib/photos.js';
 import { errText } from '../lib/helpers.js';
 import { makePoster, sharePoster, savePoster } from '../shared/poster.js';
+import { HANDOFF } from './SlowSales.jsx';
 
 const KINDS = [
   ['new', 'New product'],
@@ -63,13 +64,27 @@ function Poster({ shop, news, say, onDone }) {
   );
 }
 
-function NewsForm({ shop, products, audience, say, onPosted, onCancel }) {
-  const [kind, setKind] = useState('new');
-  const [picked, setPicked] = useState([]);
+// a quick sale from the Sales tab opens the form ready: Sale, its code and end date, the newest products picked
+function takeHandoff() {
+  try {
+    const h = JSON.parse(sessionStorage.getItem(HANDOFF) || 'null');
+    sessionStorage.removeItem(HANDOFF);
+    return h && h.kind ? h : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function NewsForm({ shop, products, audience, preset, say, onPosted, onCancel }) {
+  const live = products.filter((p) => p.active !== false);
+  const [kind, setKind] = useState((preset && preset.kind) || 'new');
+  const [picked, setPicked] = useState(() =>
+    preset ? live.filter((p) => p.photo_path && p.stock > 0).slice(0, 3).map((p) => p.id) : [],
+  );
   const [codes, setCodes] = useState([]);
-  const [coupon, setCoupon] = useState('');
+  const [coupon, setCoupon] = useState(preset && preset.coupon ? String(preset.coupon) : '');
   const [body, setBody] = useState('');
-  const [ends, setEnds] = useState('');
+  const [ends, setEnds] = useState((preset && preset.ends) || '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   useEffect(() => {
@@ -77,7 +92,6 @@ function NewsForm({ shop, products, audience, say, onPosted, onCancel }) {
       setCodes((data || []).filter((c) => c.active && !c.ended && !(c.max_uses && c.uses >= c.max_uses))),
     );
   }, []);
-  const live = products.filter((p) => p.active !== false);
   const toggle = (id) =>
     setPicked((x) => (x.includes(id) ? x.filter((y) => y !== id) : x.length >= 6 ? x : [...x, id]));
   async function post() {
@@ -171,8 +185,11 @@ function NewsForm({ shop, products, audience, say, onPosted, onCancel }) {
 
 export function Announce({ shop, products, say }) {
   const [d, setD] = useState(null);
-  const [mode, setMode] = useState(''); // '' | 'new' | poster for an announcement id
+  const [preset] = useState(takeHandoff);
+  const [mode, setMode] = useState(preset ? 'new' : ''); // '' | 'new' | poster for an announcement id
   const [just, setJust] = useState(null);
+  const box = useRef(null);
+  const opened = useRef(false);
   const load = useCallback(
     () => supabase.rpc('my_news').then(({ data, error }) => setD(error || !data ? { audience: 0, list: [] } : data)),
     [],
@@ -180,11 +197,17 @@ export function Announce({ shop, products, say }) {
   useEffect(() => {
     load();
   }, [load]);
+  useEffect(() => {
+    if (!preset || !d || opened.current) return;
+    opened.current = true;
+    if (d.posted_today) setMode('');
+    if (box.current) box.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [preset, d]);
   if (!d) return null;
   const list = d.list || [];
   const shown = just || (typeof mode === 'number' ? list.find((n) => n.id === mode) : null);
   return (
-    <section className="card news-card">
+    <section className="card news-card" ref={box}>
       <div className="promo-head">
         <div>
           <h2>Announcements</h2>
@@ -203,6 +226,7 @@ export function Announce({ shop, products, say }) {
           shop={shop}
           products={products}
           audience={d.audience}
+          preset={preset}
           say={say}
           onCancel={() => setMode('')}
           onPosted={(n) => {

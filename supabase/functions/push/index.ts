@@ -116,6 +116,8 @@ export function catchy(n) {
     case 'visit': return ["👀 Someone's checking out your shop", `${b} Keep sharing your link 🔥`];
     case 'rating': return [`⭐ ${t}`, b];
     case 'monthly_report': return [`📊 ${t}`, b];
+    case 'weekly': return [`📈 ${t}`, b];
+    case 'slow_sales': return ['📉 Sales are slower this week', b];
     case 'shopdesk': return ['💬 ShopDesk', b];
     case 'feature': return [`🚀 ${t}!`, b];
     case 'problem': return ['⚠️ A customer has a problem', `${code ? code + ': ' : ''}${b}`];
@@ -125,6 +127,7 @@ export function catchy(n) {
     case 'message': return [`💬 ${t}`, b];
     case 'shop_message': return [`💬 ${t}`, b];
     case 'shop_news': return [`📣 ${t}`, b];
+    case 'cart_reminder': return [`🛒 ${t}`, b];
     case 'confirmed': return shopSays('✅ Order confirmed!', b);
     case 'paid': return shopSays('💚 Payment received!', `packing ${code || 'your order'} now 📦`);
     case 'out': return ['🛵 Your order is on its way!', b];
@@ -275,6 +278,9 @@ function kindOf(k, who) {
     feature: ['New', C.good, null, 'Open ShopDesk'], // "Pay online is here"
     shop_message: ['Message', C.info, null, 'Open the shop'],
     shop_news: ['News', C.good, null, 'See the shop'], // "Black Friday: 15% off with code BF15."
+    cart_reminder: ['Your cart', C.wait, null, 'Open your cart'], // "You left 2 items"
+    weekly: ['Your week', C.good, null, 'See your sales'], // "Your week: ₦40,000"
+    slow_sales: ['Sales', C.wait, null, 'Start a discount'],
   };
   if (K[k]) return K[k];
   if (String(k).startsWith('admin') || k === 'report') return ['ShopDesk', C.info, 'Something needs you in Admin', 'Open Admin'];

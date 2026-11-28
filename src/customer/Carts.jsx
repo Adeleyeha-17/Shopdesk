@@ -134,6 +134,10 @@ export function CartsPage() {
     supabase.auth.getSession().then(({ data }) => setUid(data.session ? data.session.user.id : null));
   }, []);
   const inbox = useInbox(uid, { title: 'Your carts' });
+  const { cartCount, unread } = inbox;
+  useEffect(() => {
+    if (cartCount) unread.markRead(null, 'cart_reminder');
+  }, [cartCount]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Page title="Your carts" kind="me" tabs={<CustomerTabs active="cart" unread={inbox.count} shopNews={inbox.shopCount} />}>
       <Carts carts={carts} />

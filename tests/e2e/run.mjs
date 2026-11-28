@@ -979,6 +979,46 @@ await step('the shop sees how its codes did and makes a new one in the Shop tab'
   await p.locator('.promo-codes li:has-text("XMAS10")').waitFor();
 });
 
+// ---------------- alerts that bring people back (update 035) ----------------
+await step('a slow week: the Sales tab offers a quick sale; one tap starts the code and banner and opens Announcements ready', async () => {
+  const dow = new Date(Date.now() + 3600e3).getUTCDay();
+  if (dow === 1 || dow === 2) return console.log('      (Monday or Tuesday: the slow-week card waits until Wednesday)');
+  await as('Shop owner');
+  await nav('Sales');
+  await p.locator('.slow-card:has-text("Sales are slower this week")').waitFor();
+  await p.locator('.slow-card .filter:text-is("15%")').click();
+  await p.locator('.slow-card button:has-text("Start 15% off")').click();
+  await see('SAVE15 is on');
+  await p.locator('.news-form').waitFor();
+  expect((await p.locator('.news-form .choice[aria-checked="true"]').innerText()).includes('Sale'), 'Sale is not picked');
+  await p
+    .waitForFunction(() => /^SAVE15/.test((document.querySelector('#newsCode').selectedOptions[0] || {}).text || ''), null, { timeout: 4000 })
+    .catch(() => expect(false, 'the code is not picked'));
+  expect((await p.locator('.news-pick[aria-pressed="true"]').count()) > 0, 'no products picked');
+  expect(await p.locator('.news-form button:has-text("Announce")').isEnabled(), 'Announce is not ready');
+  await p.locator('.news-form button:has-text("Cancel")').click();
+  await nav('Sales');
+  await pause(400);
+  expect((await p.locator('.slow-card').count()) === 0, 'the slow-week card is still there with a sale on');
+});
+
+await step("a signed-in customer's cart is kept on the account: it comes back on another phone", async () => {
+  await as('Customer');
+  await patch((S) => (S.saved_carts = []), '/bimpes-beauty');
+  const add = p.locator('.pcard:not(:has(.pname:text-is("Hair growth oil"))) button[data-inc]').first();
+  await add.click();
+  await add.click();
+  await pause(1800);
+  await patch((S) => {}, '/bimpes-beauty/cart');
+  await p.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('shopdesk-cart:')).forEach((k) => localStorage.removeItem(k)));
+  await p.reload();
+  await p.locator('.demo-bar').waitFor();
+  await p.locator('.stepper .qty').first().waitFor();
+  expect((await p.locator('.stepper .qty').first().innerText()).trim() === '2', 'the cart did not come back from the account');
+  await patch((S) => (S.saved_carts = []), '/');
+  await p.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('shopdesk-cart:')).forEach((k) => localStorage.removeItem(k)));
+});
+
 await step('a shop announces Black Friday with a code: its past customer gets an alert, sees it in the Shops tab and on the shop page', async () => {
   await as('Shop owner');
   await nav('Shop');
@@ -1008,6 +1048,32 @@ await step('a shop announces Black Friday with a code: its past customer gets an
   await p.locator('.follow-btn:text-is("Follow")').waitFor();
   await p.locator('.follow-btn').click();
   await p.locator('.follow-btn:text-is("Following")').waitFor();
+});
+
+// ---------------- tablets and laptops ----------------
+await step('on a laptop the tabs sit in a side rail, shop owners see orders side by side, and customers see their cart beside the products', async () => {
+  await p.setViewportSize({ width: 1440, height: 900 });
+  try {
+    await as('Shop owner');
+    await nav('Orders');
+    const rail = await p.locator('nav.tabs').boundingBox();
+    expect(rail && rail.width < 300 && rail.height > 500, 'the tabs are not a side rail');
+    await p.locator('.filter:has-text("Done")').click();
+    const cards = p.locator('.orders-grid > article.card');
+    await cards.nth(1).waitFor();
+    const [a, b] = [await cards.nth(0).boundingBox(), await cards.nth(1).boundingBox()];
+    expect(Math.abs(a.y - b.y) < 2 && b.x > a.x, 'orders are not side by side');
+    await as('Customer');
+    await patch((S) => (S.saved_carts = []), '/bimpes-beauty');
+    await p.locator('.pcard button[data-inc]').first().click();
+    await p.locator('.cart-aside .cart-line').first().waitFor();
+    await p.locator('.cart-aside button:has-text("Checkout")').click();
+    await see('Place order');
+  } finally {
+    await p.setViewportSize({ width: 390, height: 844 });
+  }
+  await patch((S) => (S.saved_carts = []), '/');
+  await p.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('shopdesk-cart:')).forEach((k) => localStorage.removeItem(k)));
 });
 
 await step('no errors in the page', async () => {

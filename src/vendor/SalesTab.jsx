@@ -19,6 +19,7 @@ import { FullReport } from './FullReport.jsx';
 import { MoneyOutSheet } from './MoneyOutSheet.jsx';
 import { downloadSalesReport } from './salesExcel.js';
 import { Skeleton } from '../shared/Skeleton.jsx';
+import { SlowSales } from './SlowSales.jsx';
 
 const SAVED = 'shopdesk-sales-period';
 const PER = { today: 'hour', '7d': 'day', '30d': 'day', month: 'day', year: 'month', custom: 'day' };
@@ -186,6 +187,7 @@ export function SalesTab({ shop, data, say, setTab, setFocus, reloadShop, month,
   return (
     <>
       <Visitors key={reloads} />
+      <SlowSales shop={shop} say={say} setTab={setTab} stamp={changes} />
       <div className="filters wrap" role="group" aria-label="Period">
         {[...PERIODS, ['custom', 'Pick dates']].map(([k, l]) => (
           <button key={k} className="filter" aria-pressed={key === k} onClick={() => choose(k)}>
@@ -596,7 +598,7 @@ function SalesView({
   }
 
   return (
-    <>
+    <div className="wide-cols">
       <GoalCard goal={r.goal} saveGoal={saveGoal} />
 
       <section className="card dash-hero">
@@ -882,6 +884,6 @@ function SalesView({
         Updated {dayOf(new Date().toISOString())}{' '}
         {timeOf(new Date().toISOString())}.
       </p>
-    </>
+    </div>
   );
 }

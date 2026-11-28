@@ -156,8 +156,9 @@ export function OrdersTab({ shop, data, run, say, unread, focus, setFocus, setTa
             : 'No orders match.'}
         </p>
       )}
-      {shown.length
-        ? shown.map((o) => (
+      {shown.length ? (
+        <div className="wide-grid orders-grid">
+          {shown.map((o) => (
             <OrderCard
               key={o.id}
               o={o}
@@ -172,8 +173,11 @@ export function OrdersTab({ shop, data, run, say, unread, focus, setFocus, setTa
               focused={!!focus && focus.id === o.id}
               markRead={unread && unread.markRead}
             />
-          ))
-        : !searching && <p className="note">No orders here.</p>}
+          ))}
+        </div>
+      ) : (
+        !searching && <p className="note">No orders here.</p>
+      )}
     </>
   );
 }

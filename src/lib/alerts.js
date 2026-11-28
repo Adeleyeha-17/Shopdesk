@@ -181,8 +181,10 @@ export function useLive(userId, run) {
 }
 
 // A shop owner can also buy from other shops, so one account gets two kinds of alerts: about their buying (they open
-// the customer's pages: an order link /o/..., or a shop's message to its customers) and about their own shop.
-export const buyerAlert = (n) => !!n && (/^\/o\//.test(n.url || '') || n.kind === 'shop_message');
+// the customer's pages: an order link /o/..., a shop's message or news to its customers, a cart reminder) and about
+// their own shop.
+const BUYER_KINDS = ['shop_message', 'shop_news', 'cart_reminder'];
+export const buyerAlert = (n) => !!n && (/^\/o\//.test(n.url || '') || BUYER_KINDS.includes(n.kind));
 
 // Unread alerts for this account: { list, loaded, byOrder: {id: n}, chats: {id: n}, others, reload, markRead(order, kind) }
 // side 'shop' keeps the shop's alerts and 'buyer' the buying ones; others counts the unread alerts of the other side.

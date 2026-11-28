@@ -1,0 +1,50 @@
+A1 signed out, nothing is kept; signed in, the cart is kept and comes back (expect 0, then 3 and the items):
+
+0
+
+3
+t
+A2 nobody reads or changes saved carts directly (expect an error):
+psql:alerts.sql:27: ERROR:  permission denied for table saved_carts
+A3 at <clock> no reminders; at noon a cart changed 2 hours ago is too fresh (expect 0, 0):
+0
+0
+A4 after 3 hours, one reminder with the cart link; again straight after, nothing (expect 1, the alert, 0):
+1
+cart_reminder|You left 3 items|Air runner and 1 more are waiting at Tolu Kicks.|/tolukicks/cart
+0
+A5 a day later, once more; then never again (expect 1, 0):
+1
+0
+A6 changing the cart starts again; an order since then means no reminder (expect 0 and reminders back to 0):
+
+0
+0
+A6b once theyve ordered from the shop, the old cart doesnt come back (expect {}):
+{}
+A7 an emptied cart is forgotten (expect 0):
+
+0
+A8 Monday summary: last week 2 orders for 40000 against 20000 the week before; best seller named; once a week (expect 1, the alert, 0):
+1
+weekly|Your week: ₦40,000|2 orders, up 100%. Best seller: Sock pack.|/#sales
+0
+A9 not on other days or hours (expect 0, 0):
+0
+0
+A10 slower sales: 20000 by now last week, 5000 so far; the alert and the Sales card say so; once a week (expect 1, the alert, true, 0):
+1
+slow_sales|Sales are slower this week|₦5,000 so far, ₦20,000 by now last week.|/#sales
+5000|20000|false
+0
+A11 not slow when sales are close to last week (expect 0):
+0
+A12 quick sale: a 10% code for 3 days and the sale banner; again reuses the code; odd percents and other people refused (expect SAVE10|10|true twice, t, 2 errors):
+SAVE10|10|true
+SAVE10|10|true
+t
+true
+psql:alerts.sql:114: ERROR:  Pick 5, 10, 15 or 20 percent.
+CONTEXT:  PL/pgSQL function quick_sale(integer) line N at RAISE
+psql:alerts.sql:116: ERROR:  Not allowed.
+CONTEXT:  PL/pgSQL function quick_sale(integer) line N at RAISE
