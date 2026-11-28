@@ -49,6 +49,30 @@ export const PinIcon = () => (
 const inLagos = (s) => LAGOS.includes(s.area) || /lagos/i.test(s.location || '');
 
 // skip: shops already on their list above, so a shop isn't shown twice. title: the heading (h1 when it's the whole page).
+// A row you scroll sideways: On sale now, New this week.
+function ShopRow({ title, list, tag, fresh }) {
+  if (!list.length) return null;
+  return (
+    <div className="near-row">
+      <h3 className="eyebrow-title">{title}</h3>
+      <ul className="hscroll">
+        {list.slice(0, 12).map((x) => (
+          <li key={x.slug}>
+            <a className="hcard" href={'/' + x.slug}>
+              <span className={'hcard-pic' + (x.photo_path ? '' : ' letter')}>
+                {x.photo_path ? <img src={photoUrl(x.photo_path)} alt="" loading="lazy" /> : (x.name.trim()[0] || '?').toUpperCase()}
+                <span className={'hcard-tag' + (fresh ? ' new' : '')}>{tag(x)}</span>
+              </span>
+              <b>{x.name}</b>
+              <span className="sub">{x.sells}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function NearYou({ skip = [], heading = 'h2', uid = null }) {
   const [shops, setShops] = useState(null);
   const [err, setErr] = useState(false);
@@ -140,6 +164,12 @@ export function NearYou({ skip = [], heading = 'h2', uid = null }) {
       )}
       {shops && !groups.length && (
         <p className="note">{find.trim() ? `No shop matches “${find.trim()}”.` : 'No shops here yet.'}</p>
+      )}
+      {shops && !find.trim() && (
+        <>
+          <ShopRow title="On sale now" list={shops.filter((x) => x.deal)} tag={(x) => x.deal} />
+          <ShopRow title="New this week" list={shops.filter((x) => x.fresh && !x.deal)} tag={() => 'NEW'} fresh />
+        </>
       )}
       {groups.map(([title, list]) => (
         <div className="near-group" key={title}>

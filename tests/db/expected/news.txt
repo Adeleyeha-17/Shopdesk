@@ -33,6 +33,8 @@ Black Friday: 10% off with code HAIR10.
 N7 Bayo unfollows: he stops hearing the shop even though he ordered (expect f 1, then 0 in his feed):
 false|1
 0
+N9 Shops near you says the shop is on sale and new this week (expect 10% OFF and true):
+10% OFF|true
 N8 nobody reads the tables directly (expect permission denied twice):
-psql:news.sql:69: ERROR:  permission denied for table shop_news
-psql:news.sql:70: ERROR:  permission denied for table shop_follows
+psql:news.sql:74: ERROR:  permission denied for table shop_news
+psql:news.sql:75: ERROR:  permission denied for table shop_follows

@@ -157,6 +157,28 @@ begin
   return public.news_json(a) || jsonb_build_object('sent', v_sent);
 end $$;
 
+-- Shops near you also says which shops are on sale now and which are new this week.
+create or replace function public.shops_near() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('name', s.name, 'slug', s.slug, 'sells', s.sells, 'location', s.location,
+      'photo_path', (select p.photo_path from public.products p where p.shop_id = s.id and p.active and not p.hidden_by_admin
+        order by p.created_at desc limit 1),
+      -- On sale now: the newest discount code that's on ("15% OFF"), or SALE for sale news or a sale banner
+      'deal', coalesce((select case when c.kind = 'percent' then c.value || '% OFF' else '₦' || to_char(c.value, 'FM999,999,999') || ' OFF' end
+          from public.coupons c where c.shop_id = s.id and c.active and (c.ends_on is null or c.ends_on >= (now() at time zone 'Africa/Lagos')::date)
+            and (c.max_uses is null or (select count(*) from public.orders o where o.coupon_id = c.id) < c.max_uses)
+          order by c.created_at desc limit 1),
+        case when exists (select 1 from public.shop_news n where n.shop_id = s.id and n.kind in ('sale', 'black_friday') and public.news_live(n))
+          or (s.banner <> '' and (s.banner_until is null or s.banner_until >= (now() at time zone 'Africa/Lagos')::date)) then 'SALE' end),
+      -- New this week: opened, or added products, in the last 7 days
+      'fresh', s.reviewed_at > now() - interval '7 days' or exists (select 1 from public.products p where p.shop_id = s.id and p.active
+        and not p.hidden_by_admin and p.created_at > now() - interval '7 days'))
+      || public.shop_rating(s.id) order by s.created_at), '[]'::jsonb)
+  from public.shops s
+  where public.shop_open(s) and not public.shop_owes(s.id) and not s.pay_test
+    and exists (select 1 from public.products p where p.shop_id = s.id and p.active and not p.hidden_by_admin);
+$$;
+
 revoke all on function public.shop_audience(uuid), public.news_line(public.shop_news), public.news_json(public.shop_news),
   public.shop_follow(text), public.follow_shop(text, boolean), public.my_feed(), public.my_news(),
   public.post_news(text, text, uuid[], bigint, date) from public, anon, authenticated;

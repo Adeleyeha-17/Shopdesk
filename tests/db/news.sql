@@ -65,6 +65,11 @@ set request.jwt.claim.sub = 'f0110000-0000-4000-8000-000000000002';
 select f->>'following', f->>'followers' from follow_shop('ngozihair', false) f;
 select jsonb_array_length(my_feed());
 
+\echo N9 Shops near you says the shop is on sale and new this week (expect 10% OFF and true):
+set role anon; set request.jwt.claim.sub = '';
+select x->>'deal', x->>'fresh' from jsonb_array_elements(shops_near()) x where x->>'slug' = 'ngozihair';
+set role authenticated;
+
 \echo N8 nobody reads the tables directly (expect permission denied twice):
 select * from shop_news;
 select * from shop_follows;

@@ -10,6 +10,7 @@ import { ShopFields, checkShop, shopRow } from './shopForm.jsx';
 import { MoneyCards } from './MoneyCards.jsx';
 import { Promotions } from './Promotions.jsx';
 import { Announce } from './Announce.jsx';
+import { FollowShopDesk } from '../shared/Social.jsx';
 import { ShopDeskCard } from './ShopDeskChat.jsx';
 import { markShared } from './GetStarted.jsx';
 import { TabIcon } from '../shared/TabIcon.jsx';
@@ -131,6 +132,7 @@ export function ShopTab({ shop, data, reloadShop, say, email, openDesk, deskUnre
         </div>
       </section>
       <ThemePicker />
+      <FollowShopDesk />
       <section className="card">
         <h2>Account</h2>
         <p className="note">Signed in as {email}.</p>

@@ -7,6 +7,7 @@ import { useBusy } from '../lib/busy.js';
 import { Page } from '../shared/Page.jsx';
 import { CustomerTabs } from './CustomerTabs.jsx';
 import { useInbox, InboxToast } from './inbox.jsx';
+import { FollowShopDesk } from '../shared/Social.jsx';
 
 // the same rules as docs/rules.md, in buyers' words
 const FOR_BUYERS = [
@@ -146,10 +147,11 @@ export function HelpPage() {
         <div>
           <strong>Still need help?</strong>
           <span className="sub" style={{ display: 'block' }}>
-            Email ShopDesk at info@shopdesk.com.ng. Add your order code if it's about an order.
+            info@shopdesk.com.ng
           </span>
         </div>
       </a>
+      <FollowShopDesk boxed />
       <InboxToast inbox={inbox} />
     </Page>
   );

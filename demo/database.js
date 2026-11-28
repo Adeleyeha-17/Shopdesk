@@ -984,11 +984,20 @@ const RATING_SEED = [
   ['Kunle A.', 4, 'Good products, and the delivery fee was fair.', 27, 'Black soap, 500g'],
 ];
 const OTHER_SHOPS = [
-  { name: 'Kemi Wigs', slug: 'kemi-wigs', sells: 'Wigs, frontals and closures', location: 'Yaba, Lagos', rating: null, ratings: 0 },
+  { name: 'Kemi Wigs', slug: 'kemi-wigs', sells: 'Wigs, frontals and closures', location: 'Yaba, Lagos', rating: null, ratings: 0, fresh: true },
   { name: "Tola's Kitchen", slug: 'tolas-kitchen', sells: 'Food and drinks', location: 'Surulere, Lagos', rating: 4.9, ratings: 41 },
-  { name: 'Ada Fabrics', slug: 'ada-fabrics-lekki', sells: 'Ankara and lace', location: 'Lekki Phase 1, Lagos', rating: 4.6, ratings: 12 },
+  { name: 'Ada Fabrics', slug: 'ada-fabrics-lekki', sells: 'Ankara and lace', location: 'Lekki Phase 1, Lagos', rating: 4.6, ratings: 12, deal: '₦2,000 OFF' },
   { name: 'Gadget Hub Ikeja', slug: 'gadget-hub-ikeja', sells: 'Phones and accessories', location: 'Ikeja, Lagos', rating: 4.7, ratings: 18 },
 ];
+// Shops near you: "15% OFF" for a code that's on, or SALE for sale news or a sale banner (shops_near in update 034)
+function shopDeal(s) {
+  const c = (S.coupons || [])
+    .filter((x) => x.shop_id === s.id && x.active && (!x.ends_on || x.ends_on >= todayLagos()) && !(x.max_uses && S.orders.filter((o) => o.coupon_id === x.id).length >= x.max_uses))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  if (c) return c.kind === 'percent' ? `${c.value}% OFF` : `₦${Number(c.value).toLocaleString('en-NG')} OFF`;
+  const news = (S.news || []).some((a) => a.shop_id === s.id && ['sale', 'black_friday'].includes(a.kind) && newsLive(a));
+  return news || s.banner ? 'SALE' : null;
+}
 function ratingsOf(shopId) {
   if (!S.ratings) {
     const s0 = S.shops[0];
@@ -1601,6 +1610,8 @@ const RPC = {
         sells: s.sells,
         location: s.location,
         photo_path: (S.products.find((p) => p.shop_id === s.id && p.active && !p.hidden_by_admin) || {}).photo_path || null,
+        deal: shopDeal(s),
+        fresh: S.products.some((p) => p.shop_id === s.id && p.active && Date.now() - new Date(p.created_at).getTime() < 7 * 864e5),
         ...ratingOf(s.id),
       })),
     ...OTHER_SHOPS.map((x) => ({ ...x, photo_path: null })),
